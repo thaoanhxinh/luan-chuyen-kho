@@ -1,6 +1,6 @@
 import api from "./api";
 
-const BASE_URL = "/api/don-vi-nhan";
+const BASE_URL = "/don-vi-nhan";
 
 export const donViNhanService = {
   // Lấy danh sách đơn vị nhận

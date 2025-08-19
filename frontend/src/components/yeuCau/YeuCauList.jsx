@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Eye,
   Edit,
@@ -18,7 +18,7 @@ import {
   User,
   Building2,
 } from "lucide-react";
-import { AuthContext } from "../../context/AuthContext";
+import { useAuth } from "../../context/AuthContext";
 import { yeuCauService } from "../../services/yeuCauService";
 import { formatCurrency, formatDate } from "../../utils/helpers";
 import toast from "react-hot-toast";
@@ -34,7 +34,7 @@ const YeuCauList = ({
   onCreateNew,
   filterOptions = {},
 }) => {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [yeuCauList, setYeuCauList] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -65,7 +65,7 @@ const YeuCauList = ({
       color: "bg-gray-100 text-gray-800",
       icon: FileText,
     },
-    submitted: {
+    confirmed: {
       label: "Đã gửi",
       color: "bg-blue-100 text-blue-800",
       icon: Clock,
@@ -252,7 +252,7 @@ const YeuCauList = ({
     const canDelete =
       yeuCau.trang_thai === "draft" && yeuCau.nguoi_yeu_cau === user.id;
     const canCancel =
-      ["submitted", "under_review"].includes(yeuCau.trang_thai) &&
+      ["confirmed", "under_review"].includes(yeuCau.trang_thai) &&
       (yeuCau.nguoi_yeu_cau === user.id || user.role === "admin");
     const canSubmit =
       yeuCau.trang_thai === "draft" && yeuCau.nguoi_yeu_cau === user.id;

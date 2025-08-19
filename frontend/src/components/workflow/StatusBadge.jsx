@@ -28,7 +28,7 @@ const StatusBadge = ({
         icon: FileText,
         pulseColor: "animate-pulse",
       },
-      submitted: {
+      confirmed: {
         label: "Đã gửi",
         color: "bg-blue-100 text-blue-800 border-blue-200",
         icon: Clock,

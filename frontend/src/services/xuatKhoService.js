@@ -26,8 +26,24 @@
 //     return response.data;
 //   },
 
+//   // New workflow methods
+//   async submit(id) {
+//     const response = await api.patch(`/xuat-kho/${id}/submit`);
+//     return response.data;
+//   },
+
 //   async approve(id) {
-//     const response = await api.post(`/xuat-kho/${id}/approve`);
+//     const response = await api.patch(`/xuat-kho/${id}/approve`);
+//     return response.data;
+//   },
+
+//   async requestRevision(id, data) {
+//     const response = await api.patch(`/xuat-kho/${id}/request-revision`, data);
+//     return response.data;
+//   },
+
+//   async complete(id, data = {}) {
+//     const response = await api.patch(`/xuat-kho/${id}/complete`, data);
 //     return response.data;
 //   },
 
@@ -36,31 +52,6 @@
 //     return response.data;
 //   },
 
-//   async checkTonKho(data) {
-//     const response = await api.post("/xuat-kho/check-ton-kho", data);
-//     return response.data;
-//   },
-
-//   async printPhieu(id, printData) {
-//     const response = await api.post(`/xuat-kho/${id}/print`, printData);
-//     return response.data;
-//   },
-
-//   async getDonViNhanList(params = {}) {
-//     const response = await api.get("/don-vi-nhan", { params });
-//     return response.data;
-//   },
-
-//   // API mới: Cập nhật số lượng thực xuất
-//   async updateSoLuongThucXuat(id, data) {
-//     const response = await api.put(
-//       `/xuat-kho/${id}/update-so-luong-thuc-xuat`,
-//       data
-//     );
-//     return response.data;
-//   },
-
-//   // API mới: Upload quyết định và chuyển sang confirmed
 //   async uploadDecision(id, formData) {
 //     const response = await api.post(
 //       `/xuat-kho/${id}/upload-decision`,
@@ -74,19 +65,48 @@
 //     return response.data;
 //   },
 
-//   // API mới: Download file quyết định
 //   async downloadDecision(id) {
 //     const response = await api.get(`/xuat-kho/${id}/download-decision`);
 //     return response.data;
 //   },
 
-//   // API mới: Xác nhận phiếu (chuyển từ draft sang confirmed)
+//   async printPhieu(id, printData) {
+//     const response = await api.post(`/xuat-kho/${id}/print`, printData);
+//     return response.data;
+//   },
+
+//   // Inventory checking methods
+//   async checkTonKho(data) {
+//     const response = await api.post("/xuat-kho/check-ton-kho", data);
+//     return response.data;
+//   },
+
+//   async checkTonKhoThucTe(data) {
+//     const response = await api.post("/xuat-kho/check-ton-kho-thuc-te", data);
+//     return response.data;
+//   },
+
+//   // Department and unit related methods
+//   async getDonViNhanList(params = {}) {
+//     const response = await api.get("/don-vi-nhan", { params });
+//     return response.data;
+//   },
+
+//   // Legacy methods for backward compatibility
+//   async updateSoLuongThucXuat(id, data) {
+//     const response = await api.put(
+//       `/xuat-kho/${id}/update-so-luong-thuc-xuat`,
+//       data
+//     );
+//     return response.data;
+//   },
+
 //   async confirmPhieu(id, data) {
 //     const response = await api.post(`/xuat-kho/${id}/confirm`, data);
 //     return response.data;
 //   },
 
-//   // API thống kê và báo cáo
+//   // Statistics and reporting methods
 //   async getStatistics(params = {}) {
 //     const response = await api.get("/xuat-kho/statistics", { params });
 //     return response.data;
@@ -97,7 +117,7 @@
 //     return response.data;
 //   },
 
-//   // API lịch sử xuất kho
+//   // History tracking methods
 //   async getHistoryByHangHoa(hangHoaId, params = {}) {
 //     const response = await api.get(`/xuat-kho/history/hang-hoa/${hangHoaId}`, {
 //       params,
@@ -113,7 +133,7 @@
 //     return response.data;
 //   },
 
-//   // API hỗ trợ workflow
+//   // Workflow support methods
 //   async getWorkflowStatus(id) {
 //     const response = await api.get(`/xuat-kho/${id}/workflow-status`);
 //     return response.data;
@@ -153,8 +173,24 @@ export const xuatKhoService = {
     return response.data;
   },
 
+  // New workflow methods
+  async submit(id) {
+    const response = await api.patch(`/xuat-kho/${id}/submit`);
+    return response.data;
+  },
+
   async approve(id) {
-    const response = await api.post(`/xuat-kho/${id}/approve`);
+    const response = await api.patch(`/xuat-kho/${id}/approve`);
+    return response.data;
+  },
+
+  async requestRevision(id, data) {
+    const response = await api.patch(`/xuat-kho/${id}/request-revision`, data);
+    return response.data;
+  },
+
+  async complete(id, data = {}) {
+    const response = await api.patch(`/xuat-kho/${id}/complete`, data);
     return response.data;
   },
 
@@ -163,44 +199,12 @@ export const xuatKhoService = {
     return response.data;
   },
 
-  // API hoàn thành phiếu xuất
-  async complete(id) {
-    const response = await api.patch(`/xuat-kho/${id}/complete`);
+  // Thêm method mới cho cập nhật số lượng thực tế
+  async updateActualQuantity(id, data) {
+    const response = await api.put(`/xuat-kho/${id}/actual-quantity`, data);
     return response.data;
   },
 
-  // CẢI TIẾN: Kiểm tra tồn kho có tính cả phiếu chưa hoàn thành
-  async checkTonKho(data) {
-    const response = await api.post("/xuat-kho/check-ton-kho", data);
-    return response.data;
-  },
-
-  // API mới: Kiểm tra tồn kho thực tế có sẵn (bao gồm phiếu đang chờ)
-  async checkTonKhoThucTe(data) {
-    const response = await api.post("/xuat-kho/check-ton-kho-thuc-te", data);
-    return response.data;
-  },
-
-  async printPhieu(id, printData) {
-    const response = await api.post(`/xuat-kho/${id}/print`, printData);
-    return response.data;
-  },
-
-  async getDonViNhanList(params = {}) {
-    const response = await api.get("/don-vi-nhan", { params });
-    return response.data;
-  },
-
-  // API mới: Cập nhật số lượng thực xuất
-  async updateSoLuongThucXuat(id, data) {
-    const response = await api.put(
-      `/xuat-kho/${id}/update-so-luong-thuc-xuat`,
-      data
-    );
-    return response.data;
-  },
-
-  // API mới: Upload quyết định và chuyển sang confirmed
   async uploadDecision(id, formData) {
     const response = await api.post(
       `/xuat-kho/${id}/upload-decision`,
@@ -214,19 +218,48 @@ export const xuatKhoService = {
     return response.data;
   },
 
-  // API mới: Download file quyết định
   async downloadDecision(id) {
     const response = await api.get(`/xuat-kho/${id}/download-decision`);
     return response.data;
   },
 
-  // API mới: Xác nhận phiếu (chuyển từ draft sang confirmed)
+  async printPhieu(id, printData) {
+    const response = await api.post(`/xuat-kho/${id}/print`, printData);
+    return response.data;
+  },
+
+  // Inventory checking methods
+  async checkTonKho(data) {
+    const response = await api.post("/xuat-kho/check-ton-kho", data);
+    return response.data;
+  },
+
+  async checkTonKhoThucTe(data) {
+    const response = await api.post("/xuat-kho/check-ton-kho-thuc-te", data);
+    return response.data;
+  },
+
+  // Department and unit related methods
+  async getDonViNhanList(params = {}) {
+    const response = await api.get("/don-vi-nhan", { params });
+    return response.data;
+  },
+
+  // Legacy methods for backward compatibility
+  async updateSoLuongThucXuat(id, data) {
+    const response = await api.put(
+      `/xuat-kho/${id}/update-so-luong-thuc-xuat`,
+      data
+    );
+    return response.data;
+  },
+
   async confirmPhieu(id, data) {
     const response = await api.post(`/xuat-kho/${id}/confirm`, data);
     return response.data;
   },
 
-  // API thống kê và báo cáo
+  // Statistics and reporting methods
   async getStatistics(params = {}) {
     const response = await api.get("/xuat-kho/statistics", { params });
     return response.data;
@@ -237,7 +270,7 @@ export const xuatKhoService = {
     return response.data;
   },
 
-  // API lịch sử xuất kho
+  // History tracking methods
   async getHistoryByHangHoa(hangHoaId, params = {}) {
     const response = await api.get(`/xuat-kho/history/hang-hoa/${hangHoaId}`, {
       params,
@@ -253,7 +286,7 @@ export const xuatKhoService = {
     return response.data;
   },
 
-  // API hỗ trợ workflow
+  // Workflow support methods
   async getWorkflowStatus(id) {
     const response = await api.get(`/xuat-kho/${id}/workflow-status`);
     return response.data;
@@ -261,6 +294,19 @@ export const xuatKhoService = {
 
   async validateBeforeApprove(id) {
     const response = await api.post(`/xuat-kho/${id}/validate-before-approve`);
+    return response.data;
+  },
+
+  // Thêm sau dòng updateActualQuantity
+
+  // API lấy phòng ban nhận hàng
+  async getPhongBanNhanHang() {
+    const response = await api.get("/xuat-kho/phong-ban-nhan-hang");
+    return response.data;
+  },
+
+  async getPhongBanList() {
+    const response = await api.get("/departments/list");
     return response.data;
   },
 };

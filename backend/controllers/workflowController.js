@@ -26,7 +26,7 @@ const approveYeuCauNhap = async (req, res, params, body, user) => {
     const yeuCau = yeuCauResult.rows[0];
 
     // Kiểm tra trạng thái có thể phê duyệt
-    if (!["submitted", "under_review"].includes(yeuCau.trang_thai)) {
+    if (!["confirmed", "under_review"].includes(yeuCau.trang_thai)) {
       await client.query("ROLLBACK");
       return sendResponse(
         res,
@@ -142,7 +142,7 @@ const rejectYeuCauNhap = async (req, res, params, body, user) => {
     const yeuCau = yeuCauResult.rows[0];
 
     // Kiểm tra trạng thái
-    if (!["submitted", "under_review"].includes(yeuCau.trang_thai)) {
+    if (!["confirmed", "under_review"].includes(yeuCau.trang_thai)) {
       await client.query("ROLLBACK");
       return sendResponse(
         res,
@@ -395,7 +395,7 @@ const approveYeuCauXuat = async (req, res, params, body, user) => {
     const yeuCau = yeuCauResult.rows[0];
 
     // Kiểm tra trạng thái
-    if (!["submitted", "under_review"].includes(yeuCau.trang_thai)) {
+    if (!["confirmed", "under_review"].includes(yeuCau.trang_thai)) {
       await client.query("ROLLBACK");
       return sendResponse(
         res,
@@ -549,7 +549,7 @@ const getWorkflowStats = async (req, res, query, user) => {
       `SELECT 
         COUNT(*) as total_requests,
         COUNT(*) FILTER (WHERE trang_thai = 'draft') as draft_count,
-        COUNT(*) FILTER (WHERE trang_thai = 'submitted') as submitted_count,
+        COUNT(*) FILTER (WHERE trang_thai = 'confirmed') as confirmed_count,
         COUNT(*) FILTER (WHERE trang_thai = 'under_review') as under_review_count,
         COUNT(*) FILTER (WHERE trang_thai = 'approved') as approved_count,
         COUNT(*) FILTER (WHERE trang_thai = 'rejected') as rejected_count,
@@ -565,7 +565,7 @@ const getWorkflowStats = async (req, res, query, user) => {
       `SELECT 
         COUNT(*) as total_requests,
         COUNT(*) FILTER (WHERE trang_thai = 'draft') as draft_count,
-        COUNT(*) FILTER (WHERE trang_thai = 'submitted') as submitted_count,
+        COUNT(*) FILTER (WHERE trang_thai = 'confirmed') as confirmed_count,
         COUNT(*) FILTER (WHERE trang_thai = 'under_review') as under_review_count,
         COUNT(*) FILTER (WHERE trang_thai = 'approved') as approved_count,
         COUNT(*) FILTER (WHERE trang_thai = 'rejected') as rejected_count,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
-import { Plus, Trash2, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, Info } from "lucide-react";
 import { searchService } from "../../services/searchService";
 import { xuatKhoService } from "../../services/xuatKhoService";
 import { formatCurrency } from "../../utils/helpers";
@@ -8,14 +8,20 @@ import { LOAI_PHIEU_XUAT, PHAM_CHAT } from "../../utils/constants";
 import AutoComplete from "../common/AutoComplete";
 import toast from "react-hot-toast";
 
-const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
+const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel, mode = "edit" }) => {
   const [loading, setLoading] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [formReady, setFormReady] = useState(false);
   const [phieuStatus, setPhieuStatus] = useState(null);
-  const [donViNhanList, setDonViNhanList] = useState([]);
   const [tonKhoInfo, setTonKhoInfo] = useState({});
+  const [phongBanNhanList, setPhongBanNhanList] = useState([]);
+  const [linkedPhieu, setLinkedPhieu] = useState(null);
+
+  const isEditActualMode = mode === "edit-actual";
+  const canEdit =
+    !isEditActualMode && ["draft", "revision_required"].includes(phieuStatus);
+  const canEditActual = isEditActualMode && phieuStatus === "approved";
 
   const {
     register,
@@ -36,9 +42,9 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
   });
 
   const chiTietItems = watch("chi_tiet") || [];
+  //const loaiXuat = watch("loai_xuat");
+  const phongBanNhanData = watch("phong_ban_nhan");
   const donViNhanData = watch("don_vi_nhan");
-
-  const canEdit = phieuStatus !== "completed";
 
   useEffect(() => {
     if (phieuId) {
@@ -46,21 +52,26 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
       setDataLoaded(false);
       setFormReady(false);
       setPhieuStatus(null);
+      setLinkedPhieu(null);
       loadPhieuData();
     }
   }, [phieuId, reset]);
 
+  // Load phòng ban nhận khi cần
   useEffect(() => {
-    const loadDonViNhan = async () => {
-      try {
-        const response = await xuatKhoService.getDonViNhanList();
-        setDonViNhanList(response.data.items || []);
-      } catch (error) {
-        console.error("Error loading don vi nhan:", error);
-      }
-    };
-    loadDonViNhan();
-  }, []);
+    if (canEdit) {
+      loadPhongBanNhanList();
+    }
+  }, [canEdit]);
+
+  const loadPhongBanNhanList = async () => {
+    try {
+      const response = await xuatKhoService.getPhongBanNhanHang();
+      setPhongBanNhanList(response.data || []);
+    } catch (error) {
+      console.error("Error loading phong ban nhan hang:", error);
+    }
+  };
 
   const loadPhieuData = async () => {
     try {
@@ -71,29 +82,42 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
       const response = await xuatKhoService.getDetail(phieuId);
       const phieu = response.data;
 
+      console.log("Phieu data:", phieu); // Debug
+
       setPhieuStatus(phieu.trang_thai);
+      setLinkedPhieu(phieu.phieu_nhap_lien_ket || null);
 
       const formattedDate = phieu.ngay_xuat
         ? new Date(phieu.ngay_xuat).toISOString().split("T")[0]
         : new Date().toISOString().split("T")[0];
 
+      // ✅ Mapping dữ liệu đúng
       const formData = {
         ngay_xuat: formattedDate,
-        loai_xuat: phieu.loai_xuat || "don_vi_nhan",
+        loai_xuat: phieu.loai_xuat || "su_dung",
         nguoi_nhan: phieu.nguoi_nhan || "",
         so_quyet_dinh: phieu.so_quyet_dinh || "",
         ly_do_xuat: phieu.ly_do_xuat || "",
         ghi_chu: phieu.ghi_chu || "",
+
+        // ✅ Map đúng dữ liệu từ API
+        phong_ban_nhan_id: phieu.phong_ban_nhan?.id || null,
+        phong_ban_nhan: phieu.phong_ban_nhan || null,
         don_vi_nhan_id: phieu.don_vi_nhan?.id || null,
         don_vi_nhan: phieu.don_vi_nhan || null,
       };
+
+      console.log("Form data:", formData); // Debug
 
       reset(formData, { keepDefaultValues: false });
 
       const chiTietData = phieu.chi_tiet.map((item) => ({
         hang_hoa_id: item.hang_hoa.id,
         hang_hoa: item.hang_hoa,
-        so_luong_yeu_cau: parseFloat(item.so_luong_yeu_cau) || 1,
+        so_luong_yeu_cau:
+          parseFloat(item.so_luong_yeu_cau) ||
+          parseFloat(item.so_luong_thuc_xuat) ||
+          1,
         so_luong_thuc_xuat: parseFloat(item.so_luong_thuc_xuat) || 1,
         don_gia: parseFloat(item.don_gia) || 0,
         pham_chat: item.pham_chat || "tot",
@@ -102,6 +126,7 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
 
       replace(chiTietData);
 
+      // Load tồn kho info
       if (chiTietData.length > 0) {
         const tonKhoRequest = {
           phieu_hien_tai_id: phieuId,
@@ -140,6 +165,13 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
     const donGia = parseFloat(item.don_gia || 0);
     return sum + soLuong * donGia;
   }, 0);
+
+  const handlePhongBanNhanSelect = (phongBan) => {
+    if (!canEdit) return;
+    setValue("phong_ban_nhan_id", phongBan.id || null);
+    setValue("phong_ban_nhan", phongBan);
+    toast.success(`Đã chọn phòng ban nhận: ${phongBan.ten_phong_ban}`);
+  };
 
   const handleDonViNhanSelect = (donViNhan) => {
     if (!canEdit) return;
@@ -201,7 +233,7 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
   };
 
   const onSubmit = async (data) => {
-    if (!canEdit) {
+    if (!canEdit && !canEditActual) {
       toast.error("Không thể chỉnh sửa phiếu đã hoàn thành");
       return;
     }
@@ -211,6 +243,19 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
       return;
     }
 
+    // Validation theo loại phiếu
+    if (!isEditActualMode) {
+      // Kiểm tra xem có phòng ban nhận hay đơn vị nhận
+      const hasPhongBanNhan = data.phong_ban_nhan && data.phong_ban_nhan.id;
+      const hasDonViNhan = data.don_vi_nhan && data.don_vi_nhan.id;
+
+      if (!hasPhongBanNhan && !hasDonViNhan) {
+        toast.error("Vui lòng chọn phòng ban nhận hoặc đơn vị nhận");
+        return;
+      }
+    }
+
+    // Validation chi tiết
     for (let i = 0; i < data.chi_tiet.length; i++) {
       const item = data.chi_tiet[i];
       const tonKhoItem = tonKhoInfo[i];
@@ -249,35 +294,51 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
     try {
       toast.loading("Đang cập nhật phiếu xuất...", { id: "processing" });
 
-      const finalChiTiet = data.chi_tiet.map((item) => ({
-        hang_hoa_id: item.hang_hoa.id,
-        so_luong_yeu_cau: parseFloat(item.so_luong_yeu_cau),
-        so_luong_thuc_xuat: parseFloat(item.so_luong_thuc_xuat),
-        don_gia: parseFloat(item.don_gia),
-        pham_chat: item.pham_chat,
-        so_seri_xuat: item.so_seri_xuat
-          ? item.so_seri_xuat
-              .split(/[,\n]/)
-              .map((s) => s.trim())
-              .filter(Boolean)
-          : [],
-      }));
+      if (isEditActualMode) {
+        // Mode sửa số lượng thực tế
+        const updateData = {
+          chi_tiet_cap_nhat: data.chi_tiet.map((item) => ({
+            hang_hoa_id: item.hang_hoa.id,
+            so_luong_thuc_xuat: parseFloat(item.so_luong_thuc_xuat),
+          })),
+        };
 
-      const submitData = {
-        ngay_xuat: data.ngay_xuat,
-        loai_xuat: data.loai_xuat,
-        nguoi_nhan: data.nguoi_nhan || "",
-        so_quyet_dinh: data.so_quyet_dinh || "",
-        ly_do_xuat: data.ly_do_xuat || "",
-        ghi_chu: data.ghi_chu || "",
-        don_vi_nhan_id: data.don_vi_nhan?.id || null,
-        chi_tiet: finalChiTiet,
-      };
+        await xuatKhoService.updateActualQuantity(phieuId, updateData);
+        toast.dismiss("processing");
+        toast.success("🎉 Cập nhật số lượng thực tế thành công!");
+      } else {
+        // Mode sửa toàn bộ phiếu
+        const finalChiTiet = data.chi_tiet.map((item) => ({
+          hang_hoa_id: item.hang_hoa.id,
+          so_luong_yeu_cau: parseFloat(item.so_luong_yeu_cau),
+          so_luong_thuc_xuat: parseFloat(item.so_luong_thuc_xuat),
+          don_gia: parseFloat(item.don_gia),
+          pham_chat: item.pham_chat,
+          so_seri_xuat: item.so_seri_xuat
+            ? item.so_seri_xuat
+                .split(/[,\n]/)
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : [],
+        }));
 
-      await xuatKhoService.update(phieuId, submitData);
+        const submitData = {
+          ngay_xuat: data.ngay_xuat,
+          loai_xuat: data.loai_xuat,
+          nguoi_nhan: data.nguoi_nhan || "",
+          so_quyet_dinh: data.so_quyet_dinh || "",
+          ly_do_xuat: data.ly_do_xuat || "",
+          ghi_chu: data.ghi_chu || "",
+          phong_ban_nhan_id: data.phong_ban_nhan?.id || null,
+          don_vi_nhan_id: data.don_vi_nhan?.id || null,
+          chi_tiet: finalChiTiet,
+        };
 
-      toast.dismiss("processing");
-      toast.success("🎉 Cập nhật phiếu xuất thành công!");
+        await xuatKhoService.update(phieuId, submitData);
+        toast.dismiss("processing");
+        toast.success("🎉 Cập nhật phiếu xuất thành công!");
+      }
+
       onSuccess?.();
     } catch (error) {
       toast.dismiss("processing");
@@ -309,21 +370,43 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
     );
   }
 
+  // ✅ Xác định hiển thị theo dữ liệu thực tế
+  const hasPhongBanNhan = phongBanNhanData && phongBanNhanData.id;
+  const hasDonViNhan = donViNhanData && donViNhanData.id;
+
   return (
     <div className="p-4 space-y-4">
-      {!canEdit && (
+      {isEditActualMode && (
+        <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg text-sm">
+          <Info className="inline h-4 w-4 mr-1" />
+          Chế độ chỉnh sửa số lượng thực tế. Chỉ có thể sửa cột "SL thực xuất".
+        </div>
+      )}
+
+      {!canEdit && !isEditActualMode && (
         <div className="p-3 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg text-sm">
+          <AlertTriangle className="inline h-4 w-4 mr-1" />
           Phiếu đã hoàn thành nên không thể chỉnh sửa. Tồn kho đã được điều
           chỉnh theo số lượng thực xuất.
         </div>
       )}
 
+      {linkedPhieu && (
+        <div className="p-3 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm">
+          <Info className="inline h-4 w-4 mr-1" />
+          <strong>Phiếu liên kết:</strong> Phiếu nhập {linkedPhieu.so_phieu} đã
+          được tự động tạo cho phòng ban nhận khi phiếu này được duyệt.
+        </div>
+      )}
+
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        {/* Basic Information */}
         <div className="bg-white border rounded-lg p-4">
           <h3 className="text-lg font-medium text-gray-900 mb-4">
-            Thông tin phiếu xuất
+            {isEditActualMode
+              ? "Chỉnh sửa số lượng thực tế"
+              : "Thông tin phiếu xuất"}
           </h3>
+
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -334,7 +417,7 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
                 {...register("ngay_xuat", {
                   required: "Vui lòng chọn ngày xuất",
                 })}
-                disabled={!canEdit}
+                disabled={isEditActualMode || !canEdit}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm disabled:bg-gray-100"
               />
               {errors.ngay_xuat && (
@@ -343,6 +426,7 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
                 </p>
               )}
             </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Loại xuất *
@@ -351,7 +435,7 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
                 {...register("loai_xuat", {
                   required: "Vui lòng chọn loại xuất",
                 })}
-                disabled={!canEdit}
+                disabled={isEditActualMode || !canEdit}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm disabled:bg-gray-100"
               >
                 {Object.entries(LOAI_PHIEU_XUAT).map(([key, value]) => (
@@ -361,6 +445,7 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
                 ))}
               </select>
             </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Số quyết định
@@ -368,11 +453,12 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
               <input
                 type="text"
                 {...register("so_quyet_dinh")}
-                disabled={!canEdit}
+                disabled={isEditActualMode || !canEdit}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm disabled:bg-gray-100"
                 placeholder="Số quyết định xuất"
               />
             </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Người nhận
@@ -380,52 +466,83 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
               <input
                 type="text"
                 {...register("nguoi_nhan")}
-                disabled={!canEdit}
+                disabled={isEditActualMode || !canEdit}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm disabled:bg-gray-100"
                 placeholder="Tên người nhận hàng"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Đơn vị nhận
+                {hasPhongBanNhan ? "Phòng ban nhận" : "Đơn vị nhận"}
               </label>
-              <AutoComplete
-                key={`donvi-${
-                  formReady ? donViNhanData?.id || "loaded" : "loading"
-                }`}
-                searchFunction={(query) =>
-                  Promise.resolve({
-                    success: true,
-                    data: donViNhanList
-                      .filter(
-                        (item) =>
-                          item.ten_don_vi
-                            .toLowerCase()
-                            .includes(query.toLowerCase()) ||
-                          item.ma_don_vi
-                            .toLowerCase()
-                            .includes(query.toLowerCase())
-                      )
-                      .slice(0, 10),
-                  })
-                }
-                onSelect={handleDonViNhanSelect}
-                placeholder="Nhập tên đơn vị nhận..."
-                displayField="ten_don_vi"
-                className="w-full"
-                initialValue={donViNhanData?.ten_don_vi || ""}
-                allowCreate={false}
-                disabled={!canEdit}
-              />
-              {donViNhanData && (
+
+              {hasPhongBanNhan ? (
+                // Hiển thị dropdown phòng ban
+                phongBanNhanList.length > 0 ? (
+                  <select
+                    onChange={(e) => {
+                      const selectedId = parseInt(e.target.value);
+                      const selectedPhongBan = phongBanNhanList.find(
+                        (pb) => pb.id === selectedId
+                      );
+                      if (selectedPhongBan) {
+                        handlePhongBanNhanSelect(selectedPhongBan);
+                      }
+                    }}
+                    disabled={isEditActualMode || !canEdit}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm disabled:bg-gray-100"
+                    value={phongBanNhanData?.id || ""}
+                  >
+                    <option value="">-- Chọn phòng ban nhận --</option>
+                    {phongBanNhanList.map((pb) => (
+                      <option key={pb.id} value={pb.id}>
+                        {pb.ten_phong_ban} (Cấp {pb.cap_bac})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={phongBanNhanData?.ten_phong_ban || ""}
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-sm"
+                    placeholder="Không có dữ liệu"
+                  />
+                )
+              ) : (
+                // Hiển thị AutoComplete đơn vị nhận
+                <AutoComplete
+                  key={`donvi-${
+                    formReady ? donViNhanData?.id || "loaded" : "loading"
+                  }`}
+                  searchFunction={searchService.searchDonViNhan}
+                  onSelect={handleDonViNhanSelect}
+                  placeholder="Nhập tên đơn vị nhận..."
+                  displayField="ten_don_vi"
+                  className="w-full"
+                  initialValue={donViNhanData?.ten_don_vi || ""}
+                  allowCreate={false}
+                  disabled={isEditActualMode || !canEdit}
+                />
+              )}
+
+              {/* Hiển thị thông tin đã chọn */}
+              {hasPhongBanNhan && phongBanNhanData && (
+                <div className="mt-1 text-xs text-green-600">
+                  ✓ {phongBanNhanData.ma_phong_ban} - Cấp{" "}
+                  {phongBanNhanData.cap_bac}
+                </div>
+              )}
+              {hasDonViNhan && donViNhanData && (
                 <div className="mt-1 text-xs text-green-600">
                   ✓ {donViNhanData.ma_don_vi} - {donViNhanData.loai_don_vi}
                 </div>
               )}
             </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Lý do xuất
@@ -433,12 +550,12 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
               <input
                 type="text"
                 {...register("ly_do_xuat")}
-                rows={3}
-                disabled={!canEdit}
+                disabled={isEditActualMode || !canEdit}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm disabled:bg-gray-100"
                 placeholder="Nhập lý do xuất kho"
               />
             </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Ghi chú
@@ -446,8 +563,7 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
               <input
                 type="text"
                 {...register("ghi_chu")}
-                rows={2}
-                disabled={!canEdit}
+                disabled={isEditActualMode || !canEdit}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm disabled:bg-gray-100"
                 placeholder="Ghi chú thêm"
               />
@@ -455,13 +571,13 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
           </div>
         </div>
 
-        {/* Product Details */}
+        {/* Chi tiết hàng hóa */}
         <div className="bg-white border rounded-lg overflow-hidden">
           <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
             <h4 className="font-semibold text-gray-900">
               Chi tiết hàng hóa ({fields.length} mặt hàng)
             </h4>
-            {canEdit && (
+            {canEdit && !isEditActualMode && (
               <button
                 type="button"
                 onClick={addNewRow}
@@ -501,7 +617,7 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
                   <th className="px-3 py-2 text-right text-xs font-medium text-gray-600 uppercase w-[13%]">
                     Thành tiền
                   </th>
-                  {canEdit && (
+                  {canEdit && !isEditActualMode && (
                     <th className="px-3 py-2 text-center text-xs font-medium text-gray-600 uppercase w-16">
                       Thao tác
                     </th>
@@ -521,6 +637,7 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
                       <td className="px-3 py-2 text-center text-gray-900 font-medium">
                         {index + 1}
                       </td>
+
                       <td className="px-3 py-2">
                         <AutoComplete
                           key={`product-${index}-${
@@ -539,7 +656,7 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
                             currentItem.hang_hoa?.ten_hang_hoa || ""
                           }
                           allowCreate={false}
-                          disabled={!canEdit}
+                          disabled={isEditActualMode || !canEdit}
                         />
                         <div className="text-xs text-gray-500 mt-1">
                           {currentItem.hang_hoa && (
@@ -550,6 +667,7 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
                           )}
                         </div>
                       </td>
+
                       <td className="px-3 py-2 text-center">
                         {tonKhoItem ? (
                           <div className="text-center">
@@ -575,6 +693,7 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
                           <span className="text-gray-400">-</span>
                         )}
                       </td>
+
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-1">
                           <input
@@ -588,7 +707,15 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
                                 message: "Số lượng phải lớn hơn 0",
                               },
                             })}
-                            disabled={!canEdit}
+                            disabled={isEditActualMode || !canEdit}
+                            onChange={(e) => {
+                              if (!isEditActualMode) {
+                                setValue(
+                                  `chi_tiet.${index}.so_luong_thuc_xuat`,
+                                  e.target.value
+                                );
+                              }
+                            }}
                             className="w-full px-1 py-1 border border-gray-300 rounded text-xs disabled:bg-gray-100 text-center"
                           />
                           {tonKhoItem &&
@@ -603,6 +730,7 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
                             )}
                         </div>
                       </td>
+
                       <td className="px-3 py-2">
                         <input
                           type="number"
@@ -615,10 +743,11 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
                               message: "Số lượng phải lớn hơn 0",
                             },
                           })}
-                          disabled={!canEdit}
+                          disabled={!canEdit && !canEditActual}
                           className="w-full px-2 py-1 border border-gray-300 rounded text-sm disabled:bg-gray-100"
                         />
                       </td>
+
                       <td className="px-3 py-2">
                         <input
                           type="number"
@@ -628,14 +757,15 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
                             required: "Vui lòng nhập đơn giá",
                             min: { value: 0, message: "Đơn giá không được âm" },
                           })}
-                          disabled={!canEdit}
+                          disabled={isEditActualMode || !canEdit}
                           className="w-full px-2 py-1 border border-gray-300 rounded text-sm disabled:bg-gray-100"
                         />
                       </td>
+
                       <td className="px-3 py-2">
                         <select
                           {...register(`chi_tiet.${index}.pham_chat`)}
-                          disabled={!canEdit}
+                          disabled={isEditActualMode || !canEdit}
                           className="w-full px-2 py-1 border border-gray-300 rounded text-sm disabled:bg-gray-100"
                         >
                           {Object.entries(PHAM_CHAT).map(([key, value]) => (
@@ -645,10 +775,12 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
                           ))}
                         </select>
                       </td>
+
                       <td className="px-3 py-2 text-right font-medium">
                         {formatCurrency(thanhTien)}
                       </td>
-                      {canEdit && (
+
+                      {canEdit && !isEditActualMode && (
                         <td className="px-3 py-2 text-center">
                           <button
                             type="button"
@@ -675,10 +807,11 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
                     </tr>
                   );
                 })}
+
                 {fields.length > 0 && (
                   <tr className="bg-red-50 font-bold">
                     <td
-                      colSpan={canEdit ? "8" : "7"}
+                      colSpan={canEdit && !isEditActualMode ? "8" : "7"}
                       className="px-3 py-3 text-right text-gray-900"
                     >
                       TỔNG CỘNG:
@@ -686,7 +819,7 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
                     <td className="px-3 py-3 text-right text-red-600 text-lg">
                       {formatCurrency(tongTien)}
                     </td>
-                    {canEdit && <td></td>}
+                    {canEdit && !isEditActualMode && <td></td>}
                   </tr>
                 )}
               </tbody>
@@ -694,7 +827,6 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
           </div>
         </div>
 
-        {/* Action Buttons */}
         <div className="flex items-center justify-end space-x-3 pt-4">
           <button
             type="button"
@@ -702,9 +834,10 @@ const EditXuatKhoForm = ({ phieuId, onSuccess, onCancel }) => {
             disabled={loading}
             className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
           >
-            {canEdit ? "Hủy" : "Đóng"}
+            {canEdit || canEditActual ? "Hủy" : "Đóng"}
           </button>
-          {canEdit && (
+
+          {(canEdit || canEditActual) && (
             <button
               type="submit"
               disabled={loading}

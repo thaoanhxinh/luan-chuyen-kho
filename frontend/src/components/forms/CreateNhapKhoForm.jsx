@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Building, AlertCircle } from "lucide-react";
 import { searchService } from "../../services/searchService";
 import { nhapKhoService } from "../../services/nhapKhoService";
+import { hangHoaService } from "../../services/hangHoaService";
 import { formatCurrency } from "../../utils/helpers";
 import { LOAI_PHIEU_NHAP, PHAM_CHAT } from "../../utils/constants";
 import AutoComplete from "../common/AutoComplete";
@@ -10,6 +11,8 @@ import toast from "react-hot-toast";
 
 const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
   const [loading, setLoading] = useState(false);
+  const [phongBanCungCap, setPhongBanCungCap] = useState([]);
+  const [loadingPhongBan, setLoadingPhongBan] = useState(false);
 
   const {
     register,
@@ -31,10 +34,13 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
       ghi_chu: "",
       nha_cung_cap_id: null,
       nha_cung_cap: null,
+      phong_ban_cung_cap_id: null,
+      phong_ban_cung_cap: null,
       chi_tiet: [
         {
           hang_hoa_id: null,
           hang_hoa: null,
+          so_luong_ke_hoach: 1,
           so_luong: 1,
           don_gia: 0,
           pham_chat: "tot",
@@ -50,14 +56,39 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
   });
 
   const chiTietItems = watch("chi_tiet");
-  const nhaCungCapData = watch("nha_cung_cap");
+  const loaiPhieu = watch("loai_phieu");
 
-  // Calculate total amount
+  // Tải danh sách phòng ban có thể cung cấp khi thay đổi loại phiếu
+  useEffect(() => {
+    if (loaiPhieu === "tren_cap" || loaiPhieu === "dieu_chuyen") {
+      loadPhongBanCungCap();
+    } else {
+      setPhongBanCungCap([]);
+      setValue("phong_ban_cung_cap_id", null);
+      setValue("phong_ban_cung_cap", null);
+    }
+  }, [loaiPhieu, setValue]);
+
+  const loadPhongBanCungCap = async () => {
+    try {
+      setLoadingPhongBan(true);
+      const response = await hangHoaService.getPhongBanCungCap({
+        loai_phieu: loaiPhieu,
+      });
+      setPhongBanCungCap(response.data || []);
+    } catch (error) {
+      console.error("Error loading phong ban cung cap:", error);
+      toast.error("Không thể tải danh sách phòng ban cung cấp");
+      setPhongBanCungCap([]);
+    } finally {
+      setLoadingPhongBan(false);
+    }
+  };
+
   const tongTien = chiTietItems.reduce((sum, item) => {
     return sum + parseFloat(item.so_luong || 0) * parseFloat(item.don_gia || 0);
   }, 0);
 
-  // Handle supplier selection
   const handleNhaCungCapSelect = (nhaCungCap) => {
     setValue("nha_cung_cap_id", nhaCungCap.id || null);
     setValue("nha_cung_cap", nhaCungCap);
@@ -76,7 +107,12 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
     }
   };
 
-  // Handle product selection
+  const handlePhongBanCungCapSelect = (phongBan) => {
+    setValue("phong_ban_cung_cap_id", phongBan.id);
+    setValue("phong_ban_cung_cap", phongBan);
+    toast.success(`Đã chọn đơn vị cung cấp: ${phongBan.ten_phong_ban}`);
+  };
+
   const handleHangHoaSelect = (hangHoa, index) => {
     setValue(`chi_tiet.${index}.hang_hoa_id`, hangHoa.id || null);
     setValue(`chi_tiet.${index}.hang_hoa`, hangHoa);
@@ -108,6 +144,7 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
     append({
       hang_hoa_id: null,
       hang_hoa: null,
+      so_luong_ke_hoach: 1,
       so_luong: 1,
       don_gia: 0,
       pham_chat: "tot",
@@ -115,7 +152,6 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
     });
   };
 
-  // Create supplier if needed
   const createNhaCungCapIfNeeded = async (nhaCungCap) => {
     if (!nhaCungCap?.isNewItem) {
       return nhaCungCap;
@@ -146,7 +182,6 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
     }
   };
 
-  // Create product if needed
   const createHangHoaIfNeeded = async (hangHoa) => {
     if (!hangHoa?.isNewItem) {
       return hangHoa;
@@ -184,15 +219,32 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
       return;
     }
 
-    // Validate details
+    // Validation theo loại phiếu
+    if (
+      (data.loai_phieu === "tren_cap" || data.loai_phieu === "dieu_chuyen") &&
+      !data.phong_ban_cung_cap
+    ) {
+      toast.error("Vui lòng chọn đơn vị cung cấp");
+      return;
+    }
+
+    if (data.loai_phieu === "tu_mua" && !data.nha_cung_cap) {
+      toast.error("Vui lòng chọn nhà cung cấp");
+      return;
+    }
+
     for (let i = 0; i < data.chi_tiet.length; i++) {
       const item = data.chi_tiet[i];
       if (!item.hang_hoa) {
         toast.error(`Dòng ${i + 1}: Vui lòng chọn hàng hóa`);
         return;
       }
+      if (!item.so_luong_ke_hoach || item.so_luong_ke_hoach <= 0) {
+        toast.error(`Dòng ${i + 1}: Số lượng kế hoạch phải lớn hơn 0`);
+        return;
+      }
       if (!item.so_luong || item.so_luong <= 0) {
-        toast.error(`Dòng ${i + 1}: Số lượng phải lớn hơn 0`);
+        toast.error(`Dòng ${i + 1}: Số lượng thực nhập phải lớn hơn 0`);
         return;
       }
       if (item.don_gia === undefined || item.don_gia < 0) {
@@ -206,16 +258,23 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
     try {
       toast.loading("Đang xử lý phiếu nhập...", { id: "processing" });
 
-      // Step 1: Create supplier if needed
       let finalNhaCungCap = null;
-      if (data.nha_cung_cap) {
+      let finalPhongBanCungCap = null;
+
+      // Xử lý nhà cung cấp hoặc phòng ban cung cấp
+      if (data.loai_phieu === "tu_mua" && data.nha_cung_cap) {
         finalNhaCungCap = await createNhaCungCapIfNeeded(data.nha_cung_cap);
         if (finalNhaCungCap && data.nha_cung_cap.isNewItem) {
           toast.success(`✓ Đã tạo nhà cung cấp: ${finalNhaCungCap.ten_ncc}`);
         }
+      } else if (
+        (data.loai_phieu === "tren_cap" || data.loai_phieu === "dieu_chuyen") &&
+        data.phong_ban_cung_cap
+      ) {
+        finalPhongBanCungCap = data.phong_ban_cung_cap;
+        toast.success(`✓ Sẽ nhập từ: ${finalPhongBanCungCap.ten_phong_ban}`);
       }
 
-      // Step 2: Create products if needed
       const finalChiTiet = [];
       for (let i = 0; i < data.chi_tiet.length; i++) {
         const item = data.chi_tiet[i];
@@ -227,6 +286,7 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
 
         finalChiTiet.push({
           hang_hoa_id: finalHangHoa.id,
+          so_luong_ke_hoach: parseFloat(item.so_luong_ke_hoach),
           so_luong: parseFloat(item.so_luong),
           don_gia: parseFloat(item.don_gia),
           pham_chat: item.pham_chat,
@@ -239,7 +299,6 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
         });
       }
 
-      // Step 3: Create import receipt
       const submitData = {
         ngay_nhap: data.ngay_nhap,
         loai_phieu: data.loai_phieu,
@@ -252,6 +311,7 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
         ly_do_nhap: data.ly_do_nhap || "",
         ghi_chu: data.ghi_chu || "",
         nha_cung_cap_id: finalNhaCungCap?.id || null,
+        phong_ban_cung_cap_id: finalPhongBanCungCap?.id || null,
         chi_tiet: finalChiTiet,
       };
 
@@ -263,6 +323,17 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
           response.data?.so_phieu || ""
         }`
       );
+
+      // Hiển thị thông báo liên kết nếu có
+      if (data.loai_phieu === "tren_cap" || data.loai_phieu === "dieu_chuyen") {
+        setTimeout(() => {
+          toast.info(
+            `📦 Tồn kho của ${finalPhongBanCungCap?.ten_phong_ban} sẽ được tự động cập nhật`,
+            { duration: 4000 }
+          );
+        }, 1000);
+      }
+
       onSuccess?.();
     } catch (error) {
       console.error("Submit error:", error);
@@ -287,10 +358,56 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
     }
   };
 
+  // Component hiển thị thông tin phòng ban cung cấp
+  const PhongBanCungCapField = () => {
+    if (loaiPhieu !== "tren_cap" && loaiPhieu !== "dieu_chuyen") {
+      return null;
+    }
+
+    return (
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          <Building className="inline h-4 w-4 mr-1" />
+          Đơn vị cung cấp *
+        </label>
+        {loadingPhongBan ? (
+          <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm">
+            Đang tải danh sách...
+          </div>
+        ) : phongBanCungCap.length > 0 ? (
+          <select
+            onChange={(e) => {
+              const selectedId = parseInt(e.target.value);
+              const selectedPhongBan = phongBanCungCap.find(
+                (pb) => pb.id === selectedId
+              );
+              if (selectedPhongBan) {
+                handlePhongBanCungCapSelect(selectedPhongBan);
+              }
+            }}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+            defaultValue=""
+          >
+            <option value="">-- Chọn đơn vị cung cấp --</option>
+            {phongBanCungCap.map((pb) => (
+              <option key={pb.id} value={pb.id}>
+                {pb.ten_phong_ban} (Cấp {pb.cap_bac})
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-red-50 text-sm text-red-600 flex items-center">
+            <AlertCircle className="h-4 w-4 mr-1" />
+            Không có đơn vị nào có thể cung cấp cho bạn
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="p-4 space-y-2">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        {/* Basic Information */}
         <div className="bg-white border rounded-lg p-4">
           <h3 className="text-lg font-medium text-gray-900 mb-4">
             Thông tin phiếu nhập
@@ -355,25 +472,27 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nhà cung cấp
-              </label>
-              <AutoComplete
-                searchFunction={searchService.searchNhaCungCap}
-                onSelect={handleNhaCungCapSelect}
-                placeholder="Nhập tên nhà cung cấp..."
-                displayField="ten_ncc"
-                createLabel="Sẽ tạo nhà cung cấp mới"
-                className="w-full"
-                allowCreate={true}
-              />
-              {nhaCungCapData?.isNewItem && (
-                <div className="mt-1 text-xs text-blue-600">
-                  {/* 💡 Nhà cung cấp mới sẽ được tạo khi lưu phiếu nhập */}
-                </div>
-              )}
-            </div>
+            {/* Nhà cung cấp - chỉ hiện khi tự mua */}
+            {loaiPhieu === "tu_mua" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nhà cung cấp *
+                </label>
+                <AutoComplete
+                  searchFunction={searchService.searchNhaCungCap}
+                  onSelect={handleNhaCungCapSelect}
+                  placeholder="Nhập tên nhà cung cấp..."
+                  displayField="ten_ncc"
+                  createLabel="Sẽ tạo nhà cung cấp mới"
+                  className="w-full"
+                  allowCreate={true}
+                />
+              </div>
+            )}
+
+            {/* Phòng ban cung cấp - hiện khi từ trên cấp hoặc điều chuyển */}
+            <PhongBanCungCapField />
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Số hóa đơn
@@ -410,7 +529,24 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
           </div>
         </div>
 
-        {/* Product Details */}
+        {/* Phần thông báo quan trọng */}
+        {(loaiPhieu === "tren_cap" || loaiPhieu === "dieu_chuyen") && (
+          <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <AlertCircle className="h-5 w-5 text-blue-400" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-blue-700">
+                  <strong>Lưu ý quan trọng:</strong> Khi phiếu nhập được hoàn
+                  thành, hệ thống sẽ tự động tạo phiếu xuất tương ứng cho đơn vị
+                  cung cấp và trừ tồn kho của họ.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white border rounded-lg">
           <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
             <h4 className="font-semibold text-gray-900">
@@ -437,7 +573,10 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
                     Hàng hóa *
                   </th>
                   <th className="px-3 py-2 text-right text-xs font-medium text-gray-600 uppercase w-[12%]">
-                    Số lượng *
+                    SL kế hoạch *
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-600 uppercase w-[12%]">
+                    SL thực nhập *
                   </th>
                   <th className="px-3 py-2 text-right text-xs font-medium text-gray-600 uppercase w-[15%]">
                     Đơn giá *
@@ -485,8 +624,32 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
                             type="number"
                             min="0"
                             step="1"
+                            {...register(
+                              `chi_tiet.${index}.so_luong_ke_hoach`,
+                              {
+                                required: "Vui lòng nhập số lượng kế hoạch",
+                                min: {
+                                  value: 1,
+                                  message: "Số lượng phải lớn hơn 0",
+                                },
+                              }
+                            )}
+                            onChange={(e) => {
+                              setValue(
+                                `chi_tiet.${index}.so_luong`,
+                                e.target.value
+                              );
+                            }}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
                             {...register(`chi_tiet.${index}.so_luong`, {
-                              required: "Vui lòng nhập số lượng",
+                              required: "Vui lòng nhập số lượng thực nhập",
                               min: {
                                 value: 1,
                                 message: "Số lượng phải lớn hơn 0",
@@ -557,7 +720,7 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
                         <tr>
                           <td></td>
                           <td
-                            colSpan="7"
+                            colSpan="8"
                             className="px-3 py-1 text-xs text-gray-500"
                           >
                             {currentItem.hang_hoa &&
@@ -597,7 +760,6 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
           </div>
         </div>
 
-        {/* Action Buttons */}
         <div className="flex items-center justify-end space-x-3 pt-4">
           <button
             type="button"

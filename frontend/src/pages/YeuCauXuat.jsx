@@ -1,3 +1,4 @@
+// YeuCauXuat.jsx - Optimized for full space utilization
 import React, { useState, useEffect } from "react";
 import {
   Plus,
@@ -51,56 +52,49 @@ const YeuCauXuat = () => {
   const yeuCauList = data?.data?.items || [];
   const pagination = data?.data?.pagination || {};
 
-  // Tabs configuration
+  // Tabs configuration - more compact
   const tabs = [
     {
       key: "all",
       label: "Tất cả",
       icon: FileText,
       count: data?.data?.summary?.tong_so || 0,
-      color: "text-gray-600",
     },
     {
       key: "draft",
       label: "Nháp",
       icon: FileText,
       count: data?.data?.summary?.draft || 0,
-      color: "text-gray-600",
     },
     {
-      key: "submitted",
+      key: "confirmed",
       label: "Đã gửi",
       icon: Send,
-      count: data?.data?.summary?.submitted || 0,
-      color: "text-blue-600",
+      count: data?.data?.summary?.confirmed || 0,
     },
     {
       key: "under_review",
-      label: "Đang xem xét",
+      label: "Xem xét",
       icon: Clock,
       count: data?.data?.summary?.under_review || 0,
-      color: "text-yellow-600",
     },
     {
       key: "approved",
       label: "Đã duyệt",
       icon: CheckCircle,
       count: data?.data?.summary?.approved || 0,
-      color: "text-green-600",
     },
     {
       key: "rejected",
       label: "Từ chối",
       icon: XCircle,
       count: data?.data?.summary?.rejected || 0,
-      color: "text-red-600",
     },
     {
       key: "completed",
       label: "Hoàn thành",
       icon: CheckCircle,
       count: data?.data?.summary?.completed || 0,
-      color: "text-emerald-600",
     },
   ];
 
@@ -222,13 +216,13 @@ const YeuCauXuat = () => {
         color: "bg-gray-100 text-gray-800",
         icon: FileText,
       },
-      submitted: {
+      confirmed: {
         label: "Đã gửi",
         color: "bg-blue-100 text-blue-800",
         icon: Send,
       },
       under_review: {
-        label: "Đang xem xét",
+        label: "Xem xét",
         color: "bg-yellow-100 text-yellow-800",
         icon: Clock,
       },
@@ -279,56 +273,42 @@ const YeuCauXuat = () => {
   const getActionButtons = (yeuCau) => {
     const buttons = [];
 
-    // Xem chi tiết (luôn có)
+    // View detail
     buttons.push(
       <button
         key="view"
         onClick={() => handleViewDetail(yeuCau.id)}
-        className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-all"
+        className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-all"
         title="Xem chi tiết"
       >
-        <Eye size={14} />
+        <Eye size={12} />
       </button>
     );
 
-    // Gửi yêu cầu (chỉ khi ở trạng thái draft)
+    // Submit request (draft only)
     if (yeuCau.trang_thai === "draft") {
       buttons.push(
         <button
           key="submit"
           onClick={() => handleSubmit(yeuCau.id)}
-          className="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-all"
+          className="p-1 text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-all"
           title="Gửi yêu cầu"
         >
-          <Send size={14} />
+          <Send size={12} />
         </button>
       );
     }
 
-    // Hủy yêu cầu (khi chưa hoàn thành)
+    // Cancel request
     if (!["completed", "cancelled"].includes(yeuCau.trang_thai)) {
       buttons.push(
         <button
           key="cancel"
           onClick={() => handleCancel(yeuCau.id)}
-          className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-all"
+          className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-all"
           title="Hủy yêu cầu"
         >
-          <X size={14} />
-        </button>
-      );
-    }
-
-    // Xóa yêu cầu (chỉ khi ở trạng thái draft)
-    if (yeuCau.trang_thai === "draft") {
-      buttons.push(
-        <button
-          key="delete"
-          onClick={() => handleDelete(yeuCau.id)}
-          className="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-all"
-          title="Xóa yêu cầu"
-        >
-          <X size={14} />
+          <X size={12} />
         </button>
       );
     }
@@ -337,23 +317,23 @@ const YeuCauXuat = () => {
   };
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
+    <div className="h-full flex flex-col space-y-3">
+      {/* Header - compact */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center">
-            <ArrowUpFromLine className="mr-2 h-5 w-5 text-red-600" />
+          <h1 className="text-lg font-bold text-gray-900 flex items-center">
+            <ArrowUpFromLine className="mr-2 h-4 w-4 text-red-600" />
             Yêu cầu xuất kho
           </h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <p className="mt-1 text-xs text-gray-600">
             Quản lý các yêu cầu xuất hàng từ kho
           </p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors"
+          className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 transition-colors"
         >
-          <Plus size={16} />
+          <Plus size={14} />
           <span>Tạo yêu cầu</span>
         </button>
       </div>
@@ -409,7 +389,7 @@ const YeuCauXuat = () => {
         </Modal>
       )}
 
-      {/* Status Tabs */}
+      {/* Status Tabs - compact scrollable */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="flex overflow-x-auto">
           {tabs.map((tab) => {
@@ -418,16 +398,16 @@ const YeuCauXuat = () => {
               <button
                 key={tab.key}
                 onClick={() => setSelectedTab(tab.key)}
-                className={`flex-shrink-0 flex items-center space-x-2 px-4 py-3 border-b-2 font-medium text-sm transition-colors ${
+                className={`flex-shrink-0 flex items-center space-x-2 px-3 py-2 border-b-2 font-medium text-xs transition-colors ${
                   selectedTab === tab.key
                     ? "border-red-500 text-red-600"
                     : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
-                <Icon size={16} className={tab.color} />
+                <Icon size={14} />
                 <span>{tab.label}</span>
                 <span
-                  className={`px-2 py-0.5 rounded-full text-xs ${
+                  className={`px-1.5 py-0.5 rounded-full text-xs ${
                     selectedTab === tab.key
                       ? "bg-red-100 text-red-800"
                       : "bg-gray-100 text-gray-600"
@@ -441,30 +421,30 @@ const YeuCauXuat = () => {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+      {/* Filters - compact grid */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+        <div className="grid grid-cols-12 gap-3">
+          <div className="col-span-4">
+            <label className="block text-xs font-medium text-gray-700 mb-1">
               Tìm kiếm
             </label>
             <div className="relative">
               <Search
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                size={16}
+                className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400"
+                size={14}
               />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm"
-                placeholder="Tìm theo số yêu cầu hoặc lý do..."
+                className="w-full pl-7 pr-3 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                placeholder="Số yêu cầu, lý do..."
               />
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-gray-700 mb-1">
               Từ ngày
             </label>
             <input
@@ -473,12 +453,12 @@ const YeuCauXuat = () => {
               onChange={(e) =>
                 setFilters((prev) => ({ ...prev, tu_ngay: e.target.value }))
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm"
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-gray-700 mb-1">
               Đến ngày
             </label>
             <input
@@ -487,12 +467,12 @@ const YeuCauXuat = () => {
               onChange={(e) =>
                 setFilters((prev) => ({ ...prev, den_ngay: e.target.value }))
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm"
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-gray-700 mb-1">
               Mức độ ưu tiên
             </label>
             <select
@@ -503,7 +483,7 @@ const YeuCauXuat = () => {
                   muc_do_uu_tien: e.target.value,
                 }))
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm"
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
             >
               <option value="">Tất cả</option>
               <option value="thap">Thấp</option>
@@ -513,7 +493,7 @@ const YeuCauXuat = () => {
             </select>
           </div>
 
-          <div className="flex items-end">
+          <div className="col-span-2 flex items-end">
             <button
               onClick={() => {
                 setFilters({
@@ -526,61 +506,61 @@ const YeuCauXuat = () => {
                 });
                 setSearchTerm("");
               }}
-              className="w-full px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center space-x-1"
+              className="w-full px-2 py-1.5 text-xs text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors flex items-center justify-center space-x-1"
             >
-              <Filter size={14} />
+              <Filter size={12} />
               <span>Xóa bộ lọc</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+      {/* Table - flex-1 to take remaining space */}
+      <div className="flex-1 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col">
         {isLoading ? (
-          <div className="flex items-center justify-center h-64">
+          <div className="flex-1 flex items-center justify-center">
             <Loading size="large" />
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="flex-1 overflow-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
                   <tr>
                     <th
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={() => handleSort("so_yeu_cau")}
                     >
-                      Số yêu cầu {getSortIcon("so_yeu_cau")}
+                      Số YC {getSortIcon("so_yeu_cau")}
                     </th>
                     <th
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={() => handleSort("ngay_yeu_cau")}
                     >
-                      Ngày yêu cầu {getSortIcon("ngay_yeu_cau")}
+                      Ngày YC {getSortIcon("ngay_yeu_cau")}
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                      Lý do yêu cầu
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      Lý do
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                       Đơn vị nhận
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">
-                      Mức độ ưu tiên
+                    <th className="px-3 py-2 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      Ưu tiên
                     </th>
                     <th
-                      className="px-4 py-3 text-right text-xs font-medium text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="px-3 py-2 text-right text-xs font-medium text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={() => handleSort("tong_gia_tri_uoc_tinh")}
                     >
-                      Giá trị ước tính {getSortIcon("tong_gia_tri_uoc_tinh")}
+                      Giá trị {getSortIcon("tong_gia_tri_uoc_tinh")}
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">
+                    <th className="px-3 py-2 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">
                       Trạng thái
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">
-                      Người yêu cầu
+                    <th className="px-3 py-2 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      Người YC
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider w-24">
+                    <th className="px-3 py-2 text-center text-xs font-medium text-gray-600 uppercase tracking-wider w-20">
                       Thao tác
                     </th>
                   </tr>
@@ -597,71 +577,73 @@ const YeuCauXuat = () => {
                         key={yeuCau.id}
                         className="hover:bg-gray-50 transition-colors"
                       >
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <div className="text-xs font-medium text-gray-900">
                             {yeuCau.so_yeu_cau}
                           </div>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <div className="text-xs text-gray-900">
                             {formatDate(yeuCau.ngay_yeu_cau)}
                           </div>
                           {yeuCau.ngay_can_hang && (
                             <div className="text-xs text-gray-500 flex items-center mt-1">
-                              <Calendar size={12} className="mr-1" />
-                              Cần: {formatDate(yeuCau.ngay_can_hang)}
+                              <Calendar size={10} className="mr-1" />
+                              {formatDate(yeuCau.ngay_can_hang)}
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="text-sm text-gray-900 max-w-xs truncate">
+                        <td className="px-3 py-2">
+                          <div className="text-xs text-gray-900 max-w-32 truncate">
                             {yeuCau.ly_do_yeu_cau}
                           </div>
                           <div className="text-xs text-gray-500 mt-1 flex items-center">
-                            <Package size={12} className="mr-1" />
-                            {yeuCau.so_mat_hang} mặt hàng
+                            <Package size={10} className="mr-1" />
+                            {yeuCau.so_mat_hang} item
                           </div>
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="text-sm text-gray-900">
+                        <td className="px-3 py-2">
+                          <div className="text-xs text-gray-900 max-w-24 truncate">
                             {yeuCau.don_vi_nhan?.ten_don_vi || "Chưa chọn"}
                           </div>
                           {yeuCau.nguoi_nhan && (
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-gray-500 truncate">
                               {yeuCau.nguoi_nhan}
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <td className="px-3 py-2 whitespace-nowrap text-center">
                           <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${priorityInfo.color}`}
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${priorityInfo.color}`}
                           >
                             {priorityInfo.label}
                           </span>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-right">
-                          <div className="text-sm font-medium text-red-600">
+                        <td className="px-3 py-2 whitespace-nowrap text-right">
+                          <div className="text-xs font-medium text-red-600">
                             {formatCurrency(yeuCau.tong_gia_tri_uoc_tinh)}
                           </div>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <td className="px-3 py-2 whitespace-nowrap text-center">
                           <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}
                           >
-                            <statusInfo.icon size={12} className="mr-1" />
+                            <statusInfo.icon size={10} className="mr-1" />
                             {statusInfo.label}
                           </span>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-center">
-                          <div className="text-sm text-gray-900 flex items-center justify-center">
-                            <User size={14} className="mr-1 text-gray-400" />
-                            {yeuCau.nguoi_yeu_cau_info?.ho_ten || "N/A"}
+                        <td className="px-3 py-2 whitespace-nowrap text-center">
+                          <div className="text-xs text-gray-900 flex items-center justify-center">
+                            <User size={12} className="mr-1 text-gray-400" />
+                            <span className="max-w-16 truncate">
+                              {yeuCau.nguoi_yeu_cau_info?.ho_ten || "N/A"}
+                            </span>
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-gray-500 truncate max-w-20">
                             {yeuCau.don_vi_yeu_cau?.ten_phong_ban}
                           </div>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <td className="px-3 py-2 whitespace-nowrap text-center">
                           <div className="flex items-center justify-center space-x-1">
                             {getActionButtons(yeuCau)}
                           </div>
@@ -674,23 +656,25 @@ const YeuCauXuat = () => {
             </div>
 
             {yeuCauList.length === 0 && (
-              <div className="text-center py-8">
-                <ArrowUpFromLine className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-                <h3 className="text-sm font-medium text-gray-900 mb-1">
-                  Không có yêu cầu nào
-                </h3>
-                <p className="text-xs text-gray-500">
-                  {selectedTab === "all"
-                    ? "Chưa có yêu cầu xuất kho nào được tạo."
-                    : `Không có yêu cầu nào ở trạng thái "${
-                        tabs.find((t) => t.key === selectedTab)?.label
-                      }".`}
-                </p>
+              <div className="flex-1 flex items-center justify-center py-8">
+                <div className="text-center">
+                  <ArrowUpFromLine className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+                  <h3 className="text-sm font-medium text-gray-900 mb-1">
+                    Không có yêu cầu nào
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    {selectedTab === "all"
+                      ? "Chưa có yêu cầu xuất kho nào được tạo."
+                      : `Không có yêu cầu nào ở trạng thái "${
+                          tabs.find((t) => t.key === selectedTab)?.label
+                        }".`}
+                  </p>
+                </div>
               </div>
             )}
 
             {pagination.pages > 1 && (
-              <div className="px-4 py-3 border-t border-gray-200">
+              <div className="px-3 py-2 border-t border-gray-200">
                 <Pagination
                   currentPage={pagination.page || 1}
                   totalPages={pagination.pages || 1}
@@ -702,7 +686,7 @@ const YeuCauXuat = () => {
         )}
       </div>
 
-      {/* Create Modal */}
+      {/* Modals */}
       <Modal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
@@ -715,7 +699,6 @@ const YeuCauXuat = () => {
         />
       </Modal>
 
-      {/* Detail Modal */}
       <Modal
         isOpen={showDetailModal}
         onClose={() => setShowDetailModal(false)}

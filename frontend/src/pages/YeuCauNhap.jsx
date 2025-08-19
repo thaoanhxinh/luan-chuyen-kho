@@ -65,10 +65,10 @@ const YeuCauNhap = () => {
       color: "text-gray-600",
     },
     {
-      key: "submitted",
+      key: "confirmed",
       label: "Đã gửi",
       icon: Send,
-      count: data?.data?.summary?.submitted || 0,
+      count: data?.data?.summary?.confirmed || 0,
       color: "text-blue-600",
     },
     {
@@ -191,7 +191,7 @@ const YeuCauNhap = () => {
         color: "bg-gray-100 text-gray-800",
         icon: FileText,
       },
-      submitted: {
+      confirmed: {
         label: "Đã gửi",
         color: "bg-blue-100 text-blue-800",
         icon: Send,

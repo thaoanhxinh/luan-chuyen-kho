@@ -562,13 +562,13 @@ const Dashboard = () => {
 
   // Workflow trend data
   const workflowTrendData = [
-    { ngay: "T2", submitted: 5, approved: 3, rejected: 1 },
-    { ngay: "T3", submitted: 8, approved: 6, rejected: 2 },
-    { ngay: "T4", submitted: 12, approved: 10, rejected: 1 },
-    { ngay: "T5", submitted: 15, approved: 12, rejected: 3 },
-    { ngay: "T6", submitted: 10, approved: 8, rejected: 2 },
-    { ngay: "T7", submitted: 6, approved: 5, rejected: 1 },
-    { ngay: "CN", submitted: 3, approved: 2, rejected: 0 },
+    { ngay: "T2", confirmed: 5, approved: 3, rejected: 1 },
+    { ngay: "T3", confirmed: 8, approved: 6, rejected: 2 },
+    { ngay: "T4", confirmed: 12, approved: 10, rejected: 1 },
+    { ngay: "T5", confirmed: 15, approved: 12, rejected: 3 },
+    { ngay: "T6", confirmed: 10, approved: 8, rejected: 2 },
+    { ngay: "T7", confirmed: 6, approved: 5, rejected: 1 },
+    { ngay: "CN", confirmed: 3, approved: 2, rejected: 0 },
   ];
 
   return (
@@ -805,7 +805,7 @@ const Dashboard = () => {
             <Tooltip
               formatter={(value, name) => [
                 formatNumber(value),
-                name === "submitted"
+                name === "confirmed"
                   ? "Đã gửi"
                   : name === "approved"
                   ? "Đã duyệt"
@@ -820,7 +820,7 @@ const Dashboard = () => {
             />
             <Line
               type="monotone"
-              dataKey="submitted"
+              dataKey="confirmed"
               stroke="#3b82f6"
               strokeWidth={2}
               dot={{ fill: "#3b82f6", strokeWidth: 2, r: 4 }}
@@ -908,7 +908,7 @@ const Dashboard = () => {
               {
                 so_yeu_cau: "YCN20250101001",
                 loai: "Nhập kho",
-                trang_thai: "submitted",
+                trang_thai: "confirmed",
                 ngay: "01/01/2025",
               },
               {
@@ -936,7 +936,7 @@ const Dashboard = () => {
                 </div>
                 <div className="text-right">
                   <div className="flex items-center space-x-2">
-                    {request.trang_thai === "submitted" && (
+                    {request.trang_thai === "confirmed" && (
                       <Send size={12} className="text-blue-500" />
                     )}
                     {request.trang_thai === "approved" && (
@@ -947,14 +947,14 @@ const Dashboard = () => {
                     )}
                     <span
                       className={`text-xs font-medium ${
-                        request.trang_thai === "submitted"
+                        request.trang_thai === "confirmed"
                           ? "text-blue-600"
                           : request.trang_thai === "approved"
                           ? "text-green-600"
                           : "text-yellow-600"
                       }`}
                     >
-                      {request.trang_thai === "submitted"
+                      {request.trang_thai === "confirmed"
                         ? "Đã gửi"
                         : request.trang_thai === "approved"
                         ? "Đã duyệt"

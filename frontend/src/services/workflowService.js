@@ -115,6 +115,36 @@ export const workflowService = {
     }
   },
 
+  getPendingRequests: async (params = {}) => {
+    try {
+      const response = await api.get("/workflow/pending-approvals", { params });
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching pending requests:", error);
+      throw error;
+    }
+  },
+
+  // Thêm method getStatistics
+  getStatistics: async (params = {}) => {
+    try {
+      const response = await api.get("/workflow/statistics", { params });
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching workflow statistics:", error);
+      throw error;
+    }
+  },
+
+  // Thêm các method alias để tương thích với WorkflowManagement.jsx
+  convertToPhieuNhap: async (id, conversionData) => {
+    return await workflowService.convertYeuCauNhapToPhieu(id, conversionData);
+  },
+
+  convertToPhieuXuat: async (id, conversionData) => {
+    return await workflowService.convertYeuCauXuatToPhieu(id, conversionData);
+  },
+
   // Lấy lịch sử workflow của một yêu cầu
   getWorkflowHistory: async (type, id) => {
     try {

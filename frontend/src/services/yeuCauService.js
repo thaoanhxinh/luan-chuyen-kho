@@ -60,7 +60,7 @@ export const yeuCauService = {
     }
   },
 
-  // Gửi yêu cầu nhập kho (chuyển từ draft -> submitted)
+  // Gửi yêu cầu nhập kho (chuyển từ draft -> confirmed)
   submitYeuCauNhap: async (id) => {
     try {
       const response = await api.patch(`/yeu-cau-nhap/${id}/submit`);

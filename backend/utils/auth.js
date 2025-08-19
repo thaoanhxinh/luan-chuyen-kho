@@ -39,7 +39,7 @@ const checkWorkflowPermission = async (user, actionType = "view") => {
       return { hasPermission: false, reason: "User not authenticated" };
     }
 
-    // Admin có toàn quyền
+    // Admin cÃ³ toÃ n quyá»n
     if (user.role === "admin") {
       return {
         hasPermission: true,
@@ -48,7 +48,7 @@ const checkWorkflowPermission = async (user, actionType = "view") => {
       };
     }
 
-    // Kiểm tra quyền theo action type
+    // Kiá»ƒm tra quyá»n theo action type
     switch (actionType) {
       case "approve":
       case "reject":
@@ -70,11 +70,11 @@ const checkWorkflowPermission = async (user, actionType = "view") => {
 };
 
 /**
- * Kiểm tra quyền phê duyệt
+ * Kiá»ƒm tra quyá»n phÃª duyá»‡t
  */
 const checkApprovalPermission = async (user) => {
   try {
-    // Lấy danh sách phòng ban có quyền phê duyệt
+    // Láº¥y danh sÃ¡ch phÃ²ng ban cÃ³ quyá»n phÃª duyá»‡t
     const approvalDepartments = await pool.query(
       "SELECT id, ma_phong_ban, ten_phong_ban FROM phong_ban WHERE ma_phong_ban IN ('HCK', 'TMKH')"
     );
@@ -103,11 +103,11 @@ const checkApprovalPermission = async (user) => {
 };
 
 /**
- * Kiểm tra quyền tạo yêu cầu
+ * Kiá»ƒm tra quyá»n táº¡o yÃªu cáº§u
  */
 const checkCreateRequestPermission = async (user) => {
   try {
-    // Tất cả user đã authenticated đều có thể tạo yêu cầu cho phòng ban của mình
+    // Táº¥t cáº£ user Ä‘Ã£ authenticated Ä‘á»u cÃ³ thá»ƒ táº¡o yÃªu cáº§u cho phÃ²ng ban cá»§a mÃ¬nh
     const userDepartment = await pool.query(
       "SELECT id, ma_phong_ban, ten_phong_ban FROM phong_ban WHERE id = $1",
       [user.phong_ban_id]
@@ -130,17 +130,17 @@ const checkCreateRequestPermission = async (user) => {
 };
 
 /**
- * Kiểm tra quyền xem
+ * Kiá»ƒm tra quyá»n xem
  */
 const checkViewPermission = async (user) => {
   try {
-    // User có thể xem yêu cầu của phòng ban mình và yêu cầu mình tạo
+    // User cÃ³ thá»ƒ xem yÃªu cáº§u cá»§a phÃ²ng ban mÃ¬nh vÃ  yÃªu cáº§u mÃ¬nh táº¡o
     const userDepartment = await pool.query(
       "SELECT id, ma_phong_ban, ten_phong_ban FROM phong_ban WHERE id = $1",
       [user.phong_ban_id]
     );
 
-    // Kiểm tra có phải là phòng quản lý kho không
+    // Kiá»ƒm tra cÃ³ pháº£i lÃ  phÃ²ng quáº£n lÃ½ kho khÃ´ng
     const isManagementDept = await pool.query(
       "SELECT id FROM phong_ban WHERE id = $1 AND ma_phong_ban IN ('HCK', 'TMKH')",
       [user.phong_ban_id]
@@ -163,10 +163,10 @@ const checkViewPermission = async (user) => {
 };
 
 /**
- * Kiểm tra quyền truy cập resource cụ thể
+ * Kiá»ƒm tra quyá»n truy cáº­p resource cá»¥ thá»ƒ
  * @param {Object} user - User object
  * @param {string} resourceType - 'yeu_cau_nhap', 'yeu_cau_xuat', 'phieu_nhap', 'phieu_xuat'
- * @param {number} resourceId - ID của resource
+ * @param {number} resourceId - ID cá»§a resource
  * @returns {Object} Access result
  */
 const checkResourceAccess = async (user, resourceType, resourceId) => {
@@ -175,7 +175,7 @@ const checkResourceAccess = async (user, resourceType, resourceId) => {
       return { hasAccess: false, reason: "Invalid parameters" };
     }
 
-    // Admin có toàn quyền
+    // Admin cÃ³ toÃ n quyá»n
     if (user.role === "admin") {
       return { hasAccess: true, level: "admin" };
     }
@@ -183,7 +183,7 @@ const checkResourceAccess = async (user, resourceType, resourceId) => {
     let query;
     let tableName;
 
-    // Xác định table và query dựa trên resource type
+    // XÃ¡c Ä‘á»‹nh table vÃ  query dá»±a trÃªn resource type
     switch (resourceType) {
       case "yeu_cau_nhap":
         tableName = "yeu_cau_nhap_kho";
@@ -233,11 +233,11 @@ const checkResourceAccess = async (user, resourceType, resourceId) => {
 
     const resource = result.rows[0];
 
-    // Kiểm tra quyền truy cập
+    // Kiá»ƒm tra quyá»n truy cáº­p
     const isOwner = resource.nguoi_yeu_cau === user.id;
     const isSameDepartment = resource.don_vi_yeu_cau_id === user.phong_ban_id;
 
-    // Kiểm tra có phải phòng quản lý kho không
+    // Kiá»ƒm tra cÃ³ pháº£i phÃ²ng quáº£n lÃ½ kho khÃ´ng
     const managementCheck = await pool.query(
       "SELECT id FROM phong_ban WHERE id = $1 AND ma_phong_ban IN ('HCK', 'TMKH')",
       [user.phong_ban_id]
@@ -264,13 +264,13 @@ const checkResourceAccess = async (user, resourceType, resourceId) => {
 
 /**
  * Middleware factory cho workflow authentication
- * @param {string} actionType - Loại action cần kiểm tra
- * @param {string} resourceParam - Tên parameter chứa resource ID (optional)
+ * @param {string} actionType - Loáº¡i action cáº§n kiá»ƒm tra
+ * @param {string} resourceParam - TÃªn parameter chá»©a resource ID (optional)
  */
 const requireWorkflowPermission = (actionType, resourceParam = null) => {
   return async (req, res, next) => {
     try {
-      const user = req.user; // Đã được set từ authenticate middleware trước đó
+      const user = req.user; // ÄÃ£ Ä‘Æ°á»£c set tá»« authenticate middleware trÆ°á»›c Ä‘Ã³
 
       if (!user) {
         return res.status(401).json({
@@ -279,7 +279,7 @@ const requireWorkflowPermission = (actionType, resourceParam = null) => {
         });
       }
 
-      // Kiểm tra quyền workflow cơ bản
+      // Kiá»ƒm tra quyá»n workflow cÆ¡ báº£n
       const permission = await checkWorkflowPermission(user, actionType);
 
       if (!permission.hasPermission) {
@@ -289,7 +289,7 @@ const requireWorkflowPermission = (actionType, resourceParam = null) => {
         });
       }
 
-      // Nếu có resourceParam, kiểm tra quyền truy cập resource cụ thể
+      // Náº¿u cÃ³ resourceParam, kiá»ƒm tra quyá»n truy cáº­p resource cá»¥ thá»ƒ
       if (resourceParam && req.params[resourceParam]) {
         const resourceType = req.path.includes("yeu-cau-nhap")
           ? "yeu_cau_nhap"

@@ -1,33 +1,63 @@
 import api from "./api";
 
 export const userService = {
-  // Lấy danh sách nhân viên
-  getUsers: (params = {}) => {
-    return api.get("/users", { params });
+  getList: async (params = {}) => {
+    try {
+      const response = await api.get("/users", { params });
+      return response.data; // API returns {success: true, data: {items, pagination}}
+    } catch (error) {
+      console.error("Get users error:", error);
+      throw error;
+    }
   },
 
-  // Tạo nhân viên mới
-  createUser: (data) => {
-    return api.post("/users", data);
+  getDepartmentsList: async () => {
+    try {
+      const response = await api.get("/departments");
+      return response.data; // API returns {success: true, data: [...]}
+    } catch (error) {
+      console.error("Get departments error:", error);
+      throw error;
+    }
   },
 
-  // Cập nhật nhân viên
-  updateUser: (id, data) => {
-    return api.put(`/users/${id}`, data);
+  create: async (data) => {
+    try {
+      const response = await api.post("/users", data);
+      return response.data;
+    } catch (error) {
+      console.error("Create user error:", error);
+      throw error;
+    }
   },
 
-  // Xóa nhân viên
-  deleteUser: (id) => {
-    return api.delete(`/users/${id}`);
+  update: async (id, data) => {
+    try {
+      const response = await api.put(`/users/${id}`, data);
+      return response.data;
+    } catch (error) {
+      console.error("Update user error:", error);
+      throw error;
+    }
   },
 
-  // Phân quyền
-  updateUserRole: (id, role) => {
-    return api.put(`/users/${id}/role`, { role });
+  delete: async (id) => {
+    try {
+      const response = await api.delete(`/users/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error("Delete user error:", error);
+      throw error;
+    }
   },
 
-  // Reset password
-  resetPassword: (id) => {
-    return api.post(`/users/${id}/reset-password`);
+  resetPassword: async (id) => {
+    try {
+      const response = await api.post(`/users/${id}/reset-password`);
+      return response.data;
+    } catch (error) {
+      console.error("Reset password error:", error);
+      throw error;
+    }
   },
 };

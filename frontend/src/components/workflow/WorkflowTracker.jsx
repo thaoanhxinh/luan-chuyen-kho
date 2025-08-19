@@ -29,7 +29,7 @@ const WorkflowTracker = ({ yeuCau, type = "nhap", showDetails = true }) => {
       color: "gray",
     },
     {
-      key: "submitted",
+      key: "confirmed",
       label: "Đã gửi",
       description: "Yêu cầu đã được gửi để xem xét",
       icon: Clock,
@@ -64,7 +64,7 @@ const WorkflowTracker = ({ yeuCau, type = "nhap", showDetails = true }) => {
 
     if (currentStatus === "rejected" || currentStatus === "cancelled") {
       // Find the last successful stage before rejection/cancellation
-      const stages = ["draft", "submitted", "under_review"];
+      const stages = ["draft", "confirmed", "under_review"];
       for (let i = stages.length - 1; i >= 0; i--) {
         if (
           yeuCau.workflow_history?.some((h) => h.trang_thai === stages[i]) ||
@@ -161,7 +161,7 @@ const WorkflowTracker = ({ yeuCau, type = "nhap", showDetails = true }) => {
         let title = "Xem xét yêu cầu";
 
         switch (event.trang_thai) {
-          case "submitted":
+          case "confirmed":
             title = "Yêu cầu được gửi";
             eventType = "info";
             break;
@@ -321,7 +321,7 @@ const WorkflowTracker = ({ yeuCau, type = "nhap", showDetails = true }) => {
               ? "Đã phê duyệt"
               : yeuCau.trang_thai === "under_review"
               ? "Đang xem xét"
-              : yeuCau.trang_thai === "submitted"
+              : yeuCau.trang_thai === "confirmed"
               ? "Đã gửi"
               : "Nháp"}
           </div>
@@ -413,7 +413,7 @@ const WorkflowTracker = ({ yeuCau, type = "nhap", showDetails = true }) => {
               <p className="text-blue-800">
                 {yeuCau.trang_thai === "draft" &&
                   "Hoàn thiện thông tin và gửi yêu cầu để xem xét"}
-                {yeuCau.trang_thai === "submitted" &&
+                {yeuCau.trang_thai === "confirmed" &&
                   "Chờ phòng quản lý kho xem xét và phê duyệt"}
                 {yeuCau.trang_thai === "under_review" &&
                   "Đang được xem xét bởi phòng quản lý kho"}

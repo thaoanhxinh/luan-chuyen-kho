@@ -238,26 +238,58 @@ const assignUsers = async (req, res, params, body, user) => {
   }
 };
 
+// API cho dropdown trong hàng hóa (có phân quyền)
 const getDepartmentsList = async (req, res, query, user) => {
   try {
-    if (user.role !== "admin") {
-      return sendResponse(res, 403, false, "Không có quyền truy cập");
+    console.log("🏢 Getting departments list for dropdown with permissions");
+
+    let departmentsQuery;
+    let params = [];
+
+    if (user.role === "admin") {
+      // Admin xem được tất cả phòng ban
+      departmentsQuery = `
+        SELECT 
+          id,
+          ma_phong_ban,
+          ten_phong_ban,
+          cap_bac,
+          CASE 
+            WHEN cap_bac = 1 THEN 'BTL Vùng'
+            WHEN cap_bac = 2 THEN 'Phòng ban/Ban chuyên môn'
+            WHEN cap_bac = 3 THEN 'Đơn vị tác nghiệp'
+            ELSE 'Khác'
+          END as mo_ta_cap_bac
+        FROM phong_ban 
+        WHERE is_active = TRUE
+        ORDER BY cap_bac, ten_phong_ban
+      `;
+    } else if (user.role === "manager") {
+      // Manager chỉ xem được các đơn vị cấp 3 dưới quyền
+      departmentsQuery = `
+        SELECT 
+          id,
+          ma_phong_ban,
+          ten_phong_ban,
+          cap_bac,
+          'Đơn vị tác nghiệp dưới quyền' as mo_ta_cap_bac
+        FROM phong_ban 
+        WHERE is_active = TRUE 
+        AND cap_bac = 3 
+        AND phong_ban_cha_id = $1
+        ORDER BY ten_phong_ban
+      `;
+      params = [user.phong_ban_id];
+    } else {
+      // User thường không được chọn phòng ban khác
+      return sendResponse(res, 200, true, "Danh sách phòng ban khả dụng", []);
     }
 
-    console.log("🏢 Getting departments list for dropdown");
+    const result = await pool.query(departmentsQuery, params);
 
-    const departmentsQuery = `
-      SELECT 
-        id,
-        ten_phong_ban
-      FROM phong_ban 
-      WHERE trang_thai = 'active'
-      ORDER BY ma_phong_ban, ten_phong_ban
-    `;
-
-    const result = await pool.query(departmentsQuery);
-
-    console.log(`📦 Found ${result.rows.length} departments`);
+    console.log(
+      `📦 Found ${result.rows.length} departments for role: ${user.role}`
+    );
 
     sendResponse(
       res,

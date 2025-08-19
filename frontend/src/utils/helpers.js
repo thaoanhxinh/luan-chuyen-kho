@@ -1,4 +1,4 @@
-import { format, parseISO } from "date-fns";
+import { format, parseISO, formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
 
 export const formatCurrency = (amount) => {
@@ -37,4 +37,19 @@ export const debounce = (func, wait) => {
     clearTimeout(timeout);
     timeout = setTimeout(later, wait);
   };
+};
+
+export const formatRelativeTime = (date) => {
+  if (!date) return "";
+
+  try {
+    const dateObj = typeof date === "string" ? parseISO(date) : date;
+    return formatDistanceToNow(dateObj, {
+      addSuffix: true,
+      locale: vi,
+    });
+  } catch (error) {
+    console.error("Error formatting relative time:", error);
+    return "Vừa xong";
+  }
 };

@@ -30,7 +30,7 @@ const YeuCauDetail = ({ yeuCau, type = "nhap" }) => {
       color: "bg-gray-100 text-gray-800",
       icon: FileText,
     },
-    submitted: {
+    confirmed: {
       label: "Đã gửi",
       color: "bg-blue-100 text-blue-800",
       icon: Clock,

@@ -43,7 +43,7 @@ const NotificationCenter = () => {
   const notifications = data?.data?.items || [];
   const pagination = data?.data?.pagination || {};
 
-  // Tabs configuration
+  // Tabs configuration - Cập nhật với các loại thông báo mới
   const tabs = [
     {
       key: "all",
@@ -60,32 +60,53 @@ const NotificationCenter = () => {
       color: "text-blue-600",
     },
     {
-      key: "yeu_cau_moi",
-      label: "Yêu cầu mới",
+      key: "phieu_nhap_can_duyet",
+      label: "Nhập - Cần duyệt",
       icon: Info,
-      count: stats?.data?.new_requests || 0,
+      count: stats?.data?.phieu_nhap_can_duyet || 0,
       color: "text-blue-600",
     },
     {
-      key: "phe_duyet",
-      label: "Phê duyệt",
+      key: "phieu_nhap_duyet",
+      label: "Nhập - Đã duyệt",
       icon: CheckCircle,
-      count: stats?.data?.approvals || 0,
+      count: stats?.data?.phieu_nhap_duyet || 0,
       color: "text-green-600",
     },
     {
-      key: "tu_choi",
-      label: "Từ chối",
-      icon: XCircle,
-      count: stats?.data?.rejections || 0,
-      color: "text-red-600",
+      key: "phieu_nhap_can_sua",
+      label: "Nhập - Cần sửa",
+      icon: AlertCircle,
+      count: stats?.data?.phieu_nhap_can_sua || 0,
+      color: "text-orange-600",
     },
     {
-      key: "hoan_thanh",
-      label: "Hoàn thành",
+      key: "phieu_xuat_can_duyet",
+      label: "Xuất - Cần duyệt",
+      icon: Info,
+      count: stats?.data?.phieu_xuat_can_duyet || 0,
+      color: "text-blue-600",
+    },
+    {
+      key: "phieu_xuat_duyet",
+      label: "Xuất - Đã duyệt",
       icon: CheckCircle,
-      count: stats?.data?.completions || 0,
-      color: "text-emerald-600",
+      count: stats?.data?.phieu_xuat_duyet || 0,
+      color: "text-green-600",
+    },
+    {
+      key: "phieu_xuat_can_sua",
+      label: "Xuất - Cần sửa",
+      icon: XCircle,
+      count: stats?.data?.phieu_xuat_can_sua || 0,
+      color: "text-orange-600",
+    },
+    {
+      key: "system",
+      label: "Hệ thống",
+      icon: Settings,
+      count: stats?.data?.system || 0,
+      color: "text-gray-600",
     },
   ];
 
@@ -203,7 +224,7 @@ const NotificationCenter = () => {
       await handleMarkAsRead(notification.id);
     }
 
-    // Navigate to related page if URL provided
+    // Sử dụng URL từ backend (đã có tab và highlight)
     if (notification.url_redirect) {
       window.location.href = notification.url_redirect;
     }
@@ -229,10 +250,12 @@ const NotificationCenter = () => {
 
   const getNotificationIcon = (loaiThongBao) => {
     const iconMap = {
-      yeu_cau_moi: { icon: Info, color: "text-blue-500" },
-      phe_duyet: { icon: CheckCircle, color: "text-green-500" },
-      tu_choi: { icon: XCircle, color: "text-red-500" },
-      hoan_thanh: { icon: CheckCircle, color: "text-emerald-500" },
+      phieu_nhap_can_duyet: { icon: Info, color: "text-blue-500" },
+      phieu_nhap_duyet: { icon: CheckCircle, color: "text-green-500" },
+      phieu_nhap_can_sua: { icon: AlertCircle, color: "text-orange-500" },
+      phieu_xuat_can_duyet: { icon: Info, color: "text-blue-500" },
+      phieu_xuat_duyet: { icon: CheckCircle, color: "text-green-500" },
+      phieu_xuat_can_sua: { icon: XCircle, color: "text-orange-500" },
       system: { icon: Settings, color: "text-purple-500" },
     };
     return iconMap[loaiThongBao] || iconMap.system;
@@ -342,10 +365,12 @@ const NotificationCenter = () => {
               className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm"
             >
               <option value="">Tất cả loại</option>
-              <option value="yeu_cau_moi">Yêu cầu mới</option>
-              <option value="phe_duyet">Phê duyệt</option>
-              <option value="tu_choi">Từ chối</option>
-              <option value="hoan_thanh">Hoàn thành</option>
+              <option value="phieu_nhap_can_duyet">Nhập - Cần duyệt</option>
+              <option value="phieu_nhap_duyet">Nhập - Đã duyệt</option>
+              <option value="phieu_nhap_can_sua">Nhập - Cần sửa</option>
+              <option value="phieu_xuat_can_duyet">Xuất - Cần duyệt</option>
+              <option value="phieu_xuat_duyet">Xuất - Đã duyệt</option>
+              <option value="phieu_xuat_can_sua">Xuất - Cần sửa</option>
               <option value="system">Hệ thống</option>
             </select>
 
@@ -474,12 +499,12 @@ const NotificationCenter = () => {
                             <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
                               <span className="flex items-center">
                                 <Calendar size={12} className="mr-1" />
-                                {formatRelativeTime(notification.ngay_gui)}
+                                {formatRelativeTime(notification.created_at)}
                               </span>
-                              {notification.yeu_cau_id && (
+                              {notification.metadata?.phieu_id && (
                                 <span className="flex items-center">
                                   <User size={12} className="mr-1" />
-                                  Yêu cầu #{notification.yeu_cau_id}
+                                  Phiếu #{notification.metadata.phieu_id}
                                 </span>
                               )}
                             </div>
@@ -555,7 +580,7 @@ const NotificationCenter = () => {
         size="md"
       >
         {preferences && (
-          <div className="space-y-6">
+          <div className="space-y-6 p-6">
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">
                 Phương thức nhận thông báo
@@ -619,10 +644,14 @@ const NotificationCenter = () => {
                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
                       <span className="text-sm text-gray-700">
-                        {type === "yeu_cau_moi" && "Yêu cầu mới"}
-                        {type === "phe_duyet" && "Phê duyệt"}
-                        {type === "tu_choi" && "Từ chối"}
-                        {type === "hoan_thanh" && "Hoàn thành"}
+                        {type === "phieu_nhap_can_duyet" &&
+                          "Phiếu nhập cần duyệt"}
+                        {type === "phieu_nhap_duyet" && "Phiếu nhập đã duyệt"}
+                        {type === "phieu_nhap_can_sua" && "Phiếu nhập cần sửa"}
+                        {type === "phieu_xuat_can_duyet" &&
+                          "Phiếu xuất cần duyệt"}
+                        {type === "phieu_xuat_duyet" && "Phiếu xuất đã duyệt"}
+                        {type === "phieu_xuat_can_sua" && "Phiếu xuất cần sửa"}
                         {type === "system" && "Hệ thống"}
                       </span>
                     </label>

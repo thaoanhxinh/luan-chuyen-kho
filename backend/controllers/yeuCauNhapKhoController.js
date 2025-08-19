@@ -1,8 +1,8 @@
-// controllers/yeuCauNhapKhoController.js
+// controllers/yeuCauNhapKhoController.js - Complete 3-tier workflow implementation
 const pool = require("../config/database");
 const { sendResponse } = require("../utils/response");
 
-// Lấy danh sách yêu cầu nhập kho
+// Lấy danh sách yêu cầu nhập kho với logic phân quyền 3 cấp
 const getList = async (req, res, query, user) => {
   try {
     const {
@@ -14,6 +14,7 @@ const getList = async (req, res, query, user) => {
       trang_thai,
       muc_do_uu_tien,
       don_vi_yeu_cau_id,
+      nguon_cung_cap,
       sort_by = "created_at",
       sort_direction = "desc",
     } = query;
@@ -63,15 +64,40 @@ const getList = async (req, res, query, user) => {
       params.push(don_vi_yeu_cau_id);
     }
 
-    // Phân quyền theo vai trò
+    // Lọc theo nguồn cung cấp
+    if (nguon_cung_cap) {
+      paramCount++;
+      whereClause += ` AND ycn.nguon_cung_cap = $${paramCount}`;
+      params.push(nguon_cung_cap);
+    }
+
+    // Logic phân quyền theo cấp bậc 3 cấp
     if (user.role !== "admin") {
-      // User thường chỉ xem yêu cầu của phòng ban mình hoặc yêu cầu mình tạo
-      paramCount++;
-      whereClause += ` AND (ycn.don_vi_yeu_cau_id = $${paramCount} OR ycn.nguoi_yeu_cau = $${
-        paramCount + 1
-      })`;
-      params.push(user.phong_ban_id, user.id);
-      paramCount++;
+      // Lấy cấp bậc phòng ban của user
+      const userPhongBanResult = await pool.query(
+        "SELECT cap_bac, phong_ban_cha_id FROM phong_ban WHERE id = $1",
+        [user.phong_ban_id]
+      );
+
+      if (userPhongBanResult.rows.length > 0) {
+        const userCapBac = userPhongBanResult.rows[0].cap_bac;
+
+        if (userCapBac === 3) {
+          // Đơn vị cấp 3: chỉ xem yêu cầu của đơn vị mình
+          paramCount++;
+          whereClause += ` AND ycn.don_vi_yeu_cau_id = $${paramCount}`;
+          params.push(user.phong_ban_id);
+        } else if (userCapBac === 2) {
+          // Phòng ban cấp 2: xem yêu cầu của đơn vị mình và các đơn vị cấp 3 trực thuộc
+          paramCount++;
+          whereClause += ` AND (
+            ycn.don_vi_yeu_cau_id = $${paramCount} OR 
+            ycn.phong_ban_xu_ly_id = $${paramCount}
+          )`;
+          params.push(user.phong_ban_id);
+        }
+        // Cấp 1 (BTL Vùng) với role admin sẽ xem tất cả
+      }
     }
 
     // Xử lý sắp xếp
@@ -93,25 +119,34 @@ const getList = async (req, res, query, user) => {
       SELECT COUNT(*) 
       FROM yeu_cau_nhap_kho ycn 
       LEFT JOIN phong_ban pb_yc ON ycn.don_vi_yeu_cau_id = pb_yc.id
+      LEFT JOIN phong_ban pb_xl ON ycn.phong_ban_xu_ly_id = pb_xl.id
       ${whereClause}
     `;
 
-    // Query lấy dữ liệu
+    // Query lấy dữ liệu với thông tin phòng ban xử lý
     const dataQuery = `
       SELECT 
         ycn.*,
         pb_yc.id as don_vi_yeu_cau_id_ref,
         pb_yc.ten_phong_ban as ten_don_vi_yeu_cau,
+        pb_yc.cap_bac as cap_bac_don_vi_yeu_cau,
+        pb_xl.id as phong_ban_xu_ly_id_ref,
+        pb_xl.ten_phong_ban as ten_phong_ban_xu_ly,
+        pb_xl.cap_bac as cap_bac_phong_ban_xu_ly,
         u_yc.id as nguoi_yeu_cau_id_ref,
         u_yc.ho_ten as ten_nguoi_yeu_cau,
         u_duyet.id as nguoi_duyet_id_ref,
         u_duyet.ho_ten as ten_nguoi_duyet,
+        ncc.id as nha_cung_cap_id_ref,
+        ncc.ten_ncc as ten_nha_cung_cap,
         pn.id as phieu_nhap_id_ref,
         pn.so_phieu as so_phieu_nhap
       FROM yeu_cau_nhap_kho ycn
       LEFT JOIN phong_ban pb_yc ON ycn.don_vi_yeu_cau_id = pb_yc.id
+      LEFT JOIN phong_ban pb_xl ON ycn.phong_ban_xu_ly_id = pb_xl.id
       LEFT JOIN users u_yc ON ycn.nguoi_yeu_cau = u_yc.id
       LEFT JOIN users u_duyet ON ycn.nguoi_duyet = u_duyet.id
+      LEFT JOIN nha_cung_cap ncc ON ycn.nha_cung_cap_id = ncc.id
       LEFT JOIN phieu_nhap pn ON ycn.phieu_nhap_id = pn.id
       ${whereClause}
       ${orderClause}
@@ -128,13 +163,21 @@ const getList = async (req, res, query, user) => {
     const total = parseInt(countResult.rows[0].count);
     const pages = Math.ceil(total / limit);
 
-    // Cấu trúc lại dữ liệu
+    // Cấu trúc lại dữ liệu với thông tin 3 cấp
     const structuredItems = dataResult.rows.map((item) => ({
       ...item,
       don_vi_yeu_cau: item.don_vi_yeu_cau_id_ref
         ? {
             id: item.don_vi_yeu_cau_id_ref,
             ten_phong_ban: item.ten_don_vi_yeu_cau,
+            cap_bac: item.cap_bac_don_vi_yeu_cau,
+          }
+        : null,
+      phong_ban_xu_ly: item.phong_ban_xu_ly_id_ref
+        ? {
+            id: item.phong_ban_xu_ly_id_ref,
+            ten_phong_ban: item.ten_phong_ban_xu_ly,
+            cap_bac: item.cap_bac_phong_ban_xu_ly,
           }
         : null,
       nguoi_yeu_cau_info: item.nguoi_yeu_cau_id_ref
@@ -147,6 +190,12 @@ const getList = async (req, res, query, user) => {
         ? {
             id: item.nguoi_duyet_id_ref,
             ho_ten: item.ten_nguoi_duyet,
+          }
+        : null,
+      nha_cung_cap_info: item.nha_cung_cap_id_ref
+        ? {
+            id: item.nha_cung_cap_id_ref,
+            ten_ncc: item.ten_nha_cung_cap,
           }
         : null,
       phieu_nhap_info: item.phieu_nhap_id_ref
@@ -172,7 +221,7 @@ const getList = async (req, res, query, user) => {
   }
 };
 
-// Lấy chi tiết yêu cầu nhập kho
+// Lấy chi tiết yêu cầu nhập kho với thông tin 3 cấp
 const getDetail = async (req, res, params, user) => {
   try {
     const { id } = params;
@@ -181,15 +230,22 @@ const getDetail = async (req, res, params, user) => {
       SELECT 
         ycn.*,
         pb_yc.ten_phong_ban as ten_don_vi_yeu_cau,
+        pb_yc.cap_bac as cap_bac_don_vi_yeu_cau,
+        pb_xl.ten_phong_ban as ten_phong_ban_xu_ly,
+        pb_xl.cap_bac as cap_bac_phong_ban_xu_ly,
         u_yc.ho_ten as ten_nguoi_yeu_cau,
         u_yc.email as email_nguoi_yeu_cau,
         u_duyet.ho_ten as ten_nguoi_duyet,
+        ncc.ten_ncc as ten_nha_cung_cap,
+        ncc.ma_ncc as ma_nha_cung_cap,
         pn.so_phieu as so_phieu_nhap,
         pn.trang_thai as trang_thai_phieu_nhap
       FROM yeu_cau_nhap_kho ycn
       LEFT JOIN phong_ban pb_yc ON ycn.don_vi_yeu_cau_id = pb_yc.id
+      LEFT JOIN phong_ban pb_xl ON ycn.phong_ban_xu_ly_id = pb_xl.id
       LEFT JOIN users u_yc ON ycn.nguoi_yeu_cau = u_yc.id
       LEFT JOIN users u_duyet ON ycn.nguoi_duyet = u_duyet.id
+      LEFT JOIN nha_cung_cap ncc ON ycn.nha_cung_cap_id = ncc.id
       LEFT JOIN phieu_nhap pn ON ycn.phieu_nhap_id = pn.id
       WHERE ycn.id = $1
     `;
@@ -233,19 +289,35 @@ const getDetail = async (req, res, params, user) => {
 
     const yeuCauData = yeuCauResult.rows[0];
 
-    // Kiểm tra quyền xem
+    // Kiểm tra quyền xem theo logic 3 cấp
     if (user.role !== "admin") {
-      const hasPermission =
-        yeuCauData.don_vi_yeu_cau_id === user.phong_ban_id ||
-        yeuCauData.nguoi_yeu_cau === user.id;
+      const userPhongBanResult = await pool.query(
+        "SELECT cap_bac FROM phong_ban WHERE id = $1",
+        [user.phong_ban_id]
+      );
 
-      if (!hasPermission) {
-        return sendResponse(
-          res,
-          403,
-          false,
-          "Bạn không có quyền xem yêu cầu này"
-        );
+      if (userPhongBanResult.rows.length > 0) {
+        const userCapBac = userPhongBanResult.rows[0].cap_bac;
+        let hasPermission = false;
+
+        if (userCapBac === 3) {
+          // Đơn vị cấp 3: chỉ xem yêu cầu của mình
+          hasPermission = yeuCauData.don_vi_yeu_cau_id === user.phong_ban_id;
+        } else if (userCapBac === 2) {
+          // Phòng ban cấp 2: xem yêu cầu từ cấp dưới hoặc của mình
+          hasPermission =
+            yeuCauData.don_vi_yeu_cau_id === user.phong_ban_id ||
+            yeuCauData.phong_ban_xu_ly_id === user.phong_ban_id;
+        }
+
+        if (!hasPermission) {
+          return sendResponse(
+            res,
+            403,
+            false,
+            "Bạn không có quyền xem yêu cầu này"
+          );
+        }
       }
     }
 
@@ -273,7 +345,7 @@ const getDetail = async (req, res, params, user) => {
   }
 };
 
-// Tạo yêu cầu nhập kho mới
+// Tạo yêu cầu nhập kho mới với logic 3 cấp
 const create = async (req, res, body, user) => {
   const client = await pool.connect();
 
@@ -286,16 +358,36 @@ const create = async (req, res, body, user) => {
       ly_do_yeu_cau,
       muc_do_uu_tien = "binh_thuong",
       don_vi_yeu_cau_id,
+      nguon_cung_cap = "tu_mua",
+      nha_cung_cap_id,
       ghi_chu,
       file_dinh_kem_url,
       file_dinh_kem_name,
       chi_tiet = [],
     } = body;
 
-    // Validation
+    // Validation cơ bản
     if (!ly_do_yeu_cau || !chi_tiet.length) {
       await client.query("ROLLBACK");
       return sendResponse(res, 400, false, "Thiếu thông tin bắt buộc");
+    }
+
+    // Validation nguồn cung cấp
+    const validNguonCungCap = ["tu_mua", "tren_cap", "dieu_chuyen"];
+    if (!validNguonCungCap.includes(nguon_cung_cap)) {
+      await client.query("ROLLBACK");
+      return sendResponse(res, 400, false, "Nguồn cung cấp không hợp lệ");
+    }
+
+    // Kiểm tra nhà cung cấp nếu là tự mua
+    if (nguon_cung_cap === "tu_mua" && !nha_cung_cap_id) {
+      await client.query("ROLLBACK");
+      return sendResponse(
+        res,
+        400,
+        false,
+        "Cần chọn nhà cung cấp khi tự mua sắm"
+      );
     }
 
     // Kiểm tra ngày cần hàng
@@ -309,7 +401,21 @@ const create = async (req, res, body, user) => {
       );
     }
 
-    // Validate chi tiết
+    // Lấy thông tin phòng ban của user để xác định cấp bậc
+    const phongBanUserResult = await client.query(
+      "SELECT cap_bac, phong_ban_cha_id FROM phong_ban WHERE id = $1",
+      [user.phong_ban_id]
+    );
+
+    if (phongBanUserResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return sendResponse(res, 400, false, "Thông tin phòng ban không hợp lệ");
+    }
+
+    // Xác định đơn vị yêu cầu (mặc định là phòng ban của user)
+    const donViYeuCauId = don_vi_yeu_cau_id || user.phong_ban_id;
+
+    // Validate chi tiết hàng hóa
     for (let i = 0; i < chi_tiet.length; i++) {
       const item = chi_tiet[i];
       if (
@@ -325,26 +431,53 @@ const create = async (req, res, body, user) => {
           `Chi tiết dòng ${i + 1} không hợp lệ`
         );
       }
+
+      // Kiểm tra hàng hóa tồn tại
+      const hangHoaCheck = await client.query(
+        "SELECT id, ten_hang_hoa FROM hang_hoa WHERE id = $1",
+        [item.hang_hoa_id]
+      );
+
+      if (hangHoaCheck.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return sendResponse(
+          res,
+          400,
+          false,
+          `Hàng hóa ID ${item.hang_hoa_id} không tồn tại`
+        );
+      }
     }
 
-    // Tạo yêu cầu nhập kho
+    // Tính tổng giá trị ước tính
+    let tongGiaTriUocTinh = 0;
+    for (const item of chi_tiet) {
+      const giaUocTinh = item.don_gia_uoc_tinh || 0;
+      tongGiaTriUocTinh += giaUocTinh * item.so_luong_yeu_cau;
+    }
+
+    // Tạo yêu cầu nhập kho với các trường mới
     const yeuCauResult = await client.query(
       `INSERT INTO yeu_cau_nhap_kho (
         ngay_yeu_cau, ngay_can_hang, ly_do_yeu_cau, muc_do_uu_tien,
-        don_vi_yeu_cau_id, nguoi_yeu_cau, ghi_chu, 
-        file_dinh_kem_url, file_dinh_kem_name, trang_thai
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft')
+        don_vi_yeu_cau_id, nguoi_yeu_cau, nguon_cung_cap, nha_cung_cap_id,
+        ghi_chu, file_dinh_kem_url, file_dinh_kem_name, 
+        tong_gia_tri_uoc_tinh, trang_thai
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'draft')
       RETURNING *`,
       [
         ngay_yeu_cau,
         ngay_can_hang,
         ly_do_yeu_cau,
         muc_do_uu_tien,
-        don_vi_yeu_cau_id || user.phong_ban_id,
+        donViYeuCauId,
         user.id,
+        nguon_cung_cap,
+        nguon_cung_cap === "tu_mua" ? nha_cung_cap_id : null,
         ghi_chu,
         file_dinh_kem_url,
         file_dinh_kem_name,
+        tongGiaTriUocTinh,
       ]
     );
 
@@ -373,6 +506,7 @@ const create = async (req, res, body, user) => {
     sendResponse(res, 201, true, "Tạo yêu cầu nhập kho thành công", {
       id: yeuCau.id,
       so_yeu_cau: yeuCau.so_yeu_cau,
+      nguon_cung_cap: yeuCau.nguon_cung_cap,
     });
   } catch (error) {
     await client.query("ROLLBACK");
@@ -383,7 +517,7 @@ const create = async (req, res, body, user) => {
   }
 };
 
-// Cập nhật yêu cầu nhập kho
+// Cập nhật yêu cầu nhập kho với logic 3 cấp
 const update = async (req, res, params, body, user) => {
   const client = await pool.connect();
 
@@ -396,6 +530,8 @@ const update = async (req, res, params, body, user) => {
       ngay_can_hang,
       ly_do_yeu_cau,
       muc_do_uu_tien,
+      nguon_cung_cap,
+      nha_cung_cap_id,
       ghi_chu,
       file_dinh_kem_url,
       file_dinh_kem_name,
@@ -404,7 +540,10 @@ const update = async (req, res, params, body, user) => {
 
     // Kiểm tra yêu cầu tồn tại và quyền chỉnh sửa
     const yeuCauResult = await client.query(
-      "SELECT * FROM yeu_cau_nhap_kho WHERE id = $1",
+      `SELECT ycn.*, pb.cap_bac 
+       FROM yeu_cau_nhap_kho ycn
+       JOIN phong_ban pb ON ycn.don_vi_yeu_cau_id = pb.id
+       WHERE ycn.id = $1`,
       [id]
     );
 
@@ -415,7 +554,7 @@ const update = async (req, res, params, body, user) => {
 
     const yeuCau = yeuCauResult.rows[0];
 
-    // Kiểm tra quyền chỉnh sửa
+    // Kiểm tra quyền chỉnh sửa theo cấp bậc
     if (user.role !== "admin") {
       const hasPermission =
         yeuCau.nguoi_yeu_cau === user.id ||
@@ -432,8 +571,8 @@ const update = async (req, res, params, body, user) => {
       }
     }
 
-    // Chỉ cho phép chỉnh sửa khi ở trạng thái draft hoặc submitted
-    if (!["draft", "submitted"].includes(yeuCau.trang_thai)) {
+    // Chỉ cho phép chỉnh sửa khi ở trạng thái draft hoặc rejected
+    if (!["draft", "rejected"].includes(yeuCau.trang_thai)) {
       await client.query("ROLLBACK");
       return sendResponse(
         res,
@@ -443,46 +582,113 @@ const update = async (req, res, params, body, user) => {
       );
     }
 
+    // Validation nguồn cung cấp nếu có thay đổi
+    if (nguon_cung_cap) {
+      const validNguonCungCap = ["tu_mua", "tren_cap", "dieu_chuyen"];
+      if (!validNguonCungCap.includes(nguon_cung_cap)) {
+        await client.query("ROLLBACK");
+        return sendResponse(res, 400, false, "Nguồn cung cấp không hợp lệ");
+      }
+
+      if (nguon_cung_cap === "tu_mua" && !nha_cung_cap_id) {
+        await client.query("ROLLBACK");
+        return sendResponse(
+          res,
+          400,
+          false,
+          "Cần chọn nhà cung cấp khi tự mua sắm"
+        );
+      }
+    }
+
+    // Validate chi tiết nếu có cập nhật
+    if (chi_tiet.length > 0) {
+      for (let i = 0; i < chi_tiet.length; i++) {
+        const item = chi_tiet[i];
+        if (
+          !item.hang_hoa_id ||
+          !item.so_luong_yeu_cau ||
+          item.so_luong_yeu_cau <= 0
+        ) {
+          await client.query("ROLLBACK");
+          return sendResponse(
+            res,
+            400,
+            false,
+            `Chi tiết dòng ${i + 1} không hợp lệ`
+          );
+        }
+      }
+    }
+
+    // Tính lại tổng giá trị nếu có cập nhật chi tiết
+    let tongGiaTriUocTinh = yeuCau.tong_gia_tri_uoc_tinh;
+    if (chi_tiet.length > 0) {
+      tongGiaTriUocTinh = 0;
+      for (const item of chi_tiet) {
+        const giaUocTinh = item.don_gia_uoc_tinh || 0;
+        tongGiaTriUocTinh += giaUocTinh * item.so_luong_yeu_cau;
+      }
+    }
+
     // Cập nhật thông tin yêu cầu
     await client.query(
       `UPDATE yeu_cau_nhap_kho SET
-        ngay_yeu_cau = $1, ngay_can_hang = $2, ly_do_yeu_cau = $3,
-        muc_do_uu_tien = $4, ghi_chu = $5, file_dinh_kem_url = $6,
-        file_dinh_kem_name = $7, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $8`,
+        ngay_yeu_cau = COALESCE($1, ngay_yeu_cau),
+        ngay_can_hang = COALESCE($2, ngay_can_hang),
+        ly_do_yeu_cau = COALESCE($3, ly_do_yeu_cau),
+        muc_do_uu_tien = COALESCE($4, muc_do_uu_tien),
+        nguon_cung_cap = COALESCE($5, nguon_cung_cap),
+        nha_cung_cap_id = CASE 
+          WHEN $5 = 'tu_mua' THEN COALESCE($6, nha_cung_cap_id)
+          WHEN $5 IN ('tren_cap', 'dieu_chuyen') THEN NULL
+          ELSE nha_cung_cap_id
+        END,
+        ghi_chu = COALESCE($7, ghi_chu),
+        file_dinh_kem_url = COALESCE($8, file_dinh_kem_url),
+        file_dinh_kem_name = COALESCE($9, file_dinh_kem_name),
+        tong_gia_tri_uoc_tinh = $10,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $11`,
       [
         ngay_yeu_cau,
         ngay_can_hang,
         ly_do_yeu_cau,
         muc_do_uu_tien,
+        nguon_cung_cap,
+        nha_cung_cap_id,
         ghi_chu,
         file_dinh_kem_url,
         file_dinh_kem_name,
+        tongGiaTriUocTinh,
         id,
       ]
     );
 
-    // Xóa và tạo lại chi tiết
-    await client.query(
-      "DELETE FROM chi_tiet_yeu_cau_nhap WHERE yeu_cau_nhap_id = $1",
-      [id]
-    );
-
-    for (const item of chi_tiet) {
+    // Cập nhật chi tiết nếu có
+    if (chi_tiet.length > 0) {
+      // Xóa và tạo lại chi tiết
       await client.query(
-        `INSERT INTO chi_tiet_yeu_cau_nhap (
-          yeu_cau_nhap_id, hang_hoa_id, so_luong_yeu_cau,
-          don_gia_uoc_tinh, ly_do_su_dung, ghi_chu
-        ) VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          id,
-          item.hang_hoa_id,
-          item.so_luong_yeu_cau,
-          item.don_gia_uoc_tinh || 0,
-          item.ly_do_su_dung,
-          item.ghi_chu,
-        ]
+        "DELETE FROM chi_tiet_yeu_cau_nhap WHERE yeu_cau_nhap_id = $1",
+        [id]
       );
+
+      for (const item of chi_tiet) {
+        await client.query(
+          `INSERT INTO chi_tiet_yeu_cau_nhap (
+            yeu_cau_nhap_id, hang_hoa_id, so_luong_yeu_cau,
+            don_gia_uoc_tinh, ly_do_su_dung, ghi_chu
+          ) VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            id,
+            item.hang_hoa_id,
+            item.so_luong_yeu_cau,
+            item.don_gia_uoc_tinh || 0,
+            item.ly_do_su_dung,
+            item.ghi_chu,
+          ]
+        );
+      }
     }
 
     await client.query("COMMIT");
@@ -496,24 +702,33 @@ const update = async (req, res, params, body, user) => {
   }
 };
 
-// Gửi yêu cầu (chuyển từ draft sang submitted)
+// Gửi yêu cầu (chuyển từ draft sang confirmed)
 const submit = async (req, res, params, user) => {
+  const client = await pool.connect();
+
   try {
+    await client.query("BEGIN");
+
     const { id } = params;
 
     // Kiểm tra yêu cầu và quyền
-    const yeuCauResult = await pool.query(
-      "SELECT * FROM yeu_cau_nhap_kho WHERE id = $1",
+    const yeuCauResult = await client.query(
+      `SELECT ycn.*, pb.cap_bac 
+       FROM yeu_cau_nhap_kho ycn
+       JOIN phong_ban pb ON ycn.don_vi_yeu_cau_id = pb.id
+       WHERE ycn.id = $1`,
       [id]
     );
 
     if (yeuCauResult.rows.length === 0) {
+      await client.query("ROLLBACK");
       return sendResponse(res, 404, false, "Không tìm thấy yêu cầu");
     }
 
     const yeuCau = yeuCauResult.rows[0];
 
     if (yeuCau.nguoi_yeu_cau !== user.id && user.role !== "admin") {
+      await client.query("ROLLBACK");
       return sendResponse(
         res,
         403,
@@ -523,6 +738,7 @@ const submit = async (req, res, params, user) => {
     }
 
     if (yeuCau.trang_thai !== "draft") {
+      await client.query("ROLLBACK");
       return sendResponse(
         res,
         400,
@@ -532,12 +748,13 @@ const submit = async (req, res, params, user) => {
     }
 
     // Kiểm tra có chi tiết hay không
-    const chiTietCount = await pool.query(
+    const chiTietCount = await client.query(
       "SELECT COUNT(*) FROM chi_tiet_yeu_cau_nhap WHERE yeu_cau_nhap_id = $1",
       [id]
     );
 
     if (parseInt(chiTietCount.rows[0].count) === 0) {
+      await client.query("ROLLBACK");
       return sendResponse(
         res,
         400,
@@ -546,16 +763,26 @@ const submit = async (req, res, params, user) => {
       );
     }
 
-    // Cập nhật trạng thái
-    await pool.query(
-      "UPDATE yeu_cau_nhap_kho SET trang_thai = 'submitted', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+    // Cập nhật trạng thái thành confirmed
+    await client.query(
+      `UPDATE yeu_cau_nhap_kho SET 
+        trang_thai = 'confirmed', 
+        ngay_gui_yeu_cau = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP 
+      WHERE id = $1`,
       [id]
     );
 
+    // Trigger trong database sẽ tự động tạo notification và workflow entry
+
+    await client.query("COMMIT");
     sendResponse(res, 200, true, "Gửi yêu cầu thành công");
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Submit yeu cau error:", error);
     sendResponse(res, 500, false, "Lỗi server");
+  } finally {
+    client.release();
   }
 };
 
@@ -569,7 +796,10 @@ const deleteYeuCau = async (req, res, params, user) => {
     const { id } = params;
 
     const yeuCauResult = await client.query(
-      "SELECT * FROM yeu_cau_nhap_kho WHERE id = $1",
+      `SELECT ycn.*, pb.cap_bac 
+       FROM yeu_cau_nhap_kho ycn
+       JOIN phong_ban pb ON ycn.don_vi_yeu_cau_id = pb.id
+       WHERE ycn.id = $1`,
       [id]
     );
 
@@ -623,7 +853,10 @@ const cancel = async (req, res, params, user) => {
     const { ly_do_huy } = req.body || {};
 
     const yeuCauResult = await pool.query(
-      "SELECT * FROM yeu_cau_nhap_kho WHERE id = $1",
+      `SELECT ycn.*, pb.cap_bac 
+       FROM yeu_cau_nhap_kho ycn
+       JOIN phong_ban pb ON ycn.don_vi_yeu_cau_id = pb.id
+       WHERE ycn.id = $1`,
       [id]
     );
 
@@ -652,6 +885,7 @@ const cancel = async (req, res, params, user) => {
       `UPDATE yeu_cau_nhap_kho SET 
         trang_thai = 'cancelled', 
         ly_do_tu_choi = $1,
+        ngay_huy = CURRENT_TIMESTAMP,
         updated_at = CURRENT_TIMESTAMP 
       WHERE id = $2`,
       [ly_do_huy || "Người yêu cầu hủy", id]
@@ -664,23 +898,55 @@ const cancel = async (req, res, params, user) => {
   }
 };
 
-// Lấy danh sách yêu cầu chờ phê duyệt
+// Lấy danh sách yêu cầu chờ phê duyệt với logic 3 cấp
 const getPendingApprovals = async (req, res, query, user) => {
   try {
     const { page = 1, limit = 20 } = query;
     const offset = (page - 1) * limit;
 
-    // Lấy các yêu cầu mà user có thể phê duyệt
+    // Logic phân quyền xem yêu cầu chờ phê duyệt theo cấp bậc
+    let whereClause = "WHERE ycn.trang_thai IN ('confirmed', 'under_review')";
+    const params = [];
+    let paramCount = 0;
+
+    if (user.role !== "admin") {
+      // Lấy cấp bậc phòng ban của user
+      const userPhongBanResult = await pool.query(
+        "SELECT cap_bac FROM phong_ban WHERE id = $1",
+        [user.phong_ban_id]
+      );
+
+      if (userPhongBanResult.rows.length > 0) {
+        const userCapBac = userPhongBanResult.rows[0].cap_bac;
+
+        if (userCapBac === 2 || userCapBac === 1) {
+          // Phòng ban cấp 2 và BTL Vùng có thể xem yêu cầu cần xử lý
+          paramCount++;
+          whereClause += ` AND ycn.phong_ban_xu_ly_id = $${paramCount}`;
+          params.push(user.phong_ban_id);
+        } else {
+          // Đơn vị cấp 3 không có quyền phê duyệt
+          return sendResponse(
+            res,
+            403,
+            false,
+            "Không có quyền phê duyệt yêu cầu"
+          );
+        }
+      }
+    }
+
     const pendingQuery = `
       SELECT 
         ycn.*,
-        pb.ten_phong_ban as ten_don_vi_yeu_cau,
+        pb_yc.ten_phong_ban as ten_don_vi_yeu_cau,
+        pb_yc.cap_bac as cap_bac_don_vi_yeu_cau,
         u.ho_ten as ten_nguoi_yeu_cau,
         EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - ycn.created_at))/3600 as hours_pending
       FROM yeu_cau_nhap_kho ycn
-      JOIN phong_ban pb ON ycn.don_vi_yeu_cau_id = pb.id
+      JOIN phong_ban pb_yc ON ycn.don_vi_yeu_cau_id = pb_yc.id
       JOIN users u ON ycn.nguoi_yeu_cau = u.id
-      WHERE ycn.trang_thai IN ('submitted', 'under_review')
+      ${whereClause}
       ORDER BY 
         CASE ycn.muc_do_uu_tien 
           WHEN 'khan_cap' THEN 1
@@ -689,18 +955,20 @@ const getPendingApprovals = async (req, res, query, user) => {
           WHEN 'thap' THEN 4
         END,
         ycn.created_at ASC
-      LIMIT $1 OFFSET $2
+      LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
     `;
 
     const countQuery = `
       SELECT COUNT(*) 
-      FROM yeu_cau_nhap_kho 
-      WHERE trang_thai IN ('submitted', 'under_review')
+      FROM yeu_cau_nhap_kho ycn 
+      ${whereClause}
     `;
 
+    params.push(limit, offset);
+
     const [dataResult, countResult] = await Promise.all([
-      pool.query(pendingQuery, [limit, offset]),
-      pool.query(countQuery),
+      pool.query(pendingQuery, params),
+      pool.query(countQuery, params.slice(0, -2)),
     ]);
 
     const total = parseInt(countResult.rows[0].count);

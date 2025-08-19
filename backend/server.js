@@ -96,6 +96,23 @@ const authenticateWithWorkflow = async (req) => {
 };
 
 // Authentication Middleware
+// const authenticate = async (req) => {
+//   const token = getTokenFromRequest(req);
+//   if (!token) return null;
+
+//   const decoded = verifyToken(token);
+//   if (!decoded) return null;
+
+//   try {
+//     const userQuery = "SELECT * FROM users WHERE id = $1 AND trang_thai = $2";
+//     const result = await pool.query(userQuery, [decoded.id, "active"]);
+//     return result.rows.length > 0 ? result.rows[0] : null;
+//   } catch (error) {
+//     console.error("Auth error:", error);
+//     return null;
+//   }
+// };
+
 const authenticate = async (req) => {
   const token = getTokenFromRequest(req);
   if (!token) return null;
@@ -104,9 +121,46 @@ const authenticate = async (req) => {
   if (!decoded) return null;
 
   try {
-    const userQuery = "SELECT * FROM users WHERE id = $1 AND trang_thai = $2";
-    const result = await pool.query(userQuery, [decoded.id, "active"]);
-    return result.rows.length > 0 ? result.rows[0] : null;
+    // ✅ SỬA LỖI: JOIN với bảng phong_ban để lấy đầy đủ thông tin
+    const userQuery = `
+      SELECT 
+        u.*, 
+        pb.ma_phong_ban, 
+        pb.ten_phong_ban, 
+        pb.cap_bac, 
+        pb.phong_ban_cha_id
+      FROM users u
+      LEFT JOIN phong_ban pb ON u.phong_ban_id = pb.id
+      WHERE u.id = $1 AND u.trang_thai = 'active'
+    `;
+    const result = await pool.query(userQuery, [decoded.id]);
+
+    if (result.rows.length > 0) {
+      const userData = result.rows[0];
+
+      // ✅ SỬA LỖI: Tạo object user có cấu trúc lồng nhau user.phong_ban
+      // để controller có thể truy cập user.phong_ban.cap_bac
+      const user = {
+        ...userData,
+        phong_ban: {
+          id: userData.phong_ban_id,
+          ma_phong_ban: userData.ma_phong_ban,
+          ten_phong_ban: userData.ten_phong_ban,
+          cap_bac: userData.cap_bac,
+          phong_ban_cha_id: userData.phong_ban_cha_id,
+        },
+      };
+
+      // Xóa các trường thừa ở cấp ngoài cùng để tránh nhầm lẫn
+      delete user.ma_phong_ban;
+      delete user.ten_phong_ban;
+      delete user.cap_bac;
+      delete user.phong_ban_cha_id;
+
+      return user;
+    }
+
+    return null;
   } catch (error) {
     console.error("Auth error:", error);
     return null;
@@ -709,28 +763,31 @@ const router = async (req, res) => {
       });
 
       // Apply route-specific middleware
-      const middlewares = getRouteMiddleware(method, pathname);
-      if (middlewares.length > 0) {
-        console.log(
-          `🛡️ Applying ${middlewares.length} middleware(s) for ${method} ${pathname}`
-        );
+      /*
+  // Apply route-specific middleware
+  const middlewares = getRouteMiddleware(method, pathname);
+  if (middlewares.length > 0) {
+    console.log(
+      `🛡️ Applying ${middlewares.length} middleware(s) for ${method} ${pathname}`
+    );
 
-        try {
-          // Execute middleware chain
-          await new Promise((resolve, reject) => {
-            applyMiddlewares(middlewares)(req, res, (err) => {
-              if (err) reject(err);
-              else resolve();
-            });
-          });
-          console.log(`✅ Middleware chain completed successfully`);
-        } catch (middlewareError) {
-          console.error(`❌ Middleware error:`, middlewareError);
-          return sendResponse(res, 403, false, "Access denied", {
-            middleware_error: middlewareError.message,
-          });
-        }
-      }
+    try {
+      // Execute middleware chain
+      await new Promise((resolve, reject) => {
+        applyMiddlewares(middlewares)(req, res, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      console.log(`✅ Middleware chain completed successfully`);
+    } catch (middlewareError) {
+      console.error(`❌ Middleware error:`, middlewareError);
+      return sendResponse(res, 403, false, "Access denied", {
+        middleware_error: middlewareError.message,
+      });
+    }
+  }
+  */
     }
     // Protected Routes - Require Authentication
     console.log(`🔒 Authenticating user...`);
@@ -1014,10 +1071,35 @@ const router = async (req, res) => {
     if (pathname === "/api/hang-hoa") {
       switch (method) {
         case "GET":
+          // Hỗ trợ filter theo phòng ban
+          console.log(`🎯 HIT: Get hang hoa list with filters:`, {
+            phong_ban_id: query.phong_ban_id,
+            search: query.search,
+            loai_hang_hoa_id: query.loai_hang_hoa_id,
+            user_role: user.role,
+          });
           return await hangHoaController.getList(req, res, query, user);
         case "POST":
           return await hangHoaController.create(req, res, body, user);
       }
+    }
+
+    if (pathname === "/api/hang-hoa/phong-ban-cung-cap" && method === "GET") {
+      return await hangHoaController.getPhongBanCungCap(req, res, query, user);
+    }
+
+    if (pathname === "/api/hang-hoa/phong-ban-nhan-hang" && method === "GET") {
+      return await hangHoaController.getPhongBanNhanHang(req, res, query, user);
+    }
+
+    if (pathname === "/api/hang-hoa/stats-by-department" && method === "GET") {
+      console.log(`🎯 HIT: Get stats by department (admin only)`);
+      return await hangHoaController.getStatsByDepartment(
+        req,
+        res,
+        query,
+        user
+      );
     }
 
     if (pathname === "/api/hang-hoa/suggestions" && method === "GET") {
@@ -1025,11 +1107,18 @@ const router = async (req, res) => {
     }
 
     // Hang Hoa with ID routes
-    // Hang Hoa with ID routes
     const hangHoaParams = extractParams("/api/hang-hoa/:id", pathname);
     if (hangHoaParams) {
       switch (method) {
         case "GET":
+          // Hỗ trợ query parameter phong_ban_id cho admin
+          console.log(
+            `🎯 HIT: Get hang hoa detail ${hangHoaParams.id} with query:`,
+            {
+              phong_ban_id: query.phong_ban_id,
+              user_role: user.role,
+            }
+          );
           return await hangHoaController.getDetail(
             req,
             res,
@@ -1103,6 +1192,18 @@ const router = async (req, res) => {
       }
     }
 
+    // Thêm vào phần Nhap Kho Routes
+    if (pathname === "/api/nhap-kho/phong-ban-cung-cap" && method === "GET") {
+      return await nhapKhoController.getPhongBanCungCap(req, res, query, user);
+    }
+
+    if (pathname === "/api/nhap-kho/hang-hoa-co-the-nhap" && method === "GET") {
+      return await nhapKhoController.getHangHoaCoTheNhap(req, res, query, user);
+    }
+    if (pathname === "/api/nhap-kho/phong-ban-list" && method === "GET") {
+      return await nhapKhoController.getPhongBanList(req, res, query, user);
+    }
+
     const nhapKhoParams = extractParams("/api/nhap-kho/:id", pathname);
     if (nhapKhoParams) {
       switch (method) {
@@ -1135,6 +1236,34 @@ const router = async (req, res) => {
         req,
         res,
         nhapKhoApproveParams,
+        user
+      );
+    }
+
+    const nhapKhoSubmitParams = extractParams(
+      "/api/nhap-kho/:id/submit",
+      pathname
+    );
+    if (nhapKhoSubmitParams && method === "PATCH") {
+      return await nhapKhoController.submit(
+        req,
+        res,
+        nhapKhoSubmitParams,
+        user
+      );
+    }
+
+    // Yêu cầu chỉnh sửa phiếu (MỚI)
+    const nhapKhoRevisionParams = extractParams(
+      "/api/nhap-kho/:id/request-revision",
+      pathname
+    );
+    if (nhapKhoRevisionParams && method === "PATCH") {
+      return await nhapKhoController.requestRevision(
+        req,
+        res,
+        nhapKhoRevisionParams,
+        body,
         user
       );
     }
@@ -1181,6 +1310,20 @@ const router = async (req, res) => {
         user
       );
     }
+    // Route cập nhật số lượng thực tế nhập
+    const nhapKhoActualQuantityParams = extractParams(
+      "/api/nhap-kho/:id/actual-quantity",
+      pathname
+    );
+    if (nhapKhoActualQuantityParams && method === "PUT") {
+      return await nhapKhoController.updateActualQuantity(
+        req,
+        res,
+        nhapKhoActualQuantityParams,
+        body,
+        user
+      );
+    }
 
     // Xuat Kho Routes
     if (pathname === "/api/xuat-kho") {
@@ -1190,6 +1333,26 @@ const router = async (req, res) => {
         case "POST":
           return await xuatKhoController.create(req, res, body, user);
       }
+    }
+
+    if (pathname === "/api/xuat-kho/check-ton-kho" && method === "POST") {
+      return await xuatKhoController.checkTonKho(req, res, body, user);
+    }
+
+    if (
+      pathname === "/api/xuat-kho/check-ton-kho-thuc-te" &&
+      method === "POST"
+    ) {
+      console.log(`🎯 HIT: Check ton kho thuc te endpoint`);
+      return await xuatKhoController.checkTonKhoThucTe(req, res, body, user);
+    }
+
+    // Thêm vào phần Xuat Kho Routes
+    if (pathname === "/api/xuat-kho/phong-ban-nhan-hang" && method === "GET") {
+      return await xuatKhoController.getPhongBanNhanHang(req, res, query, user);
+    }
+    if (pathname === "/api/xuat-kho/phong-ban-list" && method === "GET") {
+      return await xuatKhoController.getPhongBanList(req, res, query, user);
     }
 
     const xuatKhoParams = extractParams("/api/xuat-kho/:id", pathname);
@@ -1215,15 +1378,59 @@ const router = async (req, res) => {
       }
     }
 
+    // Route cập nhật số lượng thực tế xuất (mới)
+    const xuatKhoActualQuantityParams = extractParams(
+      "/api/xuat-kho/:id/actual-quantity",
+      pathname
+    );
+    if (xuatKhoActualQuantityParams && method === "PUT") {
+      return await xuatKhoController.updateActualQuantity(
+        req,
+        res,
+        xuatKhoActualQuantityParams,
+        body,
+        user
+      );
+    }
+
     const xuatKhoApproveParams = extractParams(
       "/api/xuat-kho/:id/approve",
       pathname
     );
-    if (xuatKhoApproveParams && method === "POST") {
+    if (xuatKhoApproveParams && method === "PATCH") {
       return await xuatKhoController.approve(
         req,
         res,
         xuatKhoApproveParams,
+        user
+      );
+    }
+
+    // Gửi phiếu để duyệt (MỚI)
+    const xuatKhoSubmitParams = extractParams(
+      "/api/xuat-kho/:id/submit",
+      pathname
+    );
+    if (xuatKhoSubmitParams && method === "PATCH") {
+      return await xuatKhoController.submit(
+        req,
+        res,
+        xuatKhoSubmitParams,
+        user
+      );
+    }
+
+    // Yêu cầu chỉnh sửa phiếu (MỚI)
+    const xuatKhoRevisionParams = extractParams(
+      "/api/xuat-kho/:id/request-revision",
+      pathname
+    );
+    if (xuatKhoRevisionParams && method === "PATCH") {
+      return await xuatKhoController.requestRevision(
+        req,
+        res,
+        xuatKhoRevisionParams,
+        body,
         user
       );
     }
@@ -1398,17 +1605,6 @@ const router = async (req, res) => {
     }
 
     // Kiểm tra tồn kho trước khi xuất
-    if (pathname === "/api/xuat-kho/check-ton-kho" && method === "POST") {
-      return await xuatKhoController.checkTonKho(req, res, body, user);
-    }
-
-    if (
-      pathname === "/api/xuat-kho/check-ton-kho-thuc-te" &&
-      method === "POST"
-    ) {
-      console.log(`🎯 HIT: Check ton kho thuc te endpoint`);
-      return await xuatKhoController.checkTonKhoThucTe(req, res, body, user);
-    }
 
     // Route in phiếu xuất
     const xuatKhoPrintParams = extractParams(
@@ -1905,19 +2101,6 @@ const router = async (req, res) => {
       return await baoCaoController.getCustomReport(req, res, body, user);
     }
 
-    // YÊU CẦU NHẬP KHO ROUTES
-    // =============================================
-
-    // Danh sách yêu cầu nhập kho
-    // if (pathname === "/api/yeu-cau-nhap") {
-    //   switch (method) {
-    //     case "GET":
-    //       return await yeuCauNhapKhoController.getList(req, res, query, user);
-    //     case "POST":
-    //       return await yeuCauNhapKhoController.create(req, res, body, user);
-    //   }
-    // }
-
     if (pathname === "/api/yeu-cau-nhap") {
       switch (method) {
         case "GET":
@@ -1989,7 +2172,7 @@ const router = async (req, res) => {
       }
     }
 
-    // Gửi yêu cầu nhập kho (chuyển từ draft -> submitted)
+    // Gửi yêu cầu nhập kho (chuyển từ draft -> confirmed)
     const yeuCauNhapSubmitParams = extractParams(
       "/api/yeu-cau-nhap/:id/submit",
       pathname
@@ -2060,6 +2243,19 @@ const router = async (req, res) => {
       }
     }
 
+    const yeuCauXuatCheckTonKhoParams = extractParams(
+      "/api/yeu-cau-xuat/:id/check-ton-kho",
+      pathname
+    );
+    if (yeuCauXuatCheckTonKhoParams && method === "GET") {
+      return await yeuCauXuatKhoController.checkTonKho(
+        req,
+        res,
+        yeuCauXuatCheckTonKhoParams,
+        user
+      );
+    }
+
     // Gửi yêu cầu xuất kho
     const yeuCauXuatSubmitParams = extractParams(
       "/api/yeu-cau-xuat/:id/submit",
@@ -2089,10 +2285,7 @@ const router = async (req, res) => {
     }
 
     // Kiểm tra tồn kho cho yêu cầu xuất
-    const yeuCauXuatCheckTonKhoParams = extractParams(
-      "/api/yeu-cau-xuat/:id/check-ton-kho",
-      pathname
-    );
+
     if (yeuCauXuatCheckTonKhoParams && method === "GET") {
       return await yeuCauXuatKhoController.checkTonKho(
         req,
@@ -2106,8 +2299,6 @@ const router = async (req, res) => {
     // WORKFLOW APPROVAL ROUTES
     // =============================================
 
-    // Phê duyệt yêu cầu nhập kho
-    javascript; // Phê duyệt yêu cầu nhập kho
     const workflowApproveNhapParams = extractParams(
       "/api/workflow/yeu-cau-nhap/:id/approve",
       pathname

@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   CheckCircle,
   XCircle,
@@ -12,14 +12,14 @@ import {
   Clock,
   Save,
 } from "lucide-react";
-import { AuthContext } from "../../context/AuthContext";
+import { useAuth } from "../../context/AuthContext";
 import { workflowService } from "../../services/workflowService";
 import { formatCurrency, formatDate } from "../../utils/helpers";
 import toast from "react-hot-toast";
 import Loading from "../common/Loading";
 
 const ApprovalInterface = ({ yeuCau, type = "nhap", onApprovalComplete }) => {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
   const [showApprovalForm, setShowApprovalForm] = useState(false);
   const [showRejectionForm, setShowRejectionForm] = useState(false);
@@ -61,7 +61,7 @@ const ApprovalInterface = ({ yeuCau, type = "nhap", onApprovalComplete }) => {
 
   // Check if request is in approvable state
   const isApprovable = () => {
-    return ["submitted", "under_review"].includes(yeuCau.trang_thai);
+    return ["confirmed", "under_review"].includes(yeuCau.trang_thai);
   };
 
   const handleApprovalDetailChange = (index, field, value) => {

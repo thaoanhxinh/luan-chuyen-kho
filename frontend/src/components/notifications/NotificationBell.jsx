@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useRef, useContext } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Bell, X, Check, AlertTriangle, Info, CheckCircle } from "lucide-react";
-import { AuthContext } from "../../context/AuthContext";
+import { useAuth } from "../../context/AuthContext";
 import { notificationService } from "../../services/notificationService";
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
 
 const NotificationBell = ({ compact = false }) => {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -35,17 +35,16 @@ const NotificationBell = ({ compact = false }) => {
     }
   }, [user]);
 
-  // Real-time updates (in practice would use WebSocket)
+  // Real-time updates
   useEffect(() => {
     if (!user) return;
 
     const interval = setInterval(() => {
       loadUnreadCount();
-      // Only refresh if dropdown is closed to avoid disrupting user interaction
       if (!isOpen) {
-        loadNotifications(1, true); // Silent refresh
+        loadNotifications(1, true);
       }
-    }, 30000); // Check every 30 seconds
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [user, isOpen]);
@@ -99,7 +98,6 @@ const NotificationBell = ({ compact = false }) => {
     try {
       const response = await notificationService.markAsRead(notificationId);
       if (response.success) {
-        // Update local state
         setNotifications((prev) =>
           prev.map((notif) =>
             notif.id === notificationId
@@ -107,8 +105,6 @@ const NotificationBell = ({ compact = false }) => {
               : notif
           )
         );
-
-        // Update unread count
         setUnreadCount((prev) => Math.max(0, prev - 1));
       }
     } catch (error) {
@@ -120,7 +116,6 @@ const NotificationBell = ({ compact = false }) => {
     try {
       const response = await notificationService.markAllAsRead();
       if (response.success) {
-        // Update local state
         setNotifications((prev) =>
           prev.map((notif) => ({ ...notif, trang_thai: "read" }))
         );
@@ -139,16 +134,20 @@ const NotificationBell = ({ compact = false }) => {
 
   const getNotificationIcon = (type) => {
     switch (type) {
-      case "yeu_cau_moi":
+      case "phieu_nhap_can_duyet":
         return <Info className="text-blue-500" size={16} />;
-      case "phe_duyet":
+      case "phieu_nhap_duyet":
         return <CheckCircle className="text-green-500" size={16} />;
-      case "tu_choi":
-        return <X className="text-red-500" size={16} />;
-      case "hoan_thanh":
-        return <Check className="text-green-600" size={16} />;
+      case "phieu_nhap_can_sua":
+        return <AlertTriangle className="text-orange-500" size={16} />;
+      case "phieu_xuat_can_duyet":
+        return <Info className="text-blue-500" size={16} />;
+      case "phieu_xuat_duyet":
+        return <CheckCircle className="text-green-500" size={16} />;
+      case "phieu_xuat_can_sua":
+        return <AlertTriangle className="text-orange-500" size={16} />;
       case "system":
-        return <AlertTriangle className="text-yellow-500" size={16} />;
+        return <AlertTriangle className="text-gray-500" size={16} />;
       default:
         return <Bell className="text-gray-500" size={16} />;
     }
@@ -156,10 +155,12 @@ const NotificationBell = ({ compact = false }) => {
 
   const getNotificationTypeText = (type) => {
     const typeMap = {
-      yeu_cau_moi: "Yêu cầu mới",
-      phe_duyet: "Đã phê duyệt",
-      tu_choi: "Bị từ chối",
-      hoan_thanh: "Hoàn thành",
+      phieu_nhap_can_duyet: "Nhập - Cần duyệt",
+      phieu_nhap_duyet: "Nhập - Đã duyệt",
+      phieu_nhap_can_sua: "Nhập - Cần sửa",
+      phieu_xuat_can_duyet: "Xuất - Cần duyệt",
+      phieu_xuat_duyet: "Xuất - Đã duyệt",
+      phieu_xuat_can_sua: "Xuất - Cần sửa",
       system: "Hệ thống",
     };
     return typeMap[type] || type;
@@ -176,13 +177,14 @@ const NotificationBell = ({ compact = false }) => {
     }
   };
 
+  // Simplified notification click handler - backend đã tạo URL đúng rồi
   const handleNotificationClick = (notification) => {
     // Mark as read if unread
     if (notification.trang_thai === "unread") {
       markAsRead(notification.id);
     }
 
-    // Navigate to related page if URL is provided
+    // Sử dụng URL từ backend (đã có tab và highlight)
     if (notification.url_redirect) {
       window.location.href = notification.url_redirect;
     }
@@ -285,6 +287,19 @@ const NotificationBell = ({ compact = false }) => {
                 </div>
               )}
             </div>
+
+            {/* Thêm dòng "Xem tất cả" ở cuối */}
+            <div className="p-3 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  window.location.href = "/notifications";
+                }}
+                className="w-full text-center text-sm text-blue-600 hover:text-blue-800 py-1"
+              >
+                Xem tất cả thông báo
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -380,14 +395,14 @@ const NotificationBell = ({ compact = false }) => {
                           </span>
                           <span
                             className={`text-xs px-2 py-1 rounded-full ${
-                              notification.loai_thong_bao === "yeu_cau_moi"
+                              notification.loai_thong_bao.includes("can_duyet")
                                 ? "bg-blue-100 text-blue-700"
-                                : notification.loai_thong_bao === "phe_duyet"
+                                : notification.loai_thong_bao.includes("duyet")
                                 ? "bg-green-100 text-green-700"
-                                : notification.loai_thong_bao === "tu_choi"
-                                ? "bg-red-100 text-red-700"
-                                : notification.loai_thong_bao === "hoan_thanh"
-                                ? "bg-green-100 text-green-700"
+                                : notification.loai_thong_bao.includes(
+                                    "can_sua"
+                                  )
+                                ? "bg-orange-100 text-orange-700"
                                 : "bg-gray-100 text-gray-600"
                             }`}
                           >

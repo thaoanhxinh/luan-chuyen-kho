@@ -1,6 +1,6 @@
 import api from "./api";
 
-const BASE_URL = "/api/nha-cung-cap";
+const BASE_URL = "/nha-cung-cap";
 
 export const nhaCungCapService = {
   // Lấy danh sách nhà cung cấp

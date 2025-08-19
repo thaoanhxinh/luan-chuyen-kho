@@ -16,6 +16,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { workflowService } from "../services/workflowService";
+
 import { formatCurrency, formatDate, formatNumber } from "../utils/helpers";
 import Modal from "../components/common/Modal";
 import Pagination from "../components/common/Pagination";
@@ -87,7 +88,7 @@ const WorkflowManagement = () => {
           limit: 20,
           search: searchTerm,
           trang_thai:
-            selectedTab === "pending" ? "submitted,under_review" : selectedTab,
+            selectedTab === "pending" ? "confirmed,under_review" : selectedTab,
           ...filters,
         }),
         workflowService.getStatistics(filters),
@@ -179,7 +180,7 @@ const WorkflowManagement = () => {
 
   const getTrangThaiInfo = (trangThai) => {
     const statusMap = {
-      submitted: {
+      confirmed: {
         label: "Đã gửi",
         color: "bg-blue-100 text-blue-800",
         icon: Send,
@@ -200,7 +201,7 @@ const WorkflowManagement = () => {
         icon: XCircle,
       },
     };
-    return statusMap[trangThai] || statusMap.submitted;
+    return statusMap[trangThai] || statusMap.confirmed;
   };
 
   const getMucDoUuTienInfo = (mucDo) => {
@@ -228,7 +229,7 @@ const WorkflowManagement = () => {
       </button>
     );
 
-    if (["submitted", "under_review"].includes(request.trang_thai)) {
+    if (["confirmed", "under_review"].includes(request.trang_thai)) {
       // Phê duyệt
       buttons.push(
         <button

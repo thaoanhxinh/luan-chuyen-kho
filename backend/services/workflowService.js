@@ -116,7 +116,7 @@ const workflowService = {
         `SELECT 
           COUNT(*) as total_requests,
           COUNT(*) FILTER (WHERE trang_thai = 'draft') as draft_count,
-          COUNT(*) FILTER (WHERE trang_thai = 'submitted') as submitted_count,
+          COUNT(*) FILTER (WHERE trang_thai = 'confirmed') as confirmed_count,
           COUNT(*) FILTER (WHERE trang_thai = 'under_review') as under_review_count,
           COUNT(*) FILTER (WHERE trang_thai = 'approved') as approved_count,
           COUNT(*) FILTER (WHERE trang_thai = 'rejected') as rejected_count,
@@ -132,7 +132,7 @@ const workflowService = {
         `SELECT 
           COUNT(*) as total_requests,
           COUNT(*) FILTER (WHERE trang_thai = 'draft') as draft_count,
-          COUNT(*) FILTER (WHERE trang_thai = 'submitted') as submitted_count,
+          COUNT(*) FILTER (WHERE trang_thai = 'confirmed') as confirmed_count,
           COUNT(*) FILTER (WHERE trang_thai = 'under_review') as under_review_count,
           COUNT(*) FILTER (WHERE trang_thai = 'approved') as approved_count,
           COUNT(*) FILTER (WHERE trang_thai = 'rejected') as rejected_count,
@@ -204,7 +204,7 @@ const workflowService = {
       // Query cho yêu cầu nhập kho
       if (!loai_yeu_cau || loai_yeu_cau === "nhap_kho") {
         let nhapWhereClause =
-          "WHERE ycn.trang_thai IN ('submitted', 'under_review')";
+          "WHERE ycn.trang_thai IN ('confirmed', 'under_review')";
 
         if (muc_do_uu_tien) {
           paramCount++;
@@ -235,7 +235,7 @@ const workflowService = {
       // Query cho yêu cầu xuất kho
       if (!loai_yeu_cau || loai_yeu_cau === "xuat_kho") {
         let xuatWhereClause =
-          "WHERE ycx.trang_thai IN ('submitted', 'under_review')";
+          "WHERE ycx.trang_thai IN ('confirmed', 'under_review')";
 
         if (muc_do_uu_tien) {
           if (unionQuery) paramCount++; // Chỉ tăng nếu đã có query trước

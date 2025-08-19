@@ -6,7 +6,7 @@ export const notificationService = {
   // =============================================
 
   // Lấy danh sách thông báo
-  getNotifications: async (params = {}) => {
+  getList: async (params = {}) => {
     try {
       const response = await api.get("/notifications", { params });
       return response.data;
@@ -52,11 +52,9 @@ export const notificationService = {
   },
 
   // Lưu trữ thông báo (archive)
-  archiveNotification: async (notificationId) => {
+  archive: async (notificationId) => {
     try {
-      const response = await api.delete(
-        `/notifications/${notificationId}/archive`
-      );
+      const response = await api.delete(`/notifications/${notificationId}`);
       return response.data;
     } catch (error) {
       console.error("Error archiving notification:", error);
@@ -80,25 +78,12 @@ export const notificationService = {
   },
 
   // Lấy thống kê thông báo
-  getNotificationStatistics: async () => {
+  getStatistics: async () => {
     try {
       const response = await api.get("/notifications/statistics");
       return response.data;
     } catch (error) {
       console.error("Error fetching notification statistics:", error);
-      throw error;
-    }
-  },
-
-  // Lấy thống kê chi tiết theo loại thông báo
-  getDetailedStatistics: async (params = {}) => {
-    try {
-      const response = await api.get("/notifications/detailed-statistics", {
-        params,
-      });
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching detailed notification statistics:", error);
       throw error;
     }
   },
@@ -134,37 +119,12 @@ export const notificationService = {
     }
   },
 
-  // Gửi thông báo broadcast tới tất cả users
-  sendBroadcastNotification: async (broadcastData) => {
-    try {
-      const response = await api.post(
-        "/notifications/broadcast",
-        broadcastData
-      );
-      return response.data;
-    } catch (error) {
-      console.error("Error sending broadcast notification:", error);
-      throw error;
-    }
-  },
-
-  // Gửi thông báo theo nhóm người dùng
-  sendGroupNotification: async (groupData) => {
-    try {
-      const response = await api.post("/notifications/group", groupData);
-      return response.data;
-    } catch (error) {
-      console.error("Error sending group notification:", error);
-      throw error;
-    }
-  },
-
   // =============================================
   // NOTIFICATION PREFERENCES
   // =============================================
 
   // Lấy cài đặt thông báo
-  getNotificationPreferences: async () => {
+  getPreferences: async () => {
     try {
       const response = await api.get("/notifications/preferences");
       return response.data;
@@ -175,7 +135,7 @@ export const notificationService = {
   },
 
   // Cập nhật cài đặt thông báo
-  updateNotificationPreferences: async (preferences) => {
+  updatePreferences: async (preferences) => {
     try {
       const response = await api.put("/notifications/preferences", preferences);
       return response.data;
@@ -185,13 +145,92 @@ export const notificationService = {
     }
   },
 
-  // Reset cài đặt thông báo về mặc định
-  resetNotificationPreferences: async () => {
+  // =============================================
+  // WORKFLOW NOTIFICATION HELPERS
+  // =============================================
+
+  // Thông báo khi phiếu nhập cần duyệt
+  notifyPhieuNhapCanDuyet: async (phieuData, nguoiDuyet) => {
     try {
-      const response = await api.post("/notifications/preferences/reset");
+      const response = await api.post("/notifications/phieu-nhap-can-duyet", {
+        phieu_data: phieuData,
+        nguoi_duyet: nguoiDuyet,
+      });
       return response.data;
     } catch (error) {
-      console.error("Error resetting notification preferences:", error);
+      console.error("Error notifying phieu nhap can duyet:", error);
+      throw error;
+    }
+  },
+
+  // Thông báo khi phiếu nhập được duyệt
+  notifyPhieuNhapDuyet: async (phieuData, nguoiTao) => {
+    try {
+      const response = await api.post("/notifications/phieu-nhap-duyet", {
+        phieu_data: phieuData,
+        nguoi_tao: nguoiTao,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Error notifying phieu nhap duyet:", error);
+      throw error;
+    }
+  },
+
+  // Thông báo khi phiếu nhập cần sửa
+  notifyPhieuNhapCanSua: async (phieuData, nguoiTao, ghiChu) => {
+    try {
+      const response = await api.post("/notifications/phieu-nhap-can-sua", {
+        phieu_data: phieuData,
+        nguoi_tao: nguoiTao,
+        ghi_chu_phan_hoi: ghiChu,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Error notifying phieu nhap can sua:", error);
+      throw error;
+    }
+  },
+
+  // Thông báo khi phiếu xuất cần duyệt
+  notifyPhieuXuatCanDuyet: async (phieuData, nguoiDuyet) => {
+    try {
+      const response = await api.post("/notifications/phieu-xuat-can-duyet", {
+        phieu_data: phieuData,
+        nguoi_duyet: nguoiDuyet,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Error notifying phieu xuat can duyet:", error);
+      throw error;
+    }
+  },
+
+  // Thông báo khi phiếu xuất được duyệt
+  notifyPhieuXuatDuyet: async (phieuData, nguoiTao) => {
+    try {
+      const response = await api.post("/notifications/phieu-xuat-duyet", {
+        phieu_data: phieuData,
+        nguoi_tao: nguoiTao,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Error notifying phieu xuat duyet:", error);
+      throw error;
+    }
+  },
+
+  // Thông báo khi phiếu xuất cần sửa
+  notifyPhieuXuatCanSua: async (phieuData, nguoiTao, ghiChu) => {
+    try {
+      const response = await api.post("/notifications/phieu-xuat-can-sua", {
+        phieu_data: phieuData,
+        nguoi_tao: nguoiTao,
+        ghi_chu_phan_hoi: ghiChu,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Error notifying phieu xuat can sua:", error);
       throw error;
     }
   },
@@ -203,9 +242,8 @@ export const notificationService = {
   // Subscribe tới real-time notifications (WebSocket)
   subscribeToRealTime: (onNotification, onError) => {
     try {
-      // Sẽ được implement trong realtimeService.js
-      // Đây chỉ là placeholder cho integration
-      console.log("Real-time subscription will be handled by realtimeService");
+      // TODO: Implement WebSocket connection
+      console.log("Real-time subscription will be handled by WebSocket");
 
       // Return cleanup function
       return () => {
@@ -217,201 +255,47 @@ export const notificationService = {
     }
   },
 
-  // Kiểm tra connection status của real-time notifications
-  checkRealTimeStatus: async () => {
-    try {
-      const response = await api.get("/notifications/realtime-status");
-      return response.data;
-    } catch (error) {
-      console.error("Error checking real-time status:", error);
-      throw error;
-    }
-  },
-
-  // =============================================
-  // NOTIFICATION TEMPLATES
-  // =============================================
-
-  // Lấy danh sách template thông báo
-  getNotificationTemplates: async () => {
-    try {
-      const response = await api.get("/notifications/templates");
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching notification templates:", error);
-      throw error;
-    }
-  },
-
-  // Tạo template thông báo mới
-  createNotificationTemplate: async (templateData) => {
-    try {
-      const response = await api.post("/notifications/templates", templateData);
-      return response.data;
-    } catch (error) {
-      console.error("Error creating notification template:", error);
-      throw error;
-    }
-  },
-
-  // Sử dụng template để gửi thông báo
-  sendFromTemplate: async (templateId, templateVariables) => {
-    try {
-      const response = await api.post(
-        `/notifications/templates/${templateId}/send`,
-        {
-          variables: templateVariables,
-        }
-      );
-      return response.data;
-    } catch (error) {
-      console.error("Error sending notification from template:", error);
-      throw error;
-    }
-  },
-
-  // =============================================
-  // NOTIFICATION SCHEDULING
-  // =============================================
-
-  // Lên lịch gửi thông báo
-  scheduleNotification: async (scheduleData) => {
-    try {
-      const response = await api.post("/notifications/schedule", scheduleData);
-      return response.data;
-    } catch (error) {
-      console.error("Error scheduling notification:", error);
-      throw error;
-    }
-  },
-
-  // Lấy danh sách thông báo đã lên lịch
-  getScheduledNotifications: async (params = {}) => {
-    try {
-      const response = await api.get("/notifications/scheduled", { params });
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching scheduled notifications:", error);
-      throw error;
-    }
-  },
-
-  // Hủy thông báo đã lên lịch
-  cancelScheduledNotification: async (scheduleId) => {
-    try {
-      const response = await api.delete(
-        `/notifications/scheduled/${scheduleId}`
-      );
-      return response.data;
-    } catch (error) {
-      console.error("Error canceling scheduled notification:", error);
-      throw error;
-    }
-  },
-
-  // =============================================
-  // NOTIFICATION FILTERING AND SEARCH
-  // =============================================
-
-  // Tìm kiếm thông báo nâng cao
-  searchNotifications: async (searchCriteria) => {
-    try {
-      const response = await api.post("/notifications/search", searchCriteria);
-      return response.data;
-    } catch (error) {
-      console.error("Error searching notifications:", error);
-      throw error;
-    }
-  },
-
-  // Lọc thông báo theo loại
-  filterNotificationsByType: async (type, params = {}) => {
-    try {
-      const response = await api.get(`/notifications/filter/${type}`, {
-        params,
-      });
-      return response.data;
-    } catch (error) {
-      console.error(`Error filtering notifications by type ${type}:`, error);
-      throw error;
-    }
-  },
-
-  // Lấy thông báo theo mức độ ưu tiên
-  getNotificationsByPriority: async (priority, params = {}) => {
-    try {
-      const response = await api.get(`/notifications/priority/${priority}`, {
-        params,
-      });
-      return response.data;
-    } catch (error) {
-      console.error(
-        `Error fetching notifications by priority ${priority}:`,
-        error
-      );
-      throw error;
-    }
-  },
-
-  // =============================================
-  // NOTIFICATION ANALYTICS
-  // =============================================
-
-  // Lấy analytics về hiệu quả thông báo
-  getNotificationAnalytics: async (params = {}) => {
-    try {
-      const response = await api.get("/notifications/analytics", { params });
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching notification analytics:", error);
-      throw error;
-    }
-  },
-
-  // Lấy thống kê tương tác với thông báo
-  getInteractionStats: async (params = {}) => {
-    try {
-      const response = await api.get("/notifications/interaction-stats", {
-        params,
-      });
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching notification interaction stats:", error);
-      throw error;
-    }
-  },
-
-  // Lấy báo cáo delivery success rate
-  getDeliveryReport: async (params = {}) => {
-    try {
-      const response = await api.get("/notifications/delivery-report", {
-        params,
-      });
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching notification delivery report:", error);
-      throw error;
-    }
-  },
-
   // =============================================
   // UTILITY FUNCTIONS
   // =============================================
 
   // Format notification cho display
   formatNotificationForDisplay: (notification) => {
+    const typeLabels = {
+      phieu_nhap_can_duyet: "Phiếu nhập cần duyệt",
+      phieu_nhap_duyet: "Phiếu nhập đã duyệt",
+      phieu_nhap_can_sua: "Phiếu nhập cần sửa",
+      phieu_xuat_can_duyet: "Phiếu xuất cần duyệt",
+      phieu_xuat_duyet: "Phiếu xuất đã duyệt",
+      phieu_xuat_can_sua: "Phiếu xuất cần sửa",
+      system: "Hệ thống",
+    };
+
+    const priorityColors = {
+      urgent: "text-red-600 bg-red-100",
+      high: "text-orange-600 bg-orange-100",
+      medium: "text-yellow-600 bg-yellow-100",
+      normal: "text-blue-600 bg-blue-100",
+      low: "text-gray-600 bg-gray-100",
+    };
+
     return {
       id: notification.id,
       title: notification.tieu_de,
       content: notification.noi_dung,
       type: notification.loai_thong_bao,
+      typeLabel: typeLabels[notification.loai_thong_bao] || "Thông báo",
       status: notification.trang_thai,
       createdAt: new Date(notification.created_at),
       readAt: notification.ngay_doc ? new Date(notification.ngay_doc) : null,
       isRead: notification.trang_thai === "read",
       isImportant:
-        notification.loai_thong_bao === "system" ||
+        notification.metadata?.priority === "urgent" ||
         notification.metadata?.priority === "high",
+      priority: notification.metadata?.priority || "normal",
+      priorityClass:
+        priorityColors[notification.metadata?.priority] ||
+        priorityColors.normal,
       redirectUrl: notification.url_redirect,
       metadata: notification.metadata,
     };
@@ -447,14 +331,144 @@ export const notificationService = {
         return a.trang_thai === "unread" ? -1 : 1;
       }
 
-      // System notifications trước
-      if (a.loai_thong_bao !== b.loai_thong_bao) {
-        if (a.loai_thong_bao === "system") return -1;
-        if (b.loai_thong_bao === "system") return 1;
+      // Priority trước (urgent > high > medium > normal > low)
+      const priorityOrder = {
+        urgent: 0,
+        high: 1,
+        medium: 2,
+        normal: 3,
+        low: 4,
+      };
+      const aPriority = priorityOrder[a.metadata?.priority] ?? 3;
+      const bPriority = priorityOrder[b.metadata?.priority] ?? 3;
+
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
       }
 
       // Mới nhất trước
       return new Date(b.created_at) - new Date(a.created_at);
     });
+  },
+
+  // Check có thông báo mới trong khoảng thời gian
+  hasNewNotifications: (notifications, lastCheckTime) => {
+    if (!Array.isArray(notifications) || !lastCheckTime) return false;
+
+    return notifications.some(
+      (n) =>
+        new Date(n.created_at) > new Date(lastCheckTime) &&
+        n.trang_thai === "unread"
+    );
+  },
+
+  // Lấy thông báo có priority cao
+  getHighPriorityNotifications: (notifications) => {
+    if (!Array.isArray(notifications)) return [];
+
+    return notifications.filter(
+      (n) =>
+        n.trang_thai === "unread" &&
+        (n.metadata?.priority === "urgent" || n.metadata?.priority === "high")
+    );
+  },
+
+  // Format relative time cho notification
+  formatNotificationTime: (createdAt) => {
+    const now = new Date();
+    const created = new Date(createdAt);
+    const diffInMinutes = Math.floor((now - created) / (1000 * 60));
+
+    if (diffInMinutes < 1) return "Vừa xong";
+    if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
+
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours} giờ trước`;
+
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays} ngày trước`;
+
+    return created.toLocaleDateString("vi-VN");
+  },
+
+  // Tạo notification sound effect (nếu cần)
+  playNotificationSound: (priority = "normal") => {
+    try {
+      // TODO: Implement sound notification
+      console.log(`🔊 Playing notification sound for priority: ${priority}`);
+    } catch (error) {
+      console.error("Error playing notification sound:", error);
+    }
+  },
+
+  // Local storage helpers cho notification state
+  saveLastCheckTime: () => {
+    try {
+      localStorage.setItem("lastNotificationCheck", new Date().toISOString());
+    } catch (error) {
+      console.error("Error saving last check time:", error);
+    }
+  },
+
+  getLastCheckTime: () => {
+    try {
+      return localStorage.getItem("lastNotificationCheck");
+    } catch (error) {
+      console.error("Error getting last check time:", error);
+      return null;
+    }
+  },
+
+  // Kiểm tra browser permission cho notifications
+  requestBrowserNotificationPermission: async () => {
+    try {
+      if (!("Notification" in window)) {
+        console.log("Browser không hỗ trợ notifications");
+        return false;
+      }
+
+      if (Notification.permission === "granted") {
+        return true;
+      }
+
+      if (Notification.permission !== "denied") {
+        const permission = await Notification.requestPermission();
+        return permission === "granted";
+      }
+
+      return false;
+    } catch (error) {
+      console.error("Error requesting notification permission:", error);
+      return false;
+    }
+  },
+
+  // Hiển thị browser notification
+  showBrowserNotification: (notification) => {
+    try {
+      if (Notification.permission !== "granted") return;
+
+      const browserNotif = new Notification(notification.tieu_de, {
+        body: notification.noi_dung,
+        icon: "/favicon.ico", // hoặc icon phù hợp
+        tag: notification.id.toString(),
+        requireInteraction: notification.metadata?.priority === "urgent",
+      });
+
+      browserNotif.onclick = () => {
+        window.focus();
+        if (notification.url_redirect) {
+          window.location.href = notification.url_redirect;
+        }
+        browserNotif.close();
+      };
+
+      // Auto close sau 5 giây nếu không phải urgent
+      if (notification.metadata?.priority !== "urgent") {
+        setTimeout(() => browserNotif.close(), 5000);
+      }
+    } catch (error) {
+      console.error("Error showing browser notification:", error);
+    }
   },
 };

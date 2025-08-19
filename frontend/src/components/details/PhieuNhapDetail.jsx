@@ -114,7 +114,7 @@ const PhieuNhapDetail = ({ phieu }) => {
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <span className="text-gray-600">Người tạo:</span>
                 <span className="font-medium">
-                  {phieu.user_tao?.ho_ten || "N/A"}
+                  {phieu.nguoi_nhap_hang || "N/A"}
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-sm">
