@@ -17,6 +17,7 @@ import { formatDate } from "../utils/helpers";
 import Modal from "../components/common/Modal";
 import Pagination from "../components/common/Pagination";
 import Loading from "../components/common/Loading";
+import PageHeader from "../components/common/PageHeader";
 import toast from "react-hot-toast";
 
 // Form tạo/chỉnh sửa nhà cung cấp
@@ -422,16 +423,13 @@ const NhaCungCap = () => {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center">
-            <Truck className="mr-2 h-5 w-5 text-blue-600" />
-            Quản lý nhà cung cấp
-          </h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Quản lý thông tin các nhà cung cấp hàng hóa
-          </p>
-        </div>
+      <PageHeader
+        title="Quản lý nhà cung cấp"
+        subtitle="Quản lý thông tin các nhà cung cấp hàng hóa"
+        Icon={Truck}
+      />
+
+      <div className="flex justify-end">
         <button
           onClick={() => setShowCreateModal(true)}
           className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors"
@@ -483,8 +481,8 @@ const NhaCungCap = () => {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            <div className="overflow-hidden">
+              <table className="w-full table-fixed">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th
@@ -522,16 +520,16 @@ const NhaCungCap = () => {
                       key={item.id}
                       className="hover:bg-gray-50 transition-colors"
                     >
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className="px-4 py-3">
                         <div className="flex items-center">
                           <Building className="h-4 w-4 text-blue-600 mr-2" />
-                          <span className="text-sm font-medium text-gray-900">
+                          <span className="text-sm font-medium text-gray-900 truncate">
                             {item.ma_ncc}
                           </span>
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="text-sm text-gray-900 font-medium">
+                        <div className="text-sm text-gray-900 font-medium truncate">
                           {item.ten_ncc}
                         </div>
                       </td>
@@ -540,23 +538,25 @@ const NhaCungCap = () => {
                           {item.dien_thoai && (
                             <div className="flex items-center text-sm text-gray-600">
                               <Phone className="h-3 w-3 mr-1" />
-                              {item.dien_thoai}
+                              <span className="truncate">
+                                {item.dien_thoai}
+                              </span>
                             </div>
                           )}
                           {item.email && (
                             <div className="flex items-center text-sm text-gray-600">
                               <Mail className="h-3 w-3 mr-1" />
-                              {item.email}
+                              <span className="truncate">{item.email}</span>
                             </div>
                           )}
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="text-sm text-gray-900 max-w-xs truncate">
+                        <div className="text-sm text-gray-900">
                           {item.dia_chi && (
                             <div className="flex items-start">
                               <MapPin className="h-3 w-3 mr-1 mt-1 flex-shrink-0" />
-                              <span>{item.dia_chi}</span>
+                              <span className="truncate">{item.dia_chi}</span>
                             </div>
                           )}
                         </div>

@@ -86,7 +86,13 @@ router.delete("/:id", auth, (req, res) => {
 });
 
 // ================== WORKFLOW ROUTES ==================
-router.post("/:id/approve", auth, (req, res) => {
+// Gửi duyệt
+router.patch("/:id/submit", auth, (req, res) => {
+  xuatKhoController.submit(req, res, req.params, req.user);
+});
+
+// Duyệt phiếu
+router.patch("/:id/approve", auth, (req, res) => {
   xuatKhoController.approve(req, res, req.params, req.user);
 });
 
@@ -94,9 +100,20 @@ router.patch("/:id/cancel", auth, (req, res) => {
   xuatKhoController.cancel(req, res, req.params, req.user);
 });
 
-// Cập nhật số lượng thực xuất
+// Cập nhật số lượng thực xuất (chuẩn hoá endpoint)
+router.put("/:id/actual-quantity", auth, (req, res) => {
+  xuatKhoController.updateActualQuantity(
+    req,
+    res,
+    req.params,
+    req.body,
+    req.user
+  );
+});
+
+// Giữ lại endpoint cũ để tương thích ngược nếu frontend cũ còn gọi
 router.put("/:id/update-so-luong-thuc-xuat", auth, (req, res) => {
-  xuatKhoController.updateSoLuongThucXuat(
+  xuatKhoController.updateActualQuantity(
     req,
     res,
     req.params,
@@ -128,8 +145,13 @@ router.get("/:id/download-decision", auth, (req, res) => {
 });
 
 // Hoàn thành phiếu xuất
-router.post("/:id/complete", auth, (req, res) => {
+router.patch("/:id/complete", auth, (req, res) => {
   xuatKhoController.complete(req, res, req.params, req.body, req.user);
+});
+
+// Yêu cầu chỉnh sửa
+router.patch("/:id/request-revision", auth, (req, res) => {
+  xuatKhoController.requestRevision(req, res, req.params, req.body, req.user);
 });
 
 // ================== INVENTORY CHECK ROUTES ==================

@@ -1,204 +1,3 @@
-// import React from "react";
-// import { Routes, Route, Navigate } from "react-router-dom";
-// import { AuthProvider } from "./context/AuthContext";
-// import ProtectedRoute from "./components/common/ProtectedRoute";
-// import Layout from "./components/common/Layout";
-// import Login from "./pages/Login";
-// import Dashboard from "./pages/Dashboard";
-// import HangHoa from "./pages/HangHoa";
-// import NhapKho from "./pages/NhapKho";
-// import XuatKho from "./pages/XuatKho";
-// import KiemKe from "./pages/KiemKe";
-// import BaoCao from "./pages/BaoCao";
-// import LuanChuyenReport from "./components/reports/LuanChuyenReport";
-// import BaoCaoNhapReport from "./components/reports/BaoCaoNhapReport";
-// import BaoCaoXuatReport from "./components/reports/BaoCaoXuatReport";
-// import ThongKeDonViNhanReport from "./components/reports/ThongKeDonViNhanReport";
-// import ThongKeNhaCungCapReport from "./components/reports/ThongKeNhaCungCapReport";
-
-// // Import admin components
-// import UserManagement from "./components/admin/UserManagement";
-// import DepartmentManagement from "./components/admin/DepartmentManagement";
-
-// // Import constants
-// import { PERMISSIONS, USER_ROLES } from "./utils/constants";
-
-// function App() {
-//   return (
-//     <AuthProvider>
-//       <Routes>
-//         <Route path="/login" element={<Login />} />
-//         <Route
-//           path="/"
-//           element={
-//             <ProtectedRoute>
-//               <Layout />
-//             </ProtectedRoute>
-//           }
-//         >
-//           <Route index element={<Navigate to="/dashboard" replace />} />
-
-//           {/* Dashboard - requires VIEW_DASHBOARD permission */}
-//           <Route
-//             path="dashboard"
-//             element={
-//               <ProtectedRoute requiredPermission={PERMISSIONS.VIEW_DASHBOARD}>
-//                 <Dashboard />
-//               </ProtectedRoute>
-//             }
-//           />
-
-//           {/* Inventory management routes - require MANAGE_INVENTORY permission */}
-//           <Route
-//             path="hang-hoa"
-//             element={
-//               <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
-//                 <HangHoa />
-//               </ProtectedRoute>
-//             }
-//           />
-
-//           <Route
-//             path="nhap-kho"
-//             element={
-//               <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
-//                 <NhapKho />
-//               </ProtectedRoute>
-//             }
-//           />
-
-//           <Route
-//             path="xuat-kho"
-//             element={
-//               <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
-//                 <XuatKho />
-//               </ProtectedRoute>
-//             }
-//           />
-
-//           <Route
-//             path="/bao-cao/luan-chuyen"
-//             element={
-//               <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
-//                 <LuanChuyenReport />
-//               </ProtectedRoute>
-//             }
-//           />
-
-//           <Route
-//             path="/bao-cao/nhap"
-//             element={
-//               <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
-//                 <BaoCaoNhapReport />
-//               </ProtectedRoute>
-//             }
-//           />
-
-//           <Route
-//             path="/bao-cao/xuat"
-//             element={
-//               <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
-//                 <BaoCaoXuatReport />
-//               </ProtectedRoute>
-//             }
-//           />
-
-//           <Route
-//             path="/bao-cao/don-vi-nhan"
-//             element={
-//               <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
-//                 <ThongKeDonViNhanReport />
-//               </ProtectedRoute>
-//             }
-//           />
-
-//           <Route
-//             path="/bao-cao/nha-cung-cap"
-//             element={
-//               <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
-//                 <ThongKeNhaCungCapReport />
-//               </ProtectedRoute>
-//             }
-//           />
-
-//           <Route
-//             path="kiem-ke"
-//             element={
-//               <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
-//                 <KiemKe />
-//               </ProtectedRoute>
-//             }
-//           />
-
-//           {/* Reports - require VIEW_REPORTS permission */}
-//           <Route
-//             path="bao-cao"
-//             element={
-//               <ProtectedRoute requiredPermission={PERMISSIONS.VIEW_REPORTS}>
-//                 <BaoCao />
-//               </ProtectedRoute>
-//             }
-//           />
-
-//           {/* Admin routes - require ADMIN role */}
-//           <Route
-//             path="admin/nhan-vien"
-//             element={
-//               <ProtectedRoute requiredRole={USER_ROLES.ADMIN}>
-//                 <UserManagement />
-//               </ProtectedRoute>
-//             }
-//           />
-
-//           <Route
-//             path="admin/phong-ban"
-//             element={
-//               <ProtectedRoute requiredRole={USER_ROLES.ADMIN}>
-//                 <DepartmentManagement />
-//               </ProtectedRoute>
-//             }
-//           />
-
-//           {/* Catch-all route for 404 */}
-//           <Route
-//             path="*"
-//             element={
-//               <div className="text-center py-12">
-//                 <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-gray-100">
-//                   <svg
-//                     className="h-6 w-6 text-gray-600"
-//                     fill="none"
-//                     viewBox="0 0 24 24"
-//                     stroke="currentColor"
-//                   >
-//                     <path
-//                       strokeLinecap="round"
-//                       strokeLinejoin="round"
-//                       strokeWidth="2"
-//                       d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-//                     />
-//                   </svg>
-//                 </div>
-//                 <h3 className="mt-2 text-sm font-medium text-gray-900">
-//                   Trang không tồn tại
-//                 </h3>
-//                 <p className="mt-1 text-sm text-gray-500">
-//                   Trang bạn đang tìm kiếm không tồn tại hoặc đã bị di chuyển.
-//                 </p>
-//                 <div className="mt-6">
-//                   <Navigate to="/dashboard" replace />
-//                 </div>
-//               </div>
-//             }
-//           />
-//         </Route>
-//       </Routes>
-//     </AuthProvider>
-//   );
-// }
-
-// export default App;
-
 import React, { useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
@@ -245,6 +44,7 @@ import Departments from "./pages/admin/Departments";
 
 // Notifications
 import NotificationCenter from "./pages/NotificationCenter";
+import AccountManagement from "./pages/AccountManagement";
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -265,14 +65,12 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
-// Admin Route Component
-const AdminRoute = ({ children }) => {
+// Admin or Manager Route Component for admin pages visibility (cấp 1 và cấp 2)
+const AdminOrManagerRoute = ({ children }) => {
   const { user } = useAuth();
-
-  if (!user || user.role !== "admin") {
+  if (!user || (user.role !== "admin" && user.role !== "manager")) {
     return <Navigate to="/" replace />;
   }
-
   return children;
 };
 
@@ -296,7 +94,7 @@ const Layout = ({ children }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 overflow-hidden">
       {/* SIDEBAR - FIXED POSITION */}
       <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
 
@@ -312,8 +110,8 @@ const Layout = ({ children }) => {
         </div>
 
         {/* PAGE CONTENT */}
-        <main className="min-h-[calc(100vh-4rem)]">
-          <div className="p-4 h-full">{children}</div>
+        <main className="min-h-[calc(100vh-4rem)] overflow-hidden">
+          <div className="p-4 h-full overflow-hidden">{children}</div>
         </main>
       </div>
     </div>
@@ -562,17 +360,17 @@ const AppContent = () => {
         }
       />
 
-      {/* ADMIN ROUTES - Admin only */}
+      {/* ADMIN ROUTES - Admin and Manager visibility */}
       {/* Quản lý nhân viên */}
       <Route
         path="/admin/nhan-vien"
         element={
           <ProtectedRoute>
-            <AdminRoute>
+            <AdminOrManagerRoute>
               <Layout>
                 <Users />
               </Layout>
-            </AdminRoute>
+            </AdminOrManagerRoute>
           </ProtectedRoute>
         }
       />
@@ -582,28 +380,26 @@ const AppContent = () => {
         path="/admin/phong-ban"
         element={
           <ProtectedRoute>
-            <AdminRoute>
+            <AdminOrManagerRoute>
               <Layout>
                 <Departments />
               </Layout>
-            </AdminRoute>
+            </AdminOrManagerRoute>
           </ProtectedRoute>
         }
       />
 
-      {/* Cài đặt hệ thống */}
-      {/* <Route
-        path="/settings"
+      {/* Quản lý tài khoản (thay cho cài đặt hệ thống) */}
+      <Route
+        path="/quan-ly-tai-khoan"
         element={
           <ProtectedRoute>
-            <AdminRoute>
-              <Layout>
-                <Settings />
-              </Layout>
-            </AdminRoute>
+            <Layout>
+              <AccountManagement />
+            </Layout>
           </ProtectedRoute>
         }
-      /> */}
+      />
 
       {/* NOTIFICATIONS */}
       <Route

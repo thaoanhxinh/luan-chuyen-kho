@@ -206,6 +206,7 @@ import {
   BarChart3,
   RefreshCw,
 } from "lucide-react";
+import PageHeader from "../components/common/PageHeader";
 
 // Import các component con cho từng tab
 import LuanChuyenReport from "../components/reports/LuanChuyenReport";
@@ -260,25 +261,19 @@ const BaoCao = ({ user }) => {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center">
-            <BarChart3 className="mr-3 h-5 w-5 text-blue-600" />
-            Hệ thống báo cáo
-          </h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Quản lý và xuất báo cáo toàn diện
-          </p>
-        </div>
+      <PageHeader
+        title="Hệ thống báo cáo"
+        subtitle="Quản lý và xuất báo cáo toàn diện"
+        Icon={BarChart3}
+      />
 
-        <div className="flex items-center space-x-3">
-          <div className="text-sm text-gray-600">
-            <Calendar className="h-4 w-4 inline mr-1" />
-            {new Date().toLocaleDateString("vi-VN")}
-          </div>
-          <div className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-            {user?.role === "admin" ? "Quản trị viên" : "Người dùng"}
-          </div>
+      <div className="flex justify-end items-center space-x-3">
+        <div className="text-sm text-gray-600">
+          <Calendar className="h-4 w-4 inline mr-1" />
+          {new Date().toLocaleDateString("vi-VN")}
+        </div>
+        <div className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+          {user?.role === "admin" ? "Quản trị viên" : "Người dùng"}
         </div>
       </div>
 

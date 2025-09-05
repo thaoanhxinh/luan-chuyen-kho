@@ -1,181 +1,39 @@
-import React, { useState, useEffect, useRef } from "react";
-import { ChevronDown, Plus, Check } from "lucide-react";
-import { debounce } from "../../utils/debounce";
+import React, { useState, useRef, useEffect } from "react";
+import { Search, ChevronDown, X } from "lucide-react";
 
 const AutoComplete = ({
-  value = "",
-  initialValue = "",
-  onChange,
-  onSelect,
   searchFunction,
+  onSelect,
   placeholder = "Nhập để tìm kiếm...",
   displayField = "name",
-  valueField = "id",
-  createLabel = "Sẽ tạo mới",
-  allowCreate = true,
+  renderItem,
+  className = "",
   disabled = false,
   required = false,
-  error = "",
-  className = "",
+  initialValue = null,
+  debounceMs = 300,
 }) => {
-  const [inputValue, setInputValue] = useState(value || initialValue);
-  const [suggestions, setSuggestions] = useState([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(-1);
-  const [isNewItem, setIsNewItem] = useState(false);
-  const [hasInitialized, setHasInitialized] = useState(false);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(initialValue);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
 
   const inputRef = useRef(null);
   const dropdownRef = useRef(null);
+  const debounceRef = useRef(null);
 
-  // Debounced search function
-  const debouncedSearch = debounce(async (keyword) => {
-    if (!keyword || keyword.length < 2) {
-      setSuggestions([]);
-      setLoading(false);
-      setIsNewItem(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      console.log("🔍 Searching for:", keyword);
-      const response = await searchFunction(keyword);
-      const results = response.data || [];
-      setSuggestions(results);
-
-      // Kiểm tra xem có item nào trùng khớp chính xác không
-      const exactMatch = results.find(
-        (s) =>
-          s[displayField] &&
-          s[displayField].toLowerCase().trim() === keyword.toLowerCase().trim()
-      );
-
-      // Nếu không có trùng khớp chính xác, đánh dấu là item mới (chỉ khi cho phép tạo mới)
-      setIsNewItem(allowCreate && !exactMatch);
-
-      console.log("📋 Search results:", results.length, "items");
-      console.log("🆕 Is new item:", allowCreate && !exactMatch);
-    } catch (error) {
-      console.error("Search error:", error);
-      setSuggestions([]);
-      setIsNewItem(allowCreate);
-    } finally {
-      setLoading(false);
-    }
-  }, 300);
-
-  // Handle input change
-  const handleInputChange = (e) => {
-    const newValue = e.target.value;
-    setInputValue(newValue);
-    setShowDropdown(true);
-    setSelectedIndex(-1);
-
-    if (onChange) {
-      onChange(newValue);
-    }
-
-    debouncedSearch(newValue);
-  };
-
-  // Handle option selection hoặc tự động chọn khi blur
-  const handleSelectOption = (option) => {
-    console.log("Selecting option:", option);
-
-    if (option && option.isNew) {
-      // Đánh dấu là item mới, không tạo ngay
-      const newItem = {
-        isNewItem: true,
-        [displayField]: inputValue.trim(),
-        tempId: `new_${Date.now()}`, // ID tạm thời
-        [valueField]: null,
-      };
-
-      setInputValue(inputValue.trim());
-      setIsNewItem(true);
-
-      if (onSelect) {
-        onSelect(newItem);
-      }
-    } else if (option) {
-      // Chọn item có sẵn
-      setInputValue(option[displayField]);
-      setIsNewItem(false);
-
-      if (onSelect) {
-        onSelect(option);
-      }
-    }
-
-    setShowDropdown(false);
-    setSelectedIndex(-1);
-  };
-
-  // Handle blur - tự động chọn nếu có input nhưng chưa chọn gì
-  const handleBlur = () => {
-    setTimeout(() => {
-      if (inputValue.trim() && !showDropdown && allowCreate) {
-        // Kiểm tra xem đã chọn item nào chưa
-        const trimmedInput = inputValue.trim();
-        const exactMatch = suggestions.find(
-          (s) =>
-            s[displayField] &&
-            s[displayField].toLowerCase() === trimmedInput.toLowerCase()
-        );
-
-        if (!exactMatch && trimmedInput.length >= 2) {
-          // Tự động đánh dấu là item mới
-          handleSelectOption({ isNew: true });
-        }
-      }
-    }, 150); // Delay để click option có thể hoạt động
-  };
-
-  // Handle keyboard navigation
-  const handleKeyDown = (e) => {
-    if (!showDropdown) return;
-
-    const hasCreateOption = shouldShowCreateOption();
-    const totalOptions = suggestions.length + (hasCreateOption ? 1 : 0);
-
-    switch (e.key) {
-      case "ArrowDown":
-        e.preventDefault();
-        setSelectedIndex((prev) => (prev < totalOptions - 1 ? prev + 1 : 0));
-        break;
-      case "ArrowUp":
-        e.preventDefault();
-        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : totalOptions - 1));
-        break;
-      case "Enter":
-        e.preventDefault();
-        if (selectedIndex >= 0) {
-          const isNewOption = selectedIndex === suggestions.length;
-          if (isNewOption && hasCreateOption) {
-            handleSelectOption({ isNew: true });
-          } else if (selectedIndex < suggestions.length) {
-            handleSelectOption(suggestions[selectedIndex]);
-          }
-        } else if (inputValue.trim().length >= 2 && allowCreate) {
-          // Enter mà không chọn gì thì tự động tạo mới (chỉ khi cho phép)
-          handleSelectOption({ isNew: true });
-        }
-        break;
-      case "Escape":
-        setShowDropdown(false);
-        setSelectedIndex(-1);
-        break;
-    }
-  };
-
-  // Close dropdown when clicking outside
+  // Handle click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setShowDropdown(false);
-        setSelectedIndex(-1);
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target) &&
+        !inputRef.current?.contains(event.target)
+      ) {
+        setIsOpen(false);
+        setFocusedIndex(-1);
       }
     };
 
@@ -183,158 +41,267 @@ const AutoComplete = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Update input value when value prop changes
+  // Reset when initialValue changes
   useEffect(() => {
-    if (value !== undefined && value !== inputValue) {
-      setInputValue(value);
+    setSelectedItem(initialValue);
+    if (initialValue) {
+      setQuery(initialValue[displayField] || "");
+    } else {
+      setQuery("");
     }
-  }, [value]);
+  }, [initialValue, displayField]);
 
-  // Initialize with initialValue only once
+  // Debounced search
   useEffect(() => {
-    if (!hasInitialized && initialValue) {
-      setInputValue(initialValue);
-      setHasInitialized(true);
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
     }
-  }, [initialValue, hasInitialized]);
 
-  // Reset initialization flag when initialValue changes significantly
-  useEffect(() => {
-    if (initialValue !== inputValue && initialValue) {
-      setInputValue(initialValue);
+    debounceRef.current = setTimeout(() => {
+      if (query.trim().length >= 2 && !selectedItem) {
+        performSearch(query.trim());
+      } else if (query.trim().length < 2) {
+        setResults([]);
+        setIsOpen(false);
+      }
+    }, debounceMs);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [query, selectedItem, debounceMs]);
+
+  const performSearch = async (searchQuery) => {
+    if (!searchFunction || isLoading) return;
+
+    setIsLoading(true);
+    setFocusedIndex(-1);
+
+    try {
+      const searchResults = await searchFunction(searchQuery);
+      setResults(Array.isArray(searchResults) ? searchResults : []);
+      setIsOpen(true);
+    } catch (error) {
+      console.error("Search error:", error);
+      setResults([]);
+      setIsOpen(false);
+    } finally {
+      setIsLoading(false);
     }
-  }, [initialValue]);
-
-  // Check if should show create option
-  const shouldShowCreateOption = () => {
-    if (!allowCreate) return false;
-
-    const trimmedInput = inputValue.trim();
-    if (!trimmedInput || trimmedInput.length < 2) return false;
-
-    if (suggestions.length === 0) return true;
-
-    const exactMatch = suggestions.find(
-      (s) =>
-        s[displayField] &&
-        s[displayField].toLowerCase().trim() === trimmedInput.toLowerCase()
-    );
-
-    return !exactMatch;
   };
 
-  const defaultRenderOption = (option, index) => (
-    <div
-      key={option[valueField] || `option-${index}`}
-      className={`px-4 py-2 cursor-pointer border-l-4 transition-colors ${
-        selectedIndex === index
-          ? "bg-green-50 border-green-500 text-green-900"
-          : "border-transparent hover:bg-gray-50"
-      }`}
-      onClick={() => handleSelectOption(option)}
-    >
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="font-medium text-gray-900">
-            {option[displayField]}
-          </div>
-          {option.ma_hang_hoa && (
-            <div className="text-sm text-gray-500">
-              Mã: {option.ma_hang_hoa}
-            </div>
-          )}
-          {option.ma_ncc && (
-            <div className="text-sm text-gray-500">Mã: {option.ma_ncc}</div>
-          )}
-          {option.don_vi_tinh && (
-            <div className="text-sm text-gray-500">
-              ĐVT: {option.don_vi_tinh}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setQuery(value);
+
+    // Clear selection if user is typing
+    if (selectedItem) {
+      setSelectedItem(null);
+    }
+
+    // Show dropdown if there are cached results
+    if (value.trim().length >= 2 && results.length > 0) {
+      setIsOpen(true);
+    }
+  };
+
+  const handleInputFocus = () => {
+    if (results.length > 0 && query.trim().length >= 2) {
+      setIsOpen(true);
+    }
+  };
+
+  const handleItemSelect = (item) => {
+    setSelectedItem(item);
+    setQuery(item[displayField] || "");
+    setIsOpen(false);
+    setFocusedIndex(-1);
+    setResults([]);
+    onSelect?.(item);
+  };
+
+  const handleClear = () => {
+    setSelectedItem(null);
+    setQuery("");
+    setResults([]);
+    setIsOpen(false);
+    setFocusedIndex(-1);
+    onSelect?.(null);
+    inputRef.current?.focus();
+  };
+
+  const handleKeyDown = (e) => {
+    if (!isOpen || results.length === 0) {
+      if (
+        e.key === "ArrowDown" &&
+        results.length === 0 &&
+        query.trim().length >= 2
+      ) {
+        performSearch(query.trim());
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setFocusedIndex((prev) => (prev < results.length - 1 ? prev + 1 : 0));
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setFocusedIndex((prev) => (prev > 0 ? prev - 1 : results.length - 1));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (focusedIndex >= 0 && results[focusedIndex]) {
+          handleItemSelect(results[focusedIndex]);
+        }
+        break;
+      case "Escape":
+        setIsOpen(false);
+        setFocusedIndex(-1);
+        inputRef.current?.blur();
+        break;
+      default:
+        break;
+    }
+  };
+
+  const getDisplayValue = () => {
+    if (selectedItem) {
+      return selectedItem[displayField] || "";
+    }
+    return query;
+  };
+
+  const shouldShowClear = selectedItem || query.trim().length > 0;
 
   return (
-    <div className={`relative ${className}`} ref={dropdownRef}>
+    <div className={`relative ${className}`}>
       <div className="relative">
-        <input
-          ref={inputRef}
-          type="text"
-          value={inputValue}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          onFocus={() => setShowDropdown(true)}
-          onBlur={handleBlur}
-          disabled={disabled}
-          required={required}
-          placeholder={placeholder}
-          className={`w-full px-3 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-sm ${
-            error ? "border-red-500" : "border-gray-300"
-          } ${disabled ? "bg-gray-100 cursor-not-allowed" : ""} ${
-            isNewItem ? "bg-yellow-50 border-yellow-300" : ""
-          }`}
-        />
-        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-          {loading ? (
-            <div className="animate-spin h-4 w-4 border-2 border-green-500 border-t-transparent rounded-full"></div>
-          ) : isNewItem ? (
-            <Plus className="h-4 w-4 text-yellow-600" />
-          ) : (
-            <ChevronDown className="h-4 w-4 text-gray-400" />
-          )}
+        <div className="relative">
+          <input
+            ref={inputRef}
+            type="text"
+            value={getDisplayValue()}
+            onChange={handleInputChange}
+            onFocus={handleInputFocus}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            disabled={disabled}
+            required={required}
+            className={`
+              w-full pl-10 pr-10 py-2 border rounded-lg text-sm transition-colors
+              ${
+                disabled
+                  ? "bg-gray-100 cursor-not-allowed"
+                  : "bg-white hover:border-gray-400"
+              }
+              ${
+                selectedItem
+                  ? "border-green-300 bg-green-50"
+                  : "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              }
+            `}
+            autoComplete="off"
+          />
+
+          {/* Search icon */}
+          <Search
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+            size={16}
+          />
+
+          {/* Right icons */}
+          <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
+            {isLoading && (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+            )}
+
+            {shouldShowClear && !disabled && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="p-0.5 hover:bg-gray-200 rounded-full transition-colors"
+                title="Xóa"
+              >
+                <X size={14} className="text-gray-400 hover:text-gray-600" />
+              </button>
+            )}
+
+            <ChevronDown
+              className={`text-gray-400 transform transition-transform ${
+                isOpen ? "rotate-180" : ""
+              }`}
+              size={16}
+            />
+          </div>
         </div>
+
+        {/* Selection indicator */}
+        {selectedItem && (
+          <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-green-500 rounded-full"></div>
+        )}
       </div>
 
-      {/* {isNewItem && inputValue.trim() && allowCreate && (
-        <div className="mt-1 text-xs text-yellow-600 flex items-center">
-          <Plus className="h-3 w-3 mr-1" />
-          Sẽ tạo mới: "{inputValue.trim()}"
-        </div>
-      )} */}
-
-      {error && <div className="mt-1 text-sm text-red-600">{error}</div>}
-
-      {showDropdown && inputValue.length >= 2 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-          {loading ? (
-            <div className="px-4 py-2 text-gray-500 text-sm flex items-center">
-              <div className="animate-spin h-4 w-4 border-2 border-green-500 border-t-transparent rounded-full mr-2"></div>
+      {/* Dropdown */}
+      {isOpen && (
+        <div
+          ref={dropdownRef}
+          className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+        >
+          {isLoading ? (
+            <div className="p-3 text-center text-gray-500 text-sm">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mx-auto mb-2"></div>
               Đang tìm kiếm...
             </div>
+          ) : results.length > 0 ? (
+            <ul className="py-1">
+              {results.map((item, index) => (
+                <li key={item.id || index}>
+                  <button
+                    type="button"
+                    onClick={() => handleItemSelect(item)}
+                    className={`
+                      w-full px-3 py-2 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none transition-colors
+                      ${index === focusedIndex ? "bg-blue-50" : ""}
+                      ${item.isNewItem ? "border-l-4 border-blue-400" : ""}
+                    `}
+                    onMouseEnter={() => setFocusedIndex(index)}
+                  >
+                    {renderItem ? (
+                      renderItem(item)
+                    ) : (
+                      <div>
+                        <div className="font-medium text-gray-900">
+                          {item[displayField]}
+                        </div>
+                        {item.isNewItem && (
+                          <div className="text-xs text-blue-600 mt-1">
+                            💡 Tạo mới
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : query.trim().length >= 2 ? (
+            <div className="p-3 text-center text-gray-500 text-sm">
+              Không tìm thấy kết quả nào
+              {query.trim().length >= 3 && (
+                <div className="text-xs text-blue-600 mt-1">
+                  💡 Có thể tạo mới "{query.trim()}"
+                </div>
+              )}
+            </div>
           ) : (
-            <>
-              {suggestions.map((option, index) =>
-                defaultRenderOption(option, index)
-              )}
-
-              {shouldShowCreateOption() && (
-                <div
-                  className={`px-4 py-2 cursor-pointer ${
-                    suggestions.length > 0 ? "border-t border-gray-100" : ""
-                  } border-l-4 transition-colors ${
-                    selectedIndex === suggestions.length
-                      ? "bg-yellow-50 border-yellow-500 text-yellow-900"
-                      : "border-transparent hover:bg-yellow-25"
-                  }`}
-                  onClick={() => handleSelectOption({ isNew: true })}
-                >
-                  <div className="flex items-center space-x-2">
-                    <Plus className="h-4 w-4 text-yellow-600" />
-                    <span className="font-medium text-yellow-700">
-                      {createLabel}: "{inputValue.trim()}"
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {suggestions.length === 0 && !shouldShowCreateOption() && (
-                <div className="px-4 py-2 text-gray-500 text-sm">
-                  Nhập ít nhất 2 ký tự để tìm kiếm
-                </div>
-              )}
-            </>
+            <div className="p-3 text-center text-gray-500 text-sm">
+              Nhập ít nhất 2 ký tự để tìm kiếm
+            </div>
           )}
         </div>
       )}

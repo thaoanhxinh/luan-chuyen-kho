@@ -29,13 +29,15 @@ const getDepartments = async (req, res, query, user) => {
         pb.ma_phong_ban,
         pb.ten_phong_ban,
         pb.mo_ta,
+        pb.cap_bac,
+        pb.phong_ban_cha_id,
         pb.trang_thai::text as is_active,
         pb.created_at,
         COUNT(u.id) as so_nhan_vien
       FROM phong_ban pb
       LEFT JOIN users u ON pb.id = u.phong_ban_id AND u.trang_thai = 'active'
       ${whereClause}
-      GROUP BY pb.id, pb.ma_phong_ban, pb.ten_phong_ban, pb.mo_ta, pb.trang_thai, pb.created_at
+      GROUP BY pb.id, pb.ma_phong_ban, pb.ten_phong_ban, pb.mo_ta, pb.cap_bac, pb.phong_ban_cha_id, pb.trang_thai, pb.created_at
       ORDER BY pb.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
@@ -84,11 +86,19 @@ const getDepartments = async (req, res, query, user) => {
 
 const createDepartment = async (req, res, body, user) => {
   try {
-    if (user.role !== "admin") {
+    // Admin (cấp 1) có thể tạo cấp 2,3; Manager (cấp 2) chỉ tạo cấp 3
+    if (!["admin", "manager"].includes(user.role)) {
       return sendResponse(res, 403, false, "Không có quyền truy cập");
     }
 
-    const { ma_phong_ban, ten_phong_ban, mo_ta, is_active = true } = body;
+    const {
+      ma_phong_ban,
+      ten_phong_ban,
+      mo_ta,
+      is_active = true,
+      cap_bac,
+      phong_ban_cha_id,
+    } = body;
 
     if (!ma_phong_ban || !ten_phong_ban) {
       return sendResponse(
@@ -97,6 +107,51 @@ const createDepartment = async (req, res, body, user) => {
         false,
         "Mã phòng ban và tên phòng ban là bắt buộc"
       );
+    }
+
+    // Validate cap_bac per role
+    const capBacValue = parseInt(cap_bac, 10) || 3;
+    if (user.role === "manager" && capBacValue !== 3) {
+      return sendResponse(
+        res,
+        400,
+        false,
+        "Cấp 2 chỉ được tạo phòng ban cấp 3"
+      );
+    }
+    if (user.role === "admin" && ![2, 3].includes(capBacValue)) {
+      return sendResponse(
+        res,
+        400,
+        false,
+        "Admin chỉ tạo phòng ban cấp 2 hoặc cấp 3"
+      );
+    }
+
+    // Validate parent
+    let parentId = phong_ban_cha_id ? parseInt(phong_ban_cha_id, 10) : null;
+    if (capBacValue === 3) {
+      // cấp 3 bắt buộc phải có phòng ban cha cấp 2
+      if (!parentId) {
+        return sendResponse(
+          res,
+          400,
+          false,
+          "Phòng ban cấp 3 phải có phòng ban cha"
+        );
+      }
+      // Manager chỉ được đặt parent là phòng ban của mình
+      if (user.role === "manager" && parentId !== user.phong_ban_id) {
+        return sendResponse(
+          res,
+          403,
+          false,
+          "Không được tạo dưới phòng ban khác"
+        );
+      }
+    } else if (capBacValue === 2) {
+      // cấp 2: không có cha
+      parentId = null;
     }
 
     // Check if department code already exists
@@ -110,8 +165,8 @@ const createDepartment = async (req, res, body, user) => {
 
     // Insert with current schema structure
     const insertQuery = `
-      INSERT INTO phong_ban (ma_phong_ban, ten_phong_ban, mo_ta, trang_thai, created_at)
-      VALUES ($1, $2, $3, $4, NOW())
+      INSERT INTO phong_ban (ma_phong_ban, ten_phong_ban, mo_ta, cap_bac, phong_ban_cha_id, trang_thai, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
       RETURNING *
     `;
 
@@ -119,6 +174,8 @@ const createDepartment = async (req, res, body, user) => {
       ma_phong_ban,
       ten_phong_ban,
       mo_ta,
+      capBacValue,
+      parentId,
       is_active ? "active" : "inactive",
     ]);
 

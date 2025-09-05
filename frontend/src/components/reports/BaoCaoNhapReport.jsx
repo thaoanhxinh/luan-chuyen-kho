@@ -343,7 +343,7 @@
 //             </select>
 //           </div>
 
-//           {user?.role === "admin" && (
+//           {(user?.role === "admin" || user?.role === "manager") && (
 //             <div>
 //               <label className="block text-sm font-medium text-gray-700 mb-2">
 //                 Phòng ban
@@ -553,6 +553,7 @@
 // export default BaoCaoNhapReport;
 
 import React, { useState, useEffect } from "react";
+import { useAuth } from "../../context/AuthContext";
 import {
   Download,
   Calendar,
@@ -565,9 +566,13 @@ import {
   FileText,
   Users,
   ArrowDownToLine,
+  Truck,
+  X,
+  Warehouse,
 } from "lucide-react";
 
-const BaoCaoNhapReport = ({ user }) => {
+const BaoCaoNhapReport = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("tu_mua");
   const [filters, setFilters] = useState({
     tu_ngay: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -575,17 +580,30 @@ const BaoCaoNhapReport = ({ user }) => {
       .split("T")[0],
     den_ngay: new Date().toISOString().split("T")[0],
     timeFrame: "month",
-    phong_ban_id: user?.role === "admin" ? "all" : user?.phong_ban_id,
+    phong_ban_cap2_id: "all",
+    phong_ban_cap3_id: "all",
   });
 
   const [data, setData] = useState({
     tu_mua: { items: [], total: 0 },
     tren_cap: { items: [], total: 0 },
+    luan_chuyen: { items: [], total: 0 },
   });
-  const [phongBanList, setPhongBanList] = useState([]);
+  const [phongBanOptions, setPhongBanOptions] = useState({
+    cap2: [],
+    cap3: [],
+    hierarchy: {},
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [showExportOptionsModal, setShowExportOptionsModal] = useState(false);
+  const [exportOptions, setExportOptions] = useState({
+    timeFrame: "month", // month, quarter, year
+    selectedYear: new Date().getFullYear(),
+    selectedMonth: new Date().getMonth() + 1,
+    selectedQuarter: Math.ceil((new Date().getMonth() + 1) / 3),
+  });
   const [signatures, setSignatures] = useState({
     nguoi_lap: "",
     truong_ban_tmkh: "",
@@ -594,7 +612,7 @@ const BaoCaoNhapReport = ({ user }) => {
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    if (user?.role === "admin") {
+    if (user?.role === "admin" || user?.role === "manager") {
       fetchPhongBanList();
     }
   }, [user]);
@@ -605,7 +623,7 @@ const BaoCaoNhapReport = ({ user }) => {
 
   const fetchPhongBanList = async () => {
     try {
-      const response = await fetch("/api/departments/list", {
+      const response = await fetch("/api/bao-cao/phong-ban-list", {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
           "Content-Type": "application/json",
@@ -613,8 +631,8 @@ const BaoCaoNhapReport = ({ user }) => {
       });
 
       const result = await response.json();
-      if (result.success && Array.isArray(result.data)) {
-        setPhongBanList(result.data);
+      if (result.success) {
+        setPhongBanOptions(result.data);
       }
     } catch (error) {
       console.error("Error fetching departments:", error);
@@ -626,24 +644,39 @@ const BaoCaoNhapReport = ({ user }) => {
       setIsLoading(true);
 
       // Fetch data for both types using real API
-      const [tuMuaResponse, trenCapResponse] = await Promise.all([
-        fetchDataByType("tu_mua"),
-        fetchDataByType("tren_cap"),
-      ]);
+      const [tuMuaResponse, trenCapResponse, luanChuyenResponse] =
+        await Promise.all([
+          fetchDataByType("tu_mua"),
+          fetchDataByType("tren_cap"),
+          fetchDataByType("luan_chuyen"),
+        ]);
 
       setData({
         tu_mua: tuMuaResponse,
         tren_cap: trenCapResponse,
+        luan_chuyen: luanChuyenResponse,
       });
     } catch (error) {
       console.error("Error fetching nhap data:", error);
       setData({
         tu_mua: { items: [], total: 0 },
         tren_cap: { items: [], total: 0 },
+        luan_chuyen: { items: [], total: 0 },
       });
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleFilterChange = (key, value) => {
+    setFilters((prev) => {
+      const newFilters = { ...prev, [key]: value };
+      // Reset cấp 3 khi chọn cấp 2 mới
+      if (key === "phong_ban_cap2_id") {
+        newFilters.phong_ban_cap3_id = "all";
+      }
+      return newFilters;
+    });
   };
 
   const fetchDataByType = async (loaiPhieu) => {
@@ -655,8 +688,17 @@ const BaoCaoNhapReport = ({ user }) => {
       loai_phieu: loaiPhieu,
     });
 
-    if (filters.phong_ban_id && filters.phong_ban_id !== "all") {
-      params.append("phong_ban_id", filters.phong_ban_id);
+    // Logic chọn filter cuối cùng để gửi API
+    let selectedFilter = "all";
+
+    if (filters.phong_ban_cap3_id !== "all") {
+      selectedFilter = filters.phong_ban_cap3_id;
+    } else if (filters.phong_ban_cap2_id !== "all") {
+      selectedFilter = filters.phong_ban_cap2_id;
+    }
+
+    if (selectedFilter !== "all") {
+      params.append("phong_ban_id", selectedFilter);
     }
 
     const response = await fetch(`/api/bao-cao/nhap-by-type?${params}`, {
@@ -679,21 +721,136 @@ const BaoCaoNhapReport = ({ user }) => {
   };
 
   const handleExport = () => {
+    setShowExportOptionsModal(true);
+  };
+
+  const handleExportOptionsConfirm = () => {
+    setShowExportOptionsModal(false);
     setShowSignatureModal(true);
+  };
+
+  // Render dropdown phòng ban theo quyền
+  const renderPhongBanFilter = () => {
+    if (user?.role === "user" && user?.phong_ban?.cap_bac === 3) {
+      // Cấp 3: Hiển thị thông tin phòng ban hiện tại
+      return (
+        <div className="flex items-center space-x-2">
+          <Building2 className="h-4 w-4 text-gray-500" />
+          <span className="text-sm font-medium text-gray-700">Phòng ban:</span>
+          <span className="px-3 py-2 bg-blue-100 text-blue-800 rounded-md text-sm font-medium">
+            🏢 {user.phong_ban?.ten_phong_ban}
+          </span>
+        </div>
+      );
+    }
+
+    // Logic cho manager và admin
+    const availableCap3 =
+      filters.phong_ban_cap2_id !== "all"
+        ? phongBanOptions.cap3.filter(
+            (cap3) =>
+              cap3.phong_ban_cha_id === parseInt(filters.phong_ban_cap2_id)
+          )
+        : phongBanOptions.cap3;
+
+    return (
+      <div className="flex items-center space-x-4">
+        {/* Dropdown Cấp 2 */}
+        <div className="flex items-center space-x-2">
+          <Building2 className="h-4 w-4 text-gray-500" />
+          <label className="text-sm font-medium text-gray-700">Cấp 2:</label>
+          <select
+            value={filters.phong_ban_cap2_id}
+            onChange={(e) =>
+              handleFilterChange("phong_ban_cap2_id", e.target.value)
+            }
+            className="border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="all">Tất cả cấp 2</option>
+            {phongBanOptions.cap2.map((cap2) => (
+              <option key={cap2.id} value={cap2.id}>
+                {cap2.ten_phong_ban}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Dropdown Cấp 3 */}
+        <div className="flex items-center space-x-2">
+          <Warehouse className="h-4 w-4 text-gray-500" />
+          <label className="text-sm font-medium text-gray-700">Cấp 3:</label>
+          <select
+            value={filters.phong_ban_cap3_id}
+            onChange={(e) =>
+              handleFilterChange("phong_ban_cap3_id", e.target.value)
+            }
+            className="border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            disabled={
+              filters.phong_ban_cap2_id !== "all" && availableCap3.length === 0
+            }
+          >
+            <option value="all">
+              {filters.phong_ban_cap2_id !== "all"
+                ? "Tất cả cấp 3 thuộc cấp 2"
+                : "Tất cả cấp 3"}
+            </option>
+            {availableCap3.map((cap3) => (
+              <option key={cap3.id} value={cap3.id}>
+                {cap3.ten_phong_ban}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    );
   };
 
   const handleExportConfirm = async () => {
     try {
       setIsExporting(true);
 
+      // Tính toán thời gian dựa trên lựa chọn
+      let tu_ngay, den_ngay;
+      const year = exportOptions.selectedYear;
+
+      if (exportOptions.timeFrame === "month") {
+        const month = exportOptions.selectedMonth;
+        tu_ngay = `${year}-${month.toString().padStart(2, "0")}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        den_ngay = `${year}-${month.toString().padStart(2, "0")}-${lastDay
+          .toString()
+          .padStart(2, "0")}`;
+      } else if (exportOptions.timeFrame === "quarter") {
+        const quarter = exportOptions.selectedQuarter;
+        const startMonth = (quarter - 1) * 3 + 1;
+        const endMonth = quarter * 3;
+        tu_ngay = `${year}-${startMonth.toString().padStart(2, "0")}-01`;
+        const lastDay = new Date(year, endMonth, 0).getDate();
+        den_ngay = `${year}-${endMonth.toString().padStart(2, "0")}-${lastDay
+          .toString()
+          .padStart(2, "0")}`;
+      } else if (exportOptions.timeFrame === "year") {
+        tu_ngay = `${year}-01-01`;
+        den_ngay = `${year}-12-31`;
+      }
+
       const params = new URLSearchParams({
-        tu_ngay: filters.tu_ngay,
-        den_ngay: filters.den_ngay,
-        timeFrame: filters.timeFrame,
+        tu_ngay,
+        den_ngay,
+        timeFrame: exportOptions.timeFrame,
       });
 
-      if (filters.phong_ban_id && filters.phong_ban_id !== "all") {
-        params.append("phong_ban_id", filters.phong_ban_id);
+      // Logic chọn filter cuối cùng để gửi API
+      let selectedFilter = "all";
+
+      if (filters.phong_ban_cap3_id !== "all") {
+        selectedFilter = filters.phong_ban_cap3_id;
+      } else if (filters.phong_ban_cap2_id !== "all") {
+        selectedFilter = filters.phong_ban_cap2_id;
+      }
+
+      if (selectedFilter !== "all") {
+        params.append("phong_ban_id", selectedFilter);
       }
 
       // Add signature data
@@ -809,10 +966,13 @@ const BaoCaoNhapReport = ({ user }) => {
   const getTotalStats = () => {
     const tuMuaTotal = data.tu_mua?.total || 0;
     const trenCapTotal = data.tren_cap?.total || 0;
+    const luanChuyenTotal = data.luan_chuyen?.total || 0;
     return {
-      totalValue: tuMuaTotal + trenCapTotal,
+      totalValue: tuMuaTotal + trenCapTotal + luanChuyenTotal,
       totalItems:
-        (data.tu_mua?.items?.length || 0) + (data.tren_cap?.items?.length || 0),
+        (data.tu_mua?.items?.length || 0) +
+        (data.tren_cap?.items?.length || 0) +
+        (data.luan_chuyen?.items?.length || 0),
     };
   };
 
@@ -823,20 +983,24 @@ const BaoCaoNhapReport = ({ user }) => {
     setCurrentPage(1);
   }, [activeTab]);
 
+  const showDepartmentColumn =
+    (user?.role === "admin" || user?.role === "manager") &&
+    filters.phong_ban_cap3_id === "all";
+
   return (
     <div className="space-y-4">
-      {/* Header Card - Simplified */}
+      {/* Header Card - Compact */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-900 flex items-center">
-          <ArrowDownToLine className="mr-2 h-5 w-5 text-green-600" />
+        <h1 className="text-lg font-semibold text-gray-900 flex items-center">
+          <ArrowDownToLine className="mr-2 h-4 w-4 text-green-600" />
           Báo cáo phiếu nhập
         </h1>
 
         <div className="text-right">
-          <div className="text-xl font-bold">
+          <div className="text-base font-semibold">
             {formatCurrency(totalStats.totalValue)}
           </div>
-          <div className="text-sm text-black-100">Tổng giá trị nhập</div>
+          <div className="text-xs text-gray-500">Tổng giá trị nhập</div>
         </div>
       </div>
 
@@ -895,30 +1059,8 @@ const BaoCaoNhapReport = ({ user }) => {
             </button>
           </div>
 
-          {user?.role === "admin" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Phòng ban
-              </label>
-              <select
-                value={filters.phong_ban_id}
-                onChange={(e) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    phong_ban_id: e.target.value,
-                  }))
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              >
-                <option value="all">Tất cả phòng ban</option>
-                {phongBanList.map((pb) => (
-                  <option key={pb.id} value={pb.id}>
-                    {pb.ten_phong_ban}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Filter phòng ban */}
+          {renderPhongBanFilter()}
         </div>
       </div>
 
@@ -952,27 +1094,44 @@ const BaoCaoNhapReport = ({ user }) => {
                 Trên cấp ({data.tren_cap?.items?.length || 0})
               </div>
             </button>
+            <button
+              onClick={() => setActiveTab("luan_chuyen")}
+              className={`py-4 px-6 border-b-2 font-medium text-sm ${
+                activeTab === "luan_chuyen"
+                  ? "border-green-500 text-green-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <div className="flex items-center">
+                <Truck className="h-4 w-4 mr-2" />
+                Luân chuyển ({data.luan_chuyen?.items?.length || 0})
+              </div>
+            </button>
           </nav>
         </div>
 
         {/* Tab Content */}
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">
-              {activeTab === "tu_mua" ? "Hàng tự mua sắm" : "Hàng trên cấp"}(
-              {formatNumber(currentData.items.length)} phiếu)
+            <h3 className="text-base font-semibold text-gray-900">
+              {activeTab === "tu_mua"
+                ? "Hàng tự mua sắm"
+                : activeTab === "tren_cap"
+                ? "Hàng trên cấp"
+                : "Hàng luân chuyển"}
+              ({formatNumber(currentData.items.length)} phiếu)
             </h3>
             <div className="flex items-center space-x-4">
               <div className="text-right">
-                <div className="text-xl font-bold text-green-600">
+                <div className="text-base font-semibold text-green-600">
                   {formatCurrency(currentData.total)}
                 </div>
-                <div className="text-sm text-gray-600">Tổng giá trị</div>
+                <div className="text-xs text-gray-500">Tổng giá trị</div>
               </div>
               {isLoading && (
                 <div className="flex items-center text-blue-600">
                   <RefreshCw className="h-4 w-4 animate-spin mr-2" />
-                  <span className="text-sm">Đang tải...</span>
+                  <span className="text-xs">Đang tải...</span>
                 </div>
               )}
             </div>
@@ -991,6 +1150,11 @@ const BaoCaoNhapReport = ({ user }) => {
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">
                     Ngày, tháng
                   </th>
+                  {showDepartmentColumn && (
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      Phòng ban
+                    </th>
+                  )}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                     Nội dung
                   </th>
@@ -1020,6 +1184,13 @@ const BaoCaoNhapReport = ({ user }) => {
                         {formatDate(item.ngay_nhap)}
                       </div>
                     </td>
+                    {showDepartmentColumn && (
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                          {item.ten_phong_ban || "-"}
+                        </span>
+                      </td>
+                    )}
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">
                         {item.ly_do_nhap || "Nhập kho"}
@@ -1036,7 +1207,7 @@ const BaoCaoNhapReport = ({ user }) => {
               <tfoot className="bg-gray-50">
                 <tr>
                   <td
-                    colSpan="4"
+                    colSpan={showDepartmentColumn ? 5 : 4}
                     className="px-6 py-4 text-center font-bold text-gray-900"
                   >
                     Cộng
@@ -1057,8 +1228,12 @@ const BaoCaoNhapReport = ({ user }) => {
               </h3>
               <p className="text-sm text-gray-600">
                 Không tìm thấy phiếu nhập{" "}
-                {activeTab === "tu_mua" ? "tự mua sắm" : "trên cấp"} nào trong
-                khoảng thời gian này
+                {activeTab === "tu_mua"
+                  ? "tự mua sắm"
+                  : activeTab === "tren_cap"
+                  ? "trên cấp"
+                  : "luân chuyển"}{" "}
+                nào trong khoảng thời gian này
               </p>
             </div>
           )}
@@ -1100,6 +1275,179 @@ const BaoCaoNhapReport = ({ user }) => {
           )}
         </div>
       </div>
+
+      {/* Export Options Modal */}
+      {showExportOptionsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                <Download className="h-5 w-5 mr-2" />
+                Tùy chọn xuất báo cáo
+              </h3>
+              <button
+                onClick={() => setShowExportOptionsModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Chọn loại xuất báo cáo
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="timeFrame"
+                      value="month"
+                      checked={exportOptions.timeFrame === "month"}
+                      onChange={(e) =>
+                        setExportOptions((prev) => ({
+                          ...prev,
+                          timeFrame: e.target.value,
+                        }))
+                      }
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Theo tháng (chi tiết 4 tab)</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="timeFrame"
+                      value="quarter"
+                      checked={exportOptions.timeFrame === "quarter"}
+                      onChange={(e) =>
+                        setExportOptions((prev) => ({
+                          ...prev,
+                          timeFrame: e.target.value,
+                        }))
+                      }
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Theo quý (3 tab theo tháng)</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="timeFrame"
+                      value="year"
+                      checked={exportOptions.timeFrame === "year"}
+                      onChange={(e) =>
+                        setExportOptions((prev) => ({
+                          ...prev,
+                          timeFrame: e.target.value,
+                        }))
+                      }
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Theo năm (4 tab theo quý)</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Chọn thời gian
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">
+                      Năm
+                    </label>
+                    <select
+                      value={exportOptions.selectedYear}
+                      onChange={(e) =>
+                        setExportOptions((prev) => ({
+                          ...prev,
+                          selectedYear: parseInt(e.target.value),
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    >
+                      {Array.from({ length: 5 }, (_, i) => {
+                        const year = new Date().getFullYear() - 2 + i;
+                        return (
+                          <option key={year} value={year}>
+                            {year}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  {exportOptions.timeFrame === "month" && (
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">
+                        Tháng
+                      </label>
+                      <select
+                        value={exportOptions.selectedMonth}
+                        onChange={(e) =>
+                          setExportOptions((prev) => ({
+                            ...prev,
+                            selectedMonth: parseInt(e.target.value),
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      >
+                        {Array.from({ length: 12 }, (_, i) => (
+                          <option key={i + 1} value={i + 1}>
+                            Tháng {i + 1}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {exportOptions.timeFrame === "quarter" && (
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">
+                        Quý
+                      </label>
+                      <select
+                        value={exportOptions.selectedQuarter}
+                        onChange={(e) =>
+                          setExportOptions((prev) => ({
+                            ...prev,
+                            selectedQuarter: parseInt(e.target.value),
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      >
+                        {Array.from({ length: 4 }, (_, i) => (
+                          <option key={i + 1} value={i + 1}>
+                            Quý {i + 1}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  onClick={() => setShowExportOptionsModal(false)}
+                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={handleExportOptionsConfirm}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Tiếp tục
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Signature Modal */}
       {showSignatureModal && (

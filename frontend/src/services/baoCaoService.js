@@ -266,4 +266,34 @@ export const baoCaoService = {
       throw error;
     }
   },
+  getLuanChuyenReport: async (params = {}) => {
+    try {
+      console.log("📡 Calling luân chuyển API with params:", params);
+
+      const response = await api.get("/bao-cao/luan-chuyen", {
+        params: {
+          tu_ngay: params.tu_ngay,
+          den_ngay: params.den_ngay,
+          phong_ban_id: params.phong_ban_id || "all",
+        },
+      });
+
+      console.log("📊 API Response:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("❌ Error fetching luân chuyển report:", error);
+      throw error;
+    }
+  },
+
+  // ✅ FIX VẤN ĐỀ 3: API lấy danh sách phòng ban theo quyền
+  getPhongBanForReport: async () => {
+    try {
+      const response = await api.get("/bao-cao/phong-ban-list");
+      return response.data;
+    } catch (error) {
+      console.error("❌ Error fetching phong ban options:", error);
+      throw error;
+    }
+  },
 };

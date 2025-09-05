@@ -535,38 +535,42 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
       ]
     : [];
 
-  // Create admin conditional items
-  const adminMenuItems =
-    user?.role === "admin"
-      ? [
-          {
-            key: "admin",
-            title: "Quản trị",
-            icon: Settings,
-            type: "group",
-            items: [
-              {
-                key: "admin-users",
-                title: "Quản lý nhân viên",
-                path: "/admin/nhan-vien",
-                icon: Users,
-              },
-              {
-                key: "admin-departments",
-                title: "Quản lý phòng ban",
-                path: "/admin/phong-ban",
-                icon: Building2,
-              },
-              {
-                key: "admin-settings",
-                title: "Cài đặt hệ thống",
-                path: "/settings",
-                icon: Settings,
-              },
-            ],
-          },
-        ]
-      : [];
+  // Build Admin group items per role
+  const accountItem = {
+    key: "admin-account",
+    title: "Quản lý tài khoản",
+    path: "/quan-ly-tai-khoan",
+    icon: Settings,
+  };
+
+  let adminGroupItems = [accountItem];
+  if (user?.role === "admin" || user?.role === "manager") {
+    adminGroupItems = [
+      {
+        key: "admin-users",
+        title: "Quản lý nhân viên",
+        path: "/admin/nhan-vien",
+        icon: Users,
+      },
+      {
+        key: "admin-departments",
+        title: "Quản lý phòng ban",
+        path: "/admin/phong-ban",
+        icon: Building2,
+      },
+      accountItem,
+    ];
+  }
+
+  const adminMenuItems = [
+    {
+      key: "admin",
+      title: "Quản trị",
+      icon: Settings,
+      type: "group",
+      items: adminGroupItems,
+    },
+  ];
 
   // Menu structure theo workflow nghiệp vụ
   const menuItems = [
@@ -577,29 +581,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
       path: "/",
       type: "single",
     },
-    {
-      key: "requests",
-      title: "Yêu cầu",
-      icon: FileText,
-      type: "group",
-      items: [
-        {
-          key: "request-import",
-          title: "Tạo YC nhập kho",
-          path: "/yeu-cau-nhap",
-          icon: ArrowDownToLine,
-          action: "create",
-        },
-        {
-          key: "request-export",
-          title: "Tạo YC xuất kho",
-          path: "/yeu-cau-xuat",
-          icon: ArrowUpFromLine,
-          action: "create",
-        },
-        ...managerAdminItems,
-      ],
-    },
+    // Removed group "Yêu cầu" per new requirement
     {
       key: "warehouse",
       title: "Quản lý kho",

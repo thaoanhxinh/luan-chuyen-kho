@@ -95,24 +95,6 @@ const authenticateWithWorkflow = async (req) => {
   }
 };
 
-// Authentication Middleware
-// const authenticate = async (req) => {
-//   const token = getTokenFromRequest(req);
-//   if (!token) return null;
-
-//   const decoded = verifyToken(token);
-//   if (!decoded) return null;
-
-//   try {
-//     const userQuery = "SELECT * FROM users WHERE id = $1 AND trang_thai = $2";
-//     const result = await pool.query(userQuery, [decoded.id, "active"]);
-//     return result.rows.length > 0 ? result.rows[0] : null;
-//   } catch (error) {
-//     console.error("Auth error:", error);
-//     return null;
-//   }
-// };
-
 const authenticate = async (req) => {
   const token = getTokenFromRequest(req);
   if (!token) return null;
@@ -761,33 +743,6 @@ const router = async (req, res) => {
         department: user.ma_phong_ban,
         route_type: "workflow",
       });
-
-      // Apply route-specific middleware
-      /*
-  // Apply route-specific middleware
-  const middlewares = getRouteMiddleware(method, pathname);
-  if (middlewares.length > 0) {
-    console.log(
-      `🛡️ Applying ${middlewares.length} middleware(s) for ${method} ${pathname}`
-    );
-
-    try {
-      // Execute middleware chain
-      await new Promise((resolve, reject) => {
-        applyMiddlewares(middlewares)(req, res, (err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
-      console.log(`✅ Middleware chain completed successfully`);
-    } catch (middlewareError) {
-      console.error(`❌ Middleware error:`, middlewareError);
-      return sendResponse(res, 403, false, "Access denied", {
-        middleware_error: middlewareError.message,
-      });
-    }
-  }
-  */
     }
     // Protected Routes - Require Authentication
     console.log(`🔒 Authenticating user...`);
@@ -827,6 +782,8 @@ const router = async (req, res) => {
           );
         case "DELETE":
           return await userController.deleteUser(req, res, userParams, user);
+        case "GET":
+          return await userController.getUserDetail(req, res, userParams, user);
       }
     }
 
@@ -842,18 +799,24 @@ const router = async (req, res) => {
       );
     }
 
-    // User password reset
-    const userResetParams = extractParams(
-      "/api/users/:id/reset-password",
-      pathname
-    );
-    if (userResetParams && method === "POST") {
-      return await userController.resetPassword(
+    // Update user active status (enable/disable)
+    const userStatusParams = extractParams("/api/users/:id/status", pathname);
+    if (userStatusParams && method === "PATCH") {
+      return await userController.updateUserStatus(
         req,
         res,
-        userResetParams,
+        userStatusParams,
+        body,
         user
       );
+    }
+
+    // Self account endpoints
+    if (pathname === "/api/account/change-password" && method === "POST") {
+      return await userController.changeOwnPassword(req, res, body, user);
+    }
+    if (pathname === "/api/account/change-username" && method === "POST") {
+      return await userController.changeOwnUsername(req, res, body, user);
     }
 
     // Admin Routes - Department Management
@@ -876,6 +839,146 @@ const router = async (req, res) => {
       }
     }
 
+    if (pathname === "/api/departments/cap-2" && method === "GET") {
+      try {
+        console.log("🔍 Getting cap 2 departments for user:", user.role);
+
+        const client = await pool.connect();
+        let query;
+        let params = [];
+
+        if (user.role === "admin") {
+          // Admin xem tất cả cấp 2
+          query = `
+        SELECT id, ten_phong_ban, ma_phong_ban
+        FROM phong_ban 
+        WHERE cap_bac = 2 AND trang_thai = 'active'
+        ORDER BY ten_phong_ban
+      `;
+        } else if (user.role === "manager") {
+          // Manager chỉ xem các cấp 2 khác (không bao gồm phòng ban của mình)
+          query = `
+        SELECT id, ten_phong_ban, ma_phong_ban
+        FROM phong_ban 
+        WHERE cap_bac = 2 AND trang_thai = 'active' AND id != $1
+        ORDER BY ten_phong_ban
+      `;
+          params = [user.phong_ban_id];
+        } else {
+          // User cấp 3 xem các cấp 2 khác (không bao gồm phòng ban cha của mình)
+          query = `
+        SELECT id, ten_phong_ban, ma_phong_ban
+        FROM phong_ban 
+        WHERE cap_bac = 2 AND trang_thai = 'active' 
+        AND id != (SELECT phong_ban_cha_id FROM phong_ban WHERE id = $1)
+        ORDER BY ten_phong_ban
+      `;
+          params = [user.phong_ban_id];
+        }
+
+        const result = await client.query(query, params);
+        client.release();
+
+        console.log("🔍 Found cap 2 departments:", result.rows.length);
+        return sendResponse(
+          res,
+          200,
+          true,
+          "Lấy danh sách phòng ban cấp 2 thành công",
+          result.rows
+        );
+      } catch (error) {
+        console.error("❌ Error fetching phong ban cap 2:", error);
+        return sendResponse(res, 500, false, "Lỗi server");
+      }
+    }
+
+    // Route lấy danh sách cấp 3 theo cấp 2 parent
+    const cap3ByParentParams = extractParams(
+      "/api/departments/cap-3/:parentId",
+      pathname
+    );
+    if (cap3ByParentParams && method === "GET") {
+      try {
+        const { parentId } = cap3ByParentParams;
+        console.log(
+          "🔍 Getting cap 3 departments for parent:",
+          parentId,
+          "user:",
+          user.phong_ban_id
+        );
+
+        const client = await pool.connect();
+
+        const result = await client.query(
+          `
+      SELECT id, ten_phong_ban, ma_phong_ban
+      FROM phong_ban 
+      WHERE cap_bac = 3 
+        AND phong_ban_cha_id = $1 
+        AND trang_thai = 'active'
+        AND id != $2
+      ORDER BY ten_phong_ban
+    `,
+          [parentId, user.phong_ban_id || 0]
+        ); // Loại trừ phòng ban của user hiện tại
+
+        client.release();
+
+        console.log("🔍 Found cap 3 departments:", result.rows.length);
+        return sendResponse(
+          res,
+          200,
+          true,
+          "Lấy danh sách phòng ban cấp 3 thành công",
+          result.rows
+        );
+      } catch (error) {
+        console.error("❌ Error fetching phong ban cap 3:", error);
+        return sendResponse(res, 500, false, "Lỗi server");
+      }
+    }
+
+    const parentParams = extractParams("/api/departments/:id/parent", pathname);
+    if (parentParams && method === "GET") {
+      try {
+        const { id } = parentParams;
+        console.log("🔍 Getting parent department for:", id);
+
+        const client = await pool.connect();
+
+        const query = `
+      SELECT 
+        pb_cha.id,
+        pb_cha.ma_phong_ban,
+        pb_cha.ten_phong_ban,
+        pb_cha.cap_bac,
+        pb_cha.phong_ban_cha_id
+      FROM phong_ban pb
+      JOIN phong_ban pb_cha ON pb.phong_ban_cha_id = pb_cha.id
+      WHERE pb.id = $1 AND pb_cha.trang_thai = 'active'
+    `;
+
+        const result = await client.query(query, [id]);
+        client.release();
+
+        if (result.rows.length === 0) {
+          return sendResponse(res, 404, false, "Không tìm thấy phòng ban cha");
+        }
+
+        console.log("✅ Found parent department:", result.rows[0]);
+        return sendResponse(
+          res,
+          200,
+          true,
+          "Lấy thông tin phòng ban cha thành công",
+          result.rows[0]
+        );
+      } catch (error) {
+        console.error("❌ Error getting parent department:", error);
+        return sendResponse(res, 500, false, "Lỗi server");
+      }
+    }
     // Thêm route mới cho departments list (dành cho dropdown)
     if (pathname === "/api/departments/list" && method === "GET") {
       console.log(`🏢 HIT: Departments list endpoint for dropdown`);
@@ -885,6 +988,157 @@ const router = async (req, res) => {
         query,
         user
       );
+    }
+    if (pathname === "/api/departments/list-for-filter" && method === "GET") {
+      console.log(`🏢 HIT: Departments list endpoint for filtering`);
+      // Chúng ta sẽ tạo hàm này trong hangHoaController
+      return await hangHoaController.getPhongBanListForFilter(req, res, user);
+    }
+
+    if (
+      pathname.startsWith("/api/departments/") &&
+      method === "GET" &&
+      !pathname.includes("/list/")
+    ) {
+      const departmentId = pathname.split("/").pop();
+      try {
+        const query = `
+      SELECT 
+        pb.id,
+        pb.ma_phong_ban,
+        pb.ten_phong_ban,
+        pb.cap_bac,
+        pb.phong_ban_cha_id,
+        pb.thu_tu_hien_thi,
+        pb.mo_ta,
+        pb.is_active,
+        pb_cha.ten_phong_ban as ten_phong_ban_cha,
+        pb_cha.cap_bac as cap_bac_cha
+      FROM phong_ban pb
+      LEFT JOIN phong_ban pb_cha ON pb.phong_ban_cha_id = pb_cha.id
+      WHERE pb.id = $1
+    `;
+
+        const result = await pool.query(query, [departmentId]);
+
+        if (result.rows.length === 0) {
+          return sendResponse(res, 404, false, "Không tìm thấy phòng ban");
+        }
+
+        return sendResponse(
+          res,
+          200,
+          true,
+          "Lấy thông tin phòng ban thành công",
+          result.rows[0]
+        );
+      } catch (error) {
+        console.error("Get department info error:", error);
+        return sendResponse(res, 500, false, "Lỗi server", {
+          error: error.message,
+        });
+      }
+    }
+
+    // Lấy danh sách phòng ban hierarchy
+    if (pathname === "/api/departments/list/hierarchy" && method === "GET") {
+      try {
+        const query = `
+      WITH RECURSIVE org_tree AS (
+        SELECT 
+          id, ma_phong_ban, ten_phong_ban, cap_bac, phong_ban_cha_id,
+          ARRAY[id] as path,
+          0 as level,
+          ARRAY[thu_tu_hien_thi] as sort_path
+        FROM phong_ban 
+        WHERE cap_bac = 1 AND is_active = TRUE
+        
+        UNION ALL
+        
+        SELECT 
+          pb.id, pb.ma_phong_ban, pb.ten_phong_ban, pb.cap_bac, pb.phong_ban_cha_id,
+          ot.path || pb.id,
+          ot.level + 1,
+          ot.sort_path || pb.thu_tu_hien_thi
+        FROM phong_ban pb
+        JOIN org_tree ot ON pb.phong_ban_cha_id = ot.id
+        WHERE pb.is_active = TRUE
+      )
+      SELECT 
+        id, ma_phong_ban, ten_phong_ban, cap_bac, phong_ban_cha_id, level,
+        REPEAT('  ', level) || ten_phong_ban as ten_phong_ban_indent, path
+      FROM org_tree
+      ORDER BY sort_path
+    `;
+
+        const result = await pool.query(query);
+        return sendResponse(
+          res,
+          200,
+          true,
+          "Lấy danh sách phòng ban hierarchy thành công",
+          result.rows
+        );
+      } catch (error) {
+        console.error("Get hierarchy departments error:", error);
+        return sendResponse(res, 500, false, "Lỗi server", {
+          error: error.message,
+        });
+      }
+    }
+
+    // Lấy danh sách phòng ban có quyền xem
+    if (pathname === "/api/departments/list/accessible" && method === "GET") {
+      try {
+        // Lấy thông tin cấp bậc của user
+        const userCapBacQuery = `SELECT cap_bac FROM phong_ban WHERE id = $1`;
+        const userCapBacResult = await pool.query(userCapBacQuery, [
+          user.phong_ban_id,
+        ]);
+        const userCapBac = userCapBacResult.rows[0]?.cap_bac;
+
+        let query = "";
+        let params = [];
+
+        if (user.role === "admin") {
+          // Admin (Cấp 1): Xem tất cả phòng ban
+          query = `
+        SELECT id, ma_phong_ban, ten_phong_ban, cap_bac, phong_ban_cha_id
+        FROM phong_ban WHERE is_active = TRUE ORDER BY cap_bac, thu_tu_hien_thi
+      `;
+        } else if (user.role === "manager") {
+          // Manager (Cấp 2): Xem phòng ban của mình + các cấp 3 thuộc quyền
+          query = `
+        SELECT pb.id, pb.ma_phong_ban, pb.ten_phong_ban, pb.cap_bac, pb.phong_ban_cha_id
+        FROM phong_ban pb WHERE pb.is_active = TRUE 
+        AND (pb.id = $1 OR pb.phong_ban_cha_id = $1)
+        ORDER BY pb.cap_bac, pb.thu_tu_hien_thi
+      `;
+          params = [user.phong_ban_id];
+        } else {
+          // User (Cấp 3): Chỉ xem phòng ban của mình
+          query = `
+        SELECT pb.id, pb.ma_phong_ban, pb.ten_phong_ban, pb.cap_bac, pb.phong_ban_cha_id
+        FROM phong_ban pb WHERE pb.is_active = TRUE AND pb.id = $1
+        ORDER BY pb.cap_bac, pb.thu_tu_hien_thi
+      `;
+          params = [user.phong_ban_id];
+        }
+
+        const result = await pool.query(query, params);
+        return sendResponse(
+          res,
+          200,
+          true,
+          "Lấy danh sách phòng ban có quyền truy cập thành công",
+          result.rows
+        );
+      } catch (error) {
+        console.error("Get accessible departments error:", error);
+        return sendResponse(res, 500, false, "Lỗi server", {
+          error: error.message,
+        });
+      }
     }
 
     // Department routes with ID
@@ -931,6 +1185,19 @@ const router = async (req, res) => {
     ) {
       console.log(`🎯 HIT: Nha cung cap search endpoint`);
       return await nhaCungCapSearchController.searchNhaCungCap(req, res);
+    }
+
+    if (
+      pathname === "/api/nha-cung-cap/search/searchNhaCungCapByType" &&
+      method === "GET"
+    ) {
+      console.log(`🎯 HIT: Nha cung cap search endpoint`);
+      return await nhaCungCapSearchController.searchNhaCungCapByType(
+        req,
+        res,
+        query,
+        user
+      );
     }
 
     if (pathname === "/api/nha-cung-cap/auto-create" && method === "POST") {
@@ -1062,38 +1329,40 @@ const router = async (req, res) => {
       return await hangHoaSearchController.searchHangHoa(req, res);
     }
 
+    if (pathname === "/api/hang-hoa/search/xuat-kho" && method === "GET") {
+      console.log(`🎯 HIT: Hang hoa search for xuat kho endpoint`);
+      return await hangHoaSearchController.searchHangHoaForXuatKho(req, res);
+    }
+
+    // ✅ THÊM ROUTE CHO LOTS - PHẢI ĐẶT TRƯỚC ROUTE GENERIC /api/hang-hoa/:id
+    const hangHoaLotsParams = extractParams(
+      "/api/hang-hoa/:hangHoaId/lots/:phongBanId",
+      pathname
+    );
+    if (hangHoaLotsParams && method === "GET") {
+      console.log(`🎯 HIT: Hang hoa lots endpoint`, hangHoaLotsParams);
+      req.user = user;
+      req.params = hangHoaLotsParams; // ✅ GÁN PARAMS VÀO REQ
+      return await hangHoaSearchController.getLotsForXuatKho(req, res);
+    }
+
     if (pathname === "/api/hang-hoa/auto-create" && method === "POST") {
       console.log(`🎯 HIT: Hang hoa auto-create endpoint`);
       return await hangHoaSearchController.createHangHoaAuto(req, res, body);
     }
 
     // Hang Hoa Routes (generic)
-    if (pathname === "/api/hang-hoa") {
-      switch (method) {
-        case "GET":
-          // Hỗ trợ filter theo phòng ban
-          console.log(`🎯 HIT: Get hang hoa list with filters:`, {
-            phong_ban_id: query.phong_ban_id,
-            search: query.search,
-            loai_hang_hoa_id: query.loai_hang_hoa_id,
-            user_role: user.role,
-          });
-          return await hangHoaController.getList(req, res, query, user);
-        case "POST":
-          return await hangHoaController.create(req, res, body, user);
-      }
+    // ===== HANG HOA ROUTES - CẬP NHẬT =====
+
+    // ✅ 1. SPECIFIC ROUTES TRƯỚC - Department stats (PHẢI TRƯỚC /api/hang-hoa)
+    if (pathname === "/api/hang-hoa/department-stats" && method === "GET") {
+      req.user = user; // Gán user vào req
+      return await hangHoaController.getDepartmentStats(req, res, user);
     }
 
-    if (pathname === "/api/hang-hoa/phong-ban-cung-cap" && method === "GET") {
-      return await hangHoaController.getPhongBanCungCap(req, res, query, user);
-    }
-
-    if (pathname === "/api/hang-hoa/phong-ban-nhan-hang" && method === "GET") {
-      return await hangHoaController.getPhongBanNhanHang(req, res, query, user);
-    }
-
+    // ✅ 2. Stats by department
     if (pathname === "/api/hang-hoa/stats-by-department" && method === "GET") {
-      console.log(`🎯 HIT: Get stats by department (admin only)`);
+      req.user = user;
       return await hangHoaController.getStatsByDepartment(
         req,
         res,
@@ -1102,29 +1371,129 @@ const router = async (req, res) => {
       );
     }
 
+    // ✅ 3. Suggestions
     if (pathname === "/api/hang-hoa/suggestions" && method === "GET") {
+      req.user = user;
       return await hangHoaController.getSuggestions(req, res, query, user);
     }
 
-    // Hang Hoa with ID routes
+    // ✅ 4. Phong ban routes
+    if (pathname === "/api/hang-hoa/departments/list" && method === "GET") {
+      req.user = user;
+      return await hangHoaController.getPhongBanList(req, res, user);
+    }
+
+    if (pathname === "/api/hang-hoa/phong-ban-cung-cap" && method === "GET") {
+      req.user = user;
+      return await hangHoaController.getPhongBanCungCap(req, res, query, user);
+    }
+
+    if (pathname === "/api/hang-hoa/phong-ban-nhan-hang" && method === "GET") {
+      req.user = user;
+      return await hangHoaController.getPhongBanNhanHang(req, res, user);
+    }
+
+    // ✅ 5. Inventory overview
+    if (pathname === "/api/hang-hoa/inventory/overview" && method === "GET") {
+      req.user = user;
+      return await hangHoaController.getInventoryOverview(
+        req,
+        res,
+        query,
+        user
+      );
+    }
+
+    // ✅ 6. Department by level routes
+    const deptLevelParams = extractParams(
+      "/api/hang-hoa/departments/level/:level",
+      pathname
+    );
+    if (deptLevelParams && method === "GET") {
+      req.user = user;
+      return await hangHoaController.getDepartmentsByLevel(
+        req,
+        res,
+        deptLevelParams,
+        user
+      );
+    }
+
+    // ✅ 7. Cap3 under Cap2
+    const cap3Params = extractParams(
+      "/api/hang-hoa/departments/cap2/:cap2Id/cap3",
+      pathname
+    );
+    if (cap3Params && method === "GET") {
+      req.user = user;
+      return await hangHoaController.getCap3UnderCap2(
+        req,
+        res,
+        cap3Params,
+        user
+      );
+    }
+
+    // ✅ 8. ROUTES VỚI ID - PHẢI TRƯỚC /api/hang-hoa
+
+    // Inventory breakdown cho specific hang hoa
+    const inventoryBreakdownParams = extractParams(
+      "/api/hang-hoa/:id/inventory-breakdown",
+      pathname
+    );
+    if (inventoryBreakdownParams && method === "GET") {
+      req.user = user;
+      return await hangHoaController.getInventoryBreakdown(
+        req,
+        res,
+        inventoryBreakdownParams,
+        user
+      );
+    }
+
+    // Phieu history cho specific hang hoa
+    const phieuHistoryParams = extractParams(
+      "/api/hang-hoa/:id/phieu-history",
+      pathname
+    );
+    if (phieuHistoryParams && method === "GET") {
+      req.user = user;
+      return await hangHoaController.getPhieuHistory(
+        req,
+        res,
+        phieuHistoryParams,
+        user
+      );
+    }
+
+    // Hang hoa routes with ID
     const hangHoaParams = extractParams("/api/hang-hoa/:id", pathname);
+    const hangHoaDetailParams = extractParams(
+      "/api/hang-hoa/:id/phong-ban/:phongBanId",
+      pathname
+    );
+
+    // Route lấy chi tiết MỚI (PHẢI ĐẶT TRƯỚC ROUTE CŨ)
+    if (hangHoaDetailParams && method === "GET") {
+      req.user = user;
+      return await hangHoaController.getDetailByPhongBan(
+        req,
+        res,
+        hangHoaDetailParams,
+        user
+      );
+    }
+
+    // Route GET chi tiết tổng hợp theo id (không theo phòng ban cụ thể)
+    if (hangHoaParams && method === "GET") {
+      req.user = user;
+      return await hangHoaController.getDetail(req, res, hangHoaParams, user);
+    }
+
+    // Route cũ cho update, delete
     if (hangHoaParams) {
+      req.user = user;
       switch (method) {
-        case "GET":
-          // Hỗ trợ query parameter phong_ban_id cho admin
-          console.log(
-            `🎯 HIT: Get hang hoa detail ${hangHoaParams.id} with query:`,
-            {
-              phong_ban_id: query.phong_ban_id,
-              user_role: user.role,
-            }
-          );
-          return await hangHoaController.getDetail(
-            req,
-            res,
-            hangHoaParams,
-            user
-          );
         case "PUT":
           return await hangHoaController.update(
             req,
@@ -1138,6 +1507,23 @@ const router = async (req, res) => {
       }
     }
 
+    // ✅ 9. GENERIC ROUTES CUỐI CÙNG
+    if (pathname === "/api/hang-hoa") {
+      req.user = user; // Gán user vào req
+      switch (method) {
+        case "GET":
+          console.log(`🎯 HIT: Get hang hoa list with filters:`, {
+            phong_ban_id: query.phong_ban_id,
+            search: query.search,
+            loai_hang_hoa_id: query.loai_hang_hoa_id,
+            user_role: user.role,
+          });
+          // ✅ SỬA: Truyền đầy đủ parameters (req, res, query, user)
+          return await hangHoaController.getList(req, res, query, user);
+        case "POST":
+          return await hangHoaController.create(req, res, body, user);
+      }
+    }
     // ===== LOẠI HÀNG HÓA ROUTES =====
     if (pathname === "/api/loai-hang-hoa") {
       switch (method) {
@@ -1236,6 +1622,32 @@ const router = async (req, res) => {
         req,
         res,
         nhapKhoApproveParams,
+        user
+      );
+    }
+
+    const nhapKhoManagerApproveParams = extractParams(
+      "/api/nhap-kho/:id/manager-approve",
+      pathname
+    );
+    if (nhapKhoManagerApproveParams && method === "PATCH") {
+      return await nhapKhoController.managerApprove(
+        req,
+        res,
+        nhapKhoManagerApproveParams,
+        user
+      );
+    }
+
+    const nhapKholevel3ApproveParams = extractParams(
+      "/api/nhap-kho/:id/level3-approve",
+      pathname
+    );
+    if (nhapKholevel3ApproveParams && method === "PATCH") {
+      return await nhapKhoController.level3Approve(
+        req,
+        res,
+        nhapKholevel3ApproveParams,
         user
       );
     }
@@ -1354,7 +1766,23 @@ const router = async (req, res) => {
     if (pathname === "/api/xuat-kho/phong-ban-list" && method === "GET") {
       return await xuatKhoController.getPhongBanList(req, res, query, user);
     }
+    // Thêm vào phần Xuat Kho Routes
+    if (pathname === "/api/xuat-kho/phong-ban-cap2" && method === "GET") {
+      return await xuatKhoController.getPhongBanCap2List(req, res, query, user);
+    }
 
+    const xuatKhoCap3Params = extractParams(
+      "/api/xuat-kho/phong-ban-cap3/:cap2Id",
+      pathname
+    );
+    if (xuatKhoCap3Params && method === "GET") {
+      return await xuatKhoController.getPhongBanCap3ByParent(
+        req,
+        res,
+        xuatKhoCap3Params,
+        user
+      );
+    }
     const xuatKhoParams = extractParams("/api/xuat-kho/:id", pathname);
     if (xuatKhoParams) {
       switch (method) {
@@ -1402,6 +1830,19 @@ const router = async (req, res) => {
         req,
         res,
         xuatKhoApproveParams,
+        user
+      );
+    }
+
+    const xuatKhoManagerApproveParams = extractParams(
+      "/api/xuat-kho/:id/manager-approve",
+      pathname
+    );
+    if (xuatKhoManagerApproveParams && method === "PATCH") {
+      return await xuatKhoController.managerApprove(
+        req,
+        res,
+        xuatKhoManagerApproveParams,
         user
       );
     }
@@ -1646,7 +2087,7 @@ const router = async (req, res) => {
         case "GET":
           return await kiemKeController.getDetail(req, res, kiemKeParams, user);
         case "PUT":
-          return await kiemKeController.updateResults(
+          return await kiemKeController.update(
             req,
             res,
             kiemKeParams,
@@ -2035,6 +2476,17 @@ const router = async (req, res) => {
       return await baoCaoController.getDashboardStats(req, res, query, user);
     }
 
+    if (pathname === "/api/bao-cao/luan-chuyen" && method === "GET") {
+      console.log(`🔍 HIT: Báo cáo luân chuyển endpoint (FIX)`);
+      return await baoCaoController.getLuanChuyenReport(req, res, query, user);
+    }
+
+    // ✅ FIX VẤN ĐỀ 3: Route lấy danh sách phòng ban cho báo cáo
+    if (pathname === "/api/bao-cao/phong-ban-list" && method === "GET") {
+      console.log(`🏢 HIT: Phòng ban list for report endpoint`);
+      return await baoCaoController.getPhongBanForReport(req, res, query, user);
+    }
+
     if (pathname === "/api/bao-cao/ton-kho" && method === "GET") {
       return await baoCaoController.getTonKhoReport(req, res, query, user);
     }
@@ -2051,9 +2503,23 @@ const router = async (req, res) => {
       return await baoCaoController.getNhapDataByType(req, res, query, user);
     }
 
+    if (pathname === "/api/bao-cao/xuat-by-type" && method === "GET") {
+      return await baoCaoController.getXuatDataByType(req, res, query, user);
+    }
+
     // Route export Excel với 2 tabs (MỚI)
     if (pathname === "/api/bao-cao/export/nhap-with-tabs" && method === "GET") {
       return await printController.generateNhapReportWithTabs(
+        req,
+        res,
+        query,
+        user
+      );
+    }
+
+    // Route export Excel xuất với 2 tabs (MỚI)
+    if (pathname === "/api/bao-cao/export/xuat-with-tabs" && method === "GET") {
+      return await printController.generateXuatReportWithTabs(
         req,
         res,
         query,
@@ -2071,8 +2537,17 @@ const router = async (req, res) => {
     }
 
     // Thêm route này vào phần Bao Cao Routes
+    // if (pathname === "/api/bao-cao/luan-chuyen-kho" && method === "GET") {
+    //   return await printController.generateLuanChuyenKhoReport(
+    //     req,
+    //     res,
+    //     query,
+    //     user
+    //   );
+    // }
+
     if (pathname === "/api/bao-cao/luan-chuyen-kho" && method === "GET") {
-      return await printController.generateLuanChuyenKhoReport(
+      return await baoCaoController.exportLuanChuyenExcel(
         req,
         res,
         query,
@@ -2825,35 +3300,6 @@ global.realTimeHelpers = {
   getConnectedUsers: () => Array.from(connectedClients.values()),
   isUserOnline: (userId) => userSocketMap.has(userId),
 };
-
-// Start Server
-// const startServer = async () => {
-//   try {
-//     // Test database connection
-//     await pool.query("SELECT NOW()");
-//     console.log("✅ Database connected successfully");
-
-//     server.listen(PORT, () => {
-//       console.log(`🚀 Server running on http://localhost:${PORT}`);
-//       console.log(`📝 API Documentation: http://localhost:${PORT}/`);
-//       console.log(`💚 Health Check: http://localhost:${PORT}/api/health`);
-//       console.log("");
-//       console.log("📋 Available Endpoints:");
-//       console.log("📤 Upload:");
-//       console.log(
-//         "  POST /api/nhap-kho/:id/upload-decision - Upload PDF quyết định"
-//       );
-//       console.log(
-//         "  GET  /api/nhap-kho/:id/download-decision - Download PDF quyết định"
-//       );
-//       console.log("");
-//       console.log("🎯 Ready to accept requests!");
-//     });
-//   } catch (error) {
-//     console.error("❌ Failed to start server:", error);
-//     process.exit(1);
-//   }
-// };
 
 // Cập nhật phần startServer function hiện có
 const startServer = async () => {

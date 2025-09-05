@@ -1,216 +1,3 @@
-// // controllers/nhaCungCapSearchController.js - Phiên bản sửa lỗi body parsing
-// const pool = require("../config/database");
-// const { sendResponse } = require("../utils/response");
-// const { parseUrl } = require("../utils/helpers");
-
-// const searchNhaCungCap = async (req, res) => {
-//   try {
-//     console.log("🔍 NCC Request URL:", req.url);
-
-//     const { query } = parseUrl(req.url);
-//     console.log("🔍 NCC Parsed query:", query);
-
-//     const q = query.q || "";
-
-//     if (!q || q.length < 2) {
-//       return sendResponse(res, 200, true, "Thành công", []);
-//     }
-
-//     console.log("🔍 NCC Search keyword:", q);
-
-//     const searchQuery = `
-//       SELECT
-//         id,
-//         ma_ncc,
-//         ten_ncc,
-//         dia_chi,
-//         phone,
-//         email
-//       FROM nha_cung_cap
-//       WHERE
-//         (
-//           ten_ncc ILIKE $1 OR
-//           ma_ncc ILIKE $1
-//         )
-//       ORDER BY
-//         CASE WHEN ten_ncc ILIKE $1 THEN 0 ELSE 1 END,
-//         ten_ncc ASC
-//       LIMIT 10
-//     `;
-
-//     const searchPattern = `%${q}%`;
-//     const result = await pool.query(searchQuery, [searchPattern]);
-
-//     console.log("✅ NCC Search results:", result.rows.length);
-//     sendResponse(res, 200, true, "Tìm kiếm thành công", result.rows);
-//   } catch (error) {
-//     console.error("❌ Search nha cung cap error:", error);
-//     sendResponse(res, 500, false, "Lỗi server", { error: error.message });
-//   }
-// };
-
-// const createNhaCungCapAuto = async (req, res) => {
-//   try {
-//     console.log("=== CREATE NHA CUNG CAP AUTO START ===");
-//     console.log("🕒 Timestamp:", new Date().toISOString());
-//     console.log("📍 Request method:", req.method);
-//     console.log("📍 Request URL:", req.url);
-
-//     // Parse body từ request - BỎ TIMEOUT CHO BODY PARSING
-//     const { parseBody } = require("../utils/helpers");
-//     let body;
-
-//     try {
-//       console.log("🔄 Parsing request body...");
-//       body = await parseBody(req);
-//       console.log("✅ Request body parsed successfully:", body);
-//     } catch (parseError) {
-//       console.error("❌ Body parse error:", parseError);
-//       return sendResponse(res, 400, false, "Dữ liệu request không hợp lệ", {
-//         error: parseError.message,
-//       });
-//     }
-
-//     const { ten_ncc, dia_chi = "", phone = "", email = "" } = body;
-
-//     // Validation cơ bản
-//     if (
-//       !ten_ncc ||
-//       typeof ten_ncc !== "string" ||
-//       ten_ncc.trim().length === 0
-//     ) {
-//       console.log("❌ ERROR: Ten NCC empty or invalid");
-//       return sendResponse(
-//         res,
-//         400,
-//         false,
-//         "Tên nhà cung cấp không được để trống và phải là chuỗi hợp lệ"
-//       );
-//     }
-
-//     // Lấy thông tin user từ token
-//     const { verifyToken, getTokenFromRequest } = require("../utils/auth");
-//     const token = getTokenFromRequest(req);
-
-//     if (!token) {
-//       console.log("❌ ERROR: No authentication token");
-//       return sendResponse(res, 401, false, "Yêu cầu đăng nhập");
-//     }
-
-//     const decoded = verifyToken(token);
-//     if (!decoded) {
-//       console.log("❌ ERROR: Invalid token");
-//       return sendResponse(res, 401, false, "Token không hợp lệ");
-//     }
-
-//     console.log("✅ User authenticated:", decoded.id);
-
-//     // Kiểm tra trùng lặp tên nhà cung cấp
-//     const trimmedName = ten_ncc.trim();
-//     console.log("🔍 Checking duplicate for:", trimmedName);
-
-//     const duplicateCheck = await pool.query(
-//       "SELECT id, ma_ncc, ten_ncc FROM nha_cung_cap WHERE LOWER(ten_ncc) = LOWER($1)",
-//       [trimmedName]
-//     );
-
-//     if (duplicateCheck.rows.length > 0) {
-//       console.log("⚠️ DUPLICATE: NCC already exists");
-//       return sendResponse(
-//         res,
-//         400,
-//         false,
-//         "Nhà cung cấp đã tồn tại trong hệ thống",
-//         duplicateCheck.rows[0]
-//       );
-//     }
-
-//     // Tạo mã nhà cung cấp tự động
-//     console.log("🔄 Generating ma NCC...");
-//     const maNccResult = await pool.query("SELECT generate_ma_ncc() as ma");
-//     const maNcc = maNccResult.rows[0].ma;
-//     console.log("✅ Generated ma NCC:", maNcc);
-
-//     // Tạo nhà cung cấp mới
-//     console.log("🔄 Creating new NCC...");
-//     const insertQuery = `
-//       INSERT INTO nha_cung_cap (
-//         ma_ncc,
-//         ten_ncc,
-//         dia_chi,
-//         phone,
-//         email
-//       ) VALUES ($1, $2, $3, $4, $5)
-//       RETURNING *
-//     `;
-
-//     const insertParams = [
-//       maNcc,
-//       trimmedName,
-//       dia_chi || null,
-//       phone || null,
-//       email || null,
-//     ];
-
-//     console.log("🔄 Insert params:", insertParams);
-
-//     const result = await pool.query(insertQuery, insertParams);
-//     const newNcc = result.rows[0];
-
-//     console.log("🎉 SUCCESS: Created NCC with ID:", newNcc.id);
-//     console.log("=== CREATE NHA CUNG CAP AUTO END ===");
-
-//     // Trả về thông tin nhà cung cấp mới tạo
-//     sendResponse(res, 201, true, "Tạo nhà cung cấp mới thành công", {
-//       id: newNcc.id,
-//       ma_ncc: newNcc.ma_ncc,
-//       ten_ncc: newNcc.ten_ncc,
-//       dia_chi: newNcc.dia_chi,
-//       phone: newNcc.phone,
-//       email: newNcc.email,
-//     });
-//   } catch (error) {
-//     console.error("=== CREATE NHA CUNG CAP ERROR ===");
-//     console.error("❌ Error message:", error.message);
-//     console.error("❌ Error stack:", error.stack);
-
-//     // Xử lý các loại lỗi cụ thể
-//     if (error.code === "23505") {
-//       // Unique constraint violation
-//       return sendResponse(
-//         res,
-//         400,
-//         false,
-//         "Mã nhà cung cấp hoặc tên nhà cung cấp đã tồn tại"
-//       );
-//     }
-
-//     if (error.code === "23503") {
-//       // Foreign key constraint violation
-//       return sendResponse(res, 400, false, "Dữ liệu tham chiếu không hợp lệ");
-//     }
-
-//     // Lỗi database connection
-//     if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") {
-//       return sendResponse(res, 503, false, "Không thể kết nối cơ sở dữ liệu");
-//     }
-
-//     sendResponse(res, 500, false, "Lỗi hệ thống khi tạo nhà cung cấp", {
-//       error: error.message,
-//       code: error.code,
-//     });
-//   }
-// };
-
-// module.exports = {
-//   searchNhaCungCap,
-//   createNhaCungCapAuto,
-// };
-
-// controllers/nhaCungCapSearchController.js - Phiên bản đơn giản để debug
-// controllers/nhaCungCapSearchController.js - Phiên bản đơn giản hóa hoàn toàn
-
-// controllers/nhaCungCapSearchController.js - Fixed Version
 const pool = require("../config/database");
 const { sendResponse } = require("../utils/response");
 const { parseUrl } = require("../utils/helpers");
@@ -256,18 +43,16 @@ const searchNhaCungCap = async (req, res) => {
   }
 };
 
-// FIXED VERSION - Simplified and reliable
+// ✅ FIX CHÍNH: SỬA FUNCTION createNhaCungCapAuto
 const createNhaCungCapAuto = async (req, res, body) => {
-  // <--- THÊM `body` vào tham số
-  console.log("\n🆕 === CREATE NCC AUTO START (FINAL) ===");
+  console.log("\n🆕 === CREATE NCC AUTO START (FIXED VERSION) ===");
   console.log("⏰ Timestamp:", new Date().toISOString());
 
   try {
-    // KHÔNG CẦN PARSE BODY Ở ĐÂY NỮA
     console.log("✅ Body received from server:", body);
 
-    // Validation
-    const { ten_ncc } = body;
+    // ✅ Validation cơ bản
+    const { ten_ncc, loai_nha_cung_cap } = body;
     if (!ten_ncc || typeof ten_ncc !== "string" || ten_ncc.trim() === "") {
       console.error("❌ Invalid ten_ncc:", ten_ncc);
       return sendResponse(res, 400, false, "Tên nhà cung cấp không hợp lệ", {
@@ -278,7 +63,7 @@ const createNhaCungCapAuto = async (req, res, body) => {
 
     console.log("✅ Validation passed for:", ten_ncc);
 
-    // Authentication
+    // ✅ Authentication
     const { verifyToken, getTokenFromRequest } = require("../utils/auth");
     const token = getTokenFromRequest(req);
 
@@ -295,7 +80,7 @@ const createNhaCungCapAuto = async (req, res, body) => {
 
     console.log("✅ Token verified for user:", decoded.id);
 
-    // Get user info
+    // ✅ Get user info
     const userResult = await pool.query(
       "SELECT * FROM users WHERE id = $1 AND trang_thai = $2",
       [decoded.id, "active"]
@@ -309,7 +94,7 @@ const createNhaCungCapAuto = async (req, res, body) => {
     const user = userResult.rows[0];
     console.log("✅ User found:", user.id);
 
-    // Check for duplicates
+    // ✅ Check for duplicates
     const trimmedName = ten_ncc.trim();
     const duplicateCheck = await pool.query(
       "SELECT id, ma_ncc, ten_ncc FROM nha_cung_cap WHERE LOWER(ten_ncc) = LOWER($1)",
@@ -329,20 +114,33 @@ const createNhaCungCapAuto = async (req, res, body) => {
 
     console.log("✅ No duplicates found");
 
-    // Generate ma_ncc
+    // ✅ Generate ma_ncc using function
     const maNccResult = await pool.query("SELECT generate_ma_ncc() as ma");
     const maNcc = maNccResult.rows[0].ma;
     console.log("✅ Generated ma_ncc:", maNcc);
 
-    // Create new record
+    // ✅ FIXED: Xác định loại nhà cung cấp và is_noi_bo
+    const finalLoaiNcc = loai_nha_cung_cap || "tu_mua";
+    const isNoiBo = finalLoaiNcc === "dieu_chuyen";
+
+    console.log("🔧 NCC Type determined:", { finalLoaiNcc, isNoiBo });
+
+    // ✅ FIXED: CREATE với đầy đủ columns theo hi4.sql schema
     const insertQuery = `
       INSERT INTO nha_cung_cap (
         ma_ncc, 
         ten_ncc, 
         dia_chi, 
         phone, 
-        email
-      ) VALUES ($1, $2, $3, $4, $5)
+        email,
+        nguoi_lien_he,
+        is_noi_bo,
+        loai_nha_cung_cap,
+        phong_ban_id,
+        trang_thai,
+        created_at,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', NOW(), NOW())
       RETURNING *
     `;
 
@@ -352,6 +150,10 @@ const createNhaCungCapAuto = async (req, res, body) => {
       body.dia_chi || null,
       body.phone || null,
       body.email || null,
+      body.nguoi_lien_he || null,
+      isNoiBo,
+      finalLoaiNcc,
+      isNoiBo ? user.phong_ban_id : null, // Nếu nội bộ thì gán phòng ban
     ]);
 
     const newNcc = insertResult.rows[0];
@@ -364,18 +166,29 @@ const createNhaCungCapAuto = async (req, res, body) => {
       dia_chi: newNcc.dia_chi,
       phone: newNcc.phone,
       email: newNcc.email,
+      is_noi_bo: newNcc.is_noi_bo,
+      loai_nha_cung_cap: newNcc.loai_nha_cung_cap,
     });
   } catch (error) {
     console.error("❌ Error in createNhaCungCapAuto:", error.message);
     console.error("❌ Error stack:", error.stack);
 
-    // Error handling
+    // ✅ Error handling
     if (error.code === "23505") {
       return sendResponse(res, 400, false, "Nhà cung cấp đã tồn tại");
     }
 
     if (error.code === "23503") {
       return sendResponse(res, 400, false, "Dữ liệu tham chiếu không hợp lệ");
+    }
+
+    if (error.code === "42703") {
+      return sendResponse(
+        res,
+        500,
+        false,
+        "Lỗi cấu trúc database - cột không tồn tại"
+      );
     }
 
     return sendResponse(res, 500, false, "Lỗi hệ thống", {
@@ -386,7 +199,68 @@ const createNhaCungCapAuto = async (req, res, body) => {
   }
 };
 
+const searchNhaCungCapByType = async (req, res, query, user) => {
+  try {
+    const { search = "", loai_phieu = "tu_mua" } = query;
+
+    let whereConditions = ["ncc.trang_thai = 'active'"];
+    const params = [];
+    let paramIndex = 1;
+
+    // ✅ Filter theo loại phiếu - SỬA LOGIC CHO ĐÚNG VỚI HI4.SQL
+    if (loai_phieu === "tu_mua") {
+      whereConditions.push(
+        `(ncc.loai_nha_cung_cap = 'tu_mua' OR ncc.loai_nha_cung_cap IS NULL) AND ncc.is_noi_bo = FALSE`
+      );
+    } else if (loai_phieu === "tren_cap") {
+      whereConditions.push(
+        `ncc.loai_nha_cung_cap = 'tren_cap' AND ncc.is_noi_bo = FALSE`
+      );
+    } else if (loai_phieu === "dieu_chuyen") {
+      whereConditions.push(
+        `ncc.loai_nha_cung_cap = 'dieu_chuyen' AND ncc.is_noi_bo = TRUE`
+      );
+      // Chỉ lấy các phòng ban cấp 3 khác (không phải của user)
+      if (user && user.phong_ban_id) {
+        whereConditions.push(`ncc.phong_ban_id != $${paramIndex++}`);
+        params.push(user.phong_ban_id);
+      }
+    }
+
+    // Search theo tên
+    if (search && search.trim()) {
+      whereConditions.push(
+        `(ncc.ten_ncc ILIKE $${paramIndex++} OR ncc.ma_ncc ILIKE $${paramIndex})`
+      );
+      const searchTerm = `%${search.trim()}%`;
+      params.push(searchTerm, searchTerm);
+      paramIndex++;
+    }
+
+    const whereClause = whereConditions.join(" AND ");
+
+    const query_str = `
+      SELECT ncc.id, ncc.ma_ncc, ncc.ten_ncc, ncc.dia_chi, ncc.phone, ncc.email, 
+             ncc.nguoi_lien_he, ncc.is_noi_bo, ncc.loai_nha_cung_cap, ncc.phong_ban_id,
+             pb.ten_phong_ban, pb.cap_bac
+      FROM nha_cung_cap ncc
+      LEFT JOIN phong_ban pb ON ncc.phong_ban_id = pb.id
+      WHERE ${whereClause}
+      ORDER BY ncc.ten_ncc
+      LIMIT 20
+    `;
+
+    const result = await pool.query(query_str, params);
+
+    sendResponse(res, 200, true, "Tìm kiếm thành công", result.rows);
+  } catch (error) {
+    console.error("Search NCC by type error:", error);
+    sendResponse(res, 500, false, "Lỗi server");
+  }
+};
+
 module.exports = {
   searchNhaCungCap,
   createNhaCungCapAuto,
+  searchNhaCungCapByType,
 };

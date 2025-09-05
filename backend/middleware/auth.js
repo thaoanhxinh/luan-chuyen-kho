@@ -1,8 +1,6 @@
 const jwt = require("jsonwebtoken");
-const { User, PhongBan } = require("../models");
+const pool = require("../config/database");
 const jwtConfig = require("../config/jwt");
-
-// Sửa file auth.js middleware
 
 const auth = async (req, res, next) => {
   try {
@@ -17,7 +15,7 @@ const auth = async (req, res, next) => {
 
     const decoded = jwt.verify(token, jwtConfig.secret);
 
-    // ✅ SỬA: Dùng raw SQL thay vì Sequelize để lấy đủ thông tin
+    // Lấy thông tin user và phòng ban
     const userQuery = `
       SELECT u.id, u.username, u.ho_ten, u.email, u.phone, u.role, u.trang_thai, u.phong_ban_id,
              pb.id as pb_id, pb.ma_phong_ban, pb.ten_phong_ban, pb.cap_bac, pb.phong_ban_cha_id
@@ -37,7 +35,7 @@ const auth = async (req, res, next) => {
 
     const userData = result.rows[0];
 
-    // ✅ Cấu trúc user object đầy đủ
+    // Cấu trúc user object đầy đủ
     const user = {
       id: userData.id,
       username: userData.username,

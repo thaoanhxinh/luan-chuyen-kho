@@ -1,535 +1,456 @@
+export const LOAI_PHIEU_NHAP = {
+  tu_mua: "Tự mua sắm",
+  tren_cap: "Cấp trên cấp",
+  dieu_chuyen: "Điều chuyển",
+};
+
+// Loại xuất - CHỈ 2 LOẠI theo database
+export const LOAI_PHIEU_XUAT = {
+  don_vi_su_dung: {
+    label: "Sử dụng nội bộ",
+    description: "Xuất cho đơn vị sử dụng nội bộ",
+  },
+  don_vi_nhan: {
+    label: "Xuất cho đơn vị",
+    description: "Xuất cho đơn vị khác (luân chuyển)",
+  },
+};
+
+// Trạng thái phiếu - CHÍNH XÁC theo database enum trang_thai_phieu
 export const TRANG_THAI_PHIEU = {
   draft: {
     label: "Nháp",
     color: "gray",
-    description: "Phiếu đang được soạn thảo",
+    bgColor: "bg-gray-100",
+    textColor: "text-gray-800",
+    description: "Phiếu đang được soạn thảo (chỉ cấp 3 thấy)",
   },
   confirmed: {
-    label: "Chờ duyệt",
+    label: "Đã gửi",
     color: "blue",
-    description: "Phiếu đã gửi lên chờ cấp trên duyệt",
+    bgColor: "bg-blue-100",
+    textColor: "text-blue-800",
+    description: "Đã gửi, chờ xử lý (admin/manager thấy)",
+  },
+  pending_approval: {
+    label: "Chờ duyệt",
+    color: "yellow",
+    bgColor: "bg-yellow-100",
+    textColor: "text-yellow-800",
+    description: "Chờ cấp 1/2 duyệt (admin/manager thấy)",
+  },
+  pending_level3_approval: {
+    label: "Chờ cấp 3 duyệt",
+    color: "orange",
+    bgColor: "bg-orange-100",
+    textColor: "text-orange-800",
+    description: "Chờ cấp 3 đích duyệt điều chuyển",
   },
   approved: {
     label: "Đã duyệt",
     color: "green",
-    description: "Phiếu đã được cấp trên phê duyệt, có thể thực hiện nhập/xuất",
-  },
-  revision_required: {
-    label: "Cần sửa",
-    color: "orange",
-    description: "Phiếu bị yêu cầu chỉnh sửa bởi cấp trên",
-  },
-  ready_to_execute: {
-    label: "Sẵn sàng thực hiện",
-    color: "green",
-    description: "Phiếu đã có quyết định, sẵn sàng thực hiện nhập/xuất",
-  },
-  in_progress: {
-    label: "Đang thực hiện",
-    color: "blue",
-    description: "Đang tiến hành nhập/xuất thực tế",
+    bgColor: "bg-green-100",
+    textColor: "text-green-800",
+    description: "Đã được duyệt, chờ hoàn thành",
   },
   completed: {
     label: "Hoàn thành",
-    color: "green",
-    description: "Đã hoàn thành nhập/xuất, tồn kho đã được cập nhật",
+    color: "emerald",
+    bgColor: "bg-emerald-100",
+    textColor: "text-emerald-800",
+    description: "Đã hoàn thành toàn bộ quy trình",
   },
   cancelled: {
     label: "Đã hủy",
     color: "red",
-    description: "Phiếu đã bị hủy bỏ",
+    bgColor: "bg-red-100",
+    textColor: "text-red-800",
+    description: "Phiếu đã bị hủy",
+  },
+  revision_required: {
+    label: "Cần chỉnh sửa",
+    color: "purple",
+    bgColor: "bg-purple-100",
+    textColor: "text-purple-800",
+    description: "Yêu cầu chỉnh sửa từ cấp duyệt (về cho cấp 3 sửa)",
   },
 };
 
-// Updated LOAI_PHIEU_NHAP - Chỉ 3 loại theo yêu cầu
-export const LOAI_PHIEU_NHAP = {
-  tren_cap: "Từ cấp trên",
-  tu_mua: "Tự mua sắm",
-  khac: "Khác",
+// Workflow types - CHÍNH XÁC theo database enum workflow_type
+export const WORKFLOW_TYPES = {
+  cap3_tu_mua: {
+    label: "Cấp 3 tự mua",
+    description: "Cấp 3 tự mua → Cấp 2 duyệt → Cấp 1 duyệt cuối",
+    flow: ["draft", "confirmed", "pending_approval", "approved", "completed"],
+  },
+  cap3_tu_cap_tren: {
+    label: "Cấp 3 từ cấp trên",
+    description: "Cấp 3 từ cấp trên → Cấp 1 duyệt trực tiếp",
+    flow: ["draft", "confirmed", "pending_approval", "approved", "completed"],
+  },
+  cap3_dieu_chuyen: {
+    label: "Cấp 3 điều chuyển",
+    description: "Cấp 3 điều chuyển → Cấp 2 → Cấp 3B duyệt xuất",
+    flow: [
+      "draft",
+      "confirmed",
+      "pending_approval",
+      "pending_level3_approval",
+      "approved",
+      "completed",
+    ],
+  },
+  cap1_tu_duyet: {
+    label: "Cấp 1 tự duyệt",
+    description: "Cấp 1 tự duyệt ngay",
+    flow: ["draft", "approved", "completed"],
+  },
 };
 
-// Updated LOAI_PHIEU_XUAT - Chỉ 3 loại theo yêu cầu
-export const LOAI_PHIEU_XUAT = {
-  su_dung: "Xuất sử dụng",
-  don_vi_nhan: "Xuất cho đơn vị",
-  khac: "Khác",
+// Phẩm chất hàng hóa - CHÍNH XÁC theo database enum pham_chat
+export const PHAM_CHAT = {
+  tot: {
+    label: "Tốt",
+    color: "green",
+    description: "Hàng hóa tốt",
+  },
+  kem_pham_chat: {
+    label: "Kém phẩm chất",
+    color: "yellow",
+    description: "Hàng hóa kém phẩm chất",
+  },
+  mat_pham_chat: {
+    label: "Mất phẩm chất",
+    color: "orange",
+    description: "Hàng hóa mất phẩm chất",
+  },
+  hong: {
+    label: "Hỏng",
+    color: "red",
+    description: "Hàng hóa hỏng",
+  },
+  can_thanh_ly: {
+    label: "Cần thanh lý",
+    color: "gray",
+    description: "Hàng hóa cần thanh lý",
+  },
 };
 
-// Enhanced getActionPermissions function với logic số lượng duyệt vs thực tế
-// export const getActionPermissions = (trangThai, userRole) => {
-//   const isAdmin = userRole === "admin";
-//   const isUser = userRole === "user";
+// Role người dùng - CHÍNH XÁC theo database enum user_role
+export const USER_ROLES = {
+  admin: "Quản trị viên (Cấp 1)",
+  manager: "Quản lý (Cấp 2)",
+  user: "Người dùng (Cấp 3)",
+};
 
-//   const permissions = {
-//     canView: true, // Tất cả đều có thể xem
-//     canEdit: false,
-//     canEditActualQuantity: false, // Cho phép sửa số lượng thực tế
-//     canSubmit: false,
-//     canApprove: false,
-//     canRequestRevision: false,
-//     canUploadDecision: false,
-//     canComplete: false,
-//     canCancel: false,
-//     canPrint: true, // Tất cả đều có thể in
-//   };
+// Cấp bậc phòng ban - CHÍNH XÁC theo database
+export const CAP_BAC = {
+  1: {
+    label: "Cấp 1",
+    description: "Ban Tổ chức - Lãnh đạo",
+    permissions: ["approve_all", "manage_all", "view_all"],
+  },
+  2: {
+    label: "Cấp 2",
+    description: "Phòng ban trung gian",
+    permissions: [
+      "approve_subordinate",
+      "manage_department",
+      "view_department",
+    ],
+  },
+  3: {
+    label: "Cấp 3",
+    description: "Đơn vị trực tiếp - Có kho",
+    permissions: ["create_request", "manage_inventory", "view_own"],
+  },
+};
 
-//   switch (trangThai) {
-//     case "draft":
-//       // Nháp - chỉ người tạo (user) có thể sửa, gửi duyệt, hủy
-//       permissions.canEdit = isUser;
-//       permissions.canSubmit = isUser;
-//       permissions.canCancel = isUser;
-//       break;
+// Loại thông báo - CHÍNH XÁC theo database enum loai_thong_bao
+export const LOAI_THONG_BAO = {
+  phieu_nhap_can_duyet: {
+    label: "Phiếu nhập cần duyệt",
+    color: "blue",
+    icon: "📝",
+  },
+  phieu_nhap_duyet: {
+    label: "Phiếu nhập đã duyệt",
+    color: "green",
+    icon: "✅",
+  },
+  phieu_nhap_can_sua: {
+    label: "Phiếu nhập cần sửa",
+    color: "orange",
+    icon: "⚠️",
+  },
+  phieu_xuat_can_duyet: {
+    label: "Phiếu xuất cần duyệt",
+    color: "blue",
+    icon: "📤",
+  },
+  phieu_xuat_duyet: {
+    label: "Phiếu xuất đã duyệt",
+    color: "green",
+    icon: "✅",
+  },
+  phieu_xuat_can_sua: {
+    label: "Phiếu xuất cần sửa",
+    color: "orange",
+    icon: "⚠️",
+  },
+  system: {
+    label: "Hệ thống",
+    color: "gray",
+    icon: "🔧",
+  },
+};
 
-//     case "confirmed":
-//       // Chờ duyệt - chỉ admin có thể duyệt hoặc yêu cầu sửa
-//       permissions.canApprove = isAdmin;
-//       permissions.canRequestRevision = isAdmin;
-//       permissions.canCancel = isAdmin;
-//       break;
+// Trạng thái thông báo - CHÍNH XÁC theo database enum trang_thai_thong_bao
+export const TRANG_THAI_THONG_BAO = {
+  unread: "Chưa đọc",
+  read: "Đã đọc",
+  archived: "Đã lưu trữ",
+};
 
-//     case "revision_required":
-//       // Cần sửa - người tạo có thể sửa và gửi lại
-//       permissions.canEdit = isUser;
-//       permissions.canSubmit = isUser;
-//       permissions.canCancel = isUser;
-//       break;
+// QUY TRÌNH DUYỆT - CHỈ CẤP 1, 2 ĐƯỢC DUYỆT (theo backend controller)
+export const WORKFLOW_RULES = {
+  // Quyền tạo phiếu
+  CAN_CREATE: {
+    admin: true, // Cấp 1 có thể tạo và tự duyệt
+    manager: false, // Cấp 2 không tạo, chỉ duyệt
+    user: true, // Cấp 3 tạo phiếu
+  },
 
-//     case "approved":
-//       // Đã duyệt - admin có thể upload quyết định, user có thể sửa số lượng thực tế
-//       permissions.canUploadDecision = isAdmin;
-//       permissions.canEditActualQuantity = true; // Cho phép sửa số lượng thực tế
-//       permissions.canComplete = true; // Có thể hoàn thành luôn sau khi duyệt
-//       permissions.canCancel = isAdmin;
-//       break;
+  // Quyền duyệt phiếu
+  CAN_APPROVE: {
+    admin: true, // Cấp 1 duyệt tất cả
+    manager: true, // Cấp 2 duyệt phiếu từ cấp 3 thuộc quyền
+    user: false, // Cấp 3 KHÔNG được duyệt (trừ trường hợp đặc biệt điều chuyển)
+  },
 
-//     case "ready_to_execute":
-//       // Sẵn sàng thực hiện - có thể sửa số lượng thực tế và hoàn thành
-//       permissions.canEditActualQuantity = true; // Vẫn cho phép sửa số lượng thực tế
-//       permissions.canComplete = true;
-//       permissions.canCancel = isAdmin;
-//       break;
+  // Quyền xem - THEO BACKEND CONTROLLER LOGIC
+  CAN_VIEW: {
+    admin: "all", // Xem tất cả (trừ draft của cấp 3)
+    manager: "department", // Xem phiếu thuộc phòng ban quản lý (trừ draft)
+    user: "own", // Chỉ xem phiếu của mình
+  },
+};
 
-//     case "in_progress":
-//       // Đang thực hiện - có thể sửa số lượng thực tế và hoàn thành
-//       permissions.canEditActualQuantity = true;
-//       permissions.canComplete = true;
-//       break;
+// Tab config - CẬP NHẬT theo logic backend
+export const TAB_CONFIG = {
+  NHAP_KHO: [
+    {
+      key: "tat_ca",
+      label: "Tất cả",
+      count: 0,
+      description: "Tất cả phiếu (theo quyền xem)",
+      // ❌ Không có filter cụ thể - sẽ hiển thị tất cả
+    },
+    {
+      key: "nhap",
+      label: "Nháp",
+      count: 0,
+      status: ["draft"],
+      description: "Phiếu đang soạn thảo (chỉ cấp 3 thấy của mình)",
+    },
+    {
+      key: "can_duyet",
+      label: "Chờ duyệt",
+      count: 0,
+      // ✅ Đối với nhập kho, hiển thị phiếu đã gửi chờ xử lý
+      // (controller sử dụng 'confirmed' trước khi duyệt)
+      status: ["confirmed"],
+      description: "Tất cả phiếu đang chờ duyệt (mọi cấp)",
+      // ✅ KHÔNG có roleFilter - tất cả role đều thấy
+    },
+    {
+      key: "da_duyet",
+      label: "Đã duyệt",
+      count: 0,
+      status: ["approved"],
+      description: "Phiếu đã được duyệt",
+    },
+    {
+      key: "hoan_thanh",
+      label: "Hoàn thành",
+      count: 0,
+      status: ["completed"],
+      description: "Phiếu đã hoàn thành",
+    },
+    {
+      key: "can_sua",
+      label: "Cần sửa",
+      count: 0,
+      status: ["revision_required"],
+      description: "Phiếu cần chỉnh sửa (về cho cấp 3)",
+    },
+    {
+      key: "da_huy",
+      label: "Đã hủy",
+      count: 0,
+      status: ["cancelled"],
+      description: "Phiếu đã bị hủy",
+    },
+  ],
 
-//     case "completed":
-//       // Hoàn thành - chỉ xem và in
-//       break;
+  XUAT_KHO: [
+    { key: "tat_ca", label: "Tất cả", count: 0 },
+    { key: "nhap", label: "Nháp", count: 0, status: ["draft"] },
+    {
+      key: "cho_duyet",
+      label: "Chờ duyệt",
+      count: 0,
+      // ✅ Cho luân chuyển: sau bước 1, trạng thái chuyển 'pending_level3_approval'
+      // Hiển thị cả 'confirmed' (chờ cấp 1/2) và 'pending_level3_approval' (chờ cấp 3)
+      status: ["confirmed", "pending_level3_approval"],
+    },
+    { key: "da_duyet", label: "Đã duyệt", count: 0, status: ["approved"] },
+    { key: "hoan_thanh", label: "Hoàn thành", count: 0, status: ["completed"] },
+    {
+      key: "can_sua",
+      label: "Cần sửa",
+      count: 0,
+      status: ["revision_required"],
+    },
+    { key: "da_huy", label: "Đã hủy", count: 0, status: ["cancelled"] },
+  ],
+};
 
-//     case "cancelled":
-//       // Đã hủy - chỉ xem
-//       break;
+// Map nhà cung cấp theo loại phiếu
+export const NHA_CUNG_CAP_BY_LOAI = {
+  tu_mua: "external", // Nhà cung cấp bên ngoài
+  tren_cap: "internal", // Phòng ban cấp trên
+  dieu_chuyen: "level3", // Phòng ban cấp 3 khác
+};
 
-//     default:
-//       break;
-//   }
+// Map đơn vị nhận theo loại xuất
+export const DON_VI_NHAN_BY_LOAI = {
+  don_vi_su_dung: null, // Không cần đơn vị nhận
+  don_vi_nhan: "level3_or_external", // Phòng ban cấp 3 hoặc bên ngoài
+};
 
-//   return permissions;
-// };
+// Helper functions
+export const getTrangThaiPhieuLabel = (trangThai) => {
+  return TRANG_THAI_PHIEU[trangThai]?.label || "Không xác định";
+};
 
-export const getActionPermissions = (
-  trangThai,
-  userRole,
-  loaiPhieu = "nhap"
-) => {
+export const getTrangThaiPhieuColor = (trangThai) => {
+  return TRANG_THAI_PHIEU[trangThai]?.color || "gray";
+};
+
+export const getTrangThaiPhieuBgColor = (trangThai) => {
+  return TRANG_THAI_PHIEU[trangThai]?.bgColor || "bg-gray-100";
+};
+
+export const getTrangThaiPhieuTextColor = (trangThai) => {
+  return TRANG_THAI_PHIEU[trangThai]?.textColor || "text-gray-800";
+};
+
+// Format helpers
+export const formatLoaiPhieuNhap = (loai) => {
+  return LOAI_PHIEU_NHAP[loai] || "Không xác định";
+};
+
+export const formatLoaiPhieuXuat = (loai) => {
+  return LOAI_PHIEU_XUAT[loai] || "Không xác định";
+};
+
+export const formatUserRole = (role) => {
+  return USER_ROLES[role] || "Không xác định";
+};
+
+export const formatWorkflowType = (workflowType) => {
+  return WORKFLOW_TYPES[workflowType]?.label || "Không xác định";
+};
+
+export const getWorkflowDescription = (workflowType) => {
+  return WORKFLOW_TYPES[workflowType]?.description || "Quy trình chuẩn";
+};
+
+export const getActionPermissions = (trangThai, userRole, phieu, user) => {
   const isAdmin = userRole === "admin";
-  const isUser = userRole !== "admin";
+  const isManager = userRole === "manager";
+  const isOwner = user && phieu && phieu.nguoi_tao === user.id;
 
   const permissions = {
     canView: true,
     canEdit: false,
-    canEditPlan: false,
-    canEditActual: false,
     canSubmit: false,
     canApprove: false,
     canRequestRevision: false,
-    canUploadDecision: false,
-    canComplete: false,
     canCancel: false,
+    canUpload: false,
+    canComplete: false,
     canPrint: true,
   };
 
-  switch (trangThai) {
-    case "draft":
-      if (loaiPhieu === "xuat") {
-        // PHIẾU XUẤT: Admin tạo và gửi
-        permissions.canEdit = isAdmin;
-        permissions.canEditPlan = isAdmin;
-        permissions.canSubmit = isAdmin;
-        permissions.canCancel = isAdmin;
-      } else {
-        // PHIẾU NHẬP: User tạo và gửi
-        permissions.canEdit = isUser;
-        permissions.canEditPlan = isUser;
-        permissions.canSubmit = isUser;
-        permissions.canCancel = isUser;
-      }
-      break;
+  // Edit permissions - CHỈ CHỦ SỞ HỮU VÀ PHIẾU Ở DRAFT/REVISION_REQUIRED
+  if (isOwner && ["draft", "revision_required"].includes(trangThai)) {
+    permissions.canEdit = true;
+  }
 
-    case "confirmed":
-      permissions.canApprove = isAdmin;
-      permissions.canRequestRevision = isAdmin;
-      permissions.canCancel = isAdmin;
-      break;
+  // Submit permissions - CHỈ CHỦ SỞ HỮU VÀ PHIẾU Ở DRAFT
+  if (isOwner && trangThai === "draft") {
+    permissions.canSubmit = true;
+  }
 
-    case "revision_required":
-      if (loaiPhieu === "xuat") {
-        permissions.canEdit = isAdmin;
-        permissions.canEditPlan = isAdmin;
-        permissions.canSubmit = isAdmin;
-        permissions.canCancel = isAdmin;
-      } else {
-        permissions.canEdit = isUser;
-        permissions.canEditPlan = isUser;
-        permissions.canSubmit = isUser;
-        permissions.canCancel = isUser;
-      }
-      break;
+  // Approve permissions - CHỈ ADMIN VÀ MANAGER VÀ PHIẾU ĐÃ GỬI
+  if (
+    (isAdmin || isManager) &&
+    ["confirmed", "pending_approval", "pending_level3_approval"].includes(
+      trangThai
+    )
+  ) {
+    permissions.canApprove = true;
+    permissions.canRequestRevision = true;
+  }
 
-    case "approved":
-      permissions.canUploadDecision = isAdmin;
-      permissions.canEditActual = true;
-      permissions.canComplete = true;
-      permissions.canCancel = isAdmin;
-      break;
+  // Cancel permissions - CHỦ SỞ HỮU HOẶC ADMIN VÀ PHIẾU CHƯA HOÀN THÀNH
+  if (
+    (isOwner || isAdmin) &&
+    ["draft", "confirmed", "pending_approval", "revision_required"].includes(
+      trangThai
+    )
+  ) {
+    permissions.canCancel = true;
+  }
 
-    case "completed":
-      break;
+  // 🔥 FIX: Upload & Complete - CHỦ SỞ HỮU CŨNG CÓ THỂ UPLOAD VÀ HOÀN THÀNH
+  if ((isAdmin || isManager || isOwner) && trangThai === "approved") {
+    permissions.canUpload = true;
+    permissions.canComplete = true; // Bỏ điều kiện phải có decision_pdf_url
+  }
 
-    case "cancelled":
-      break;
+  // Thêm upload cho trạng thái completed (để cập nhật QĐ)
+  if ((isAdmin || isManager || isOwner) && trangThai === "completed") {
+    permissions.canUpload = true;
   }
 
   return permissions;
 };
 
-// Tab configurations for different pages
-export const TAB_CONFIGS = {
-  nhap_kho: {
-    "tat-ca": {
-      label: "Tất cả",
-      filter: {},
-      color: "text-gray-600 border-gray-300",
-      activeColor: "text-blue-600 border-blue-500 bg-blue-50",
-    },
-    "can-duyet": {
-      label: "Cần duyệt",
-      filter: { trang_thai: "confirmed" },
-      adminOnly: true,
-      color: "text-blue-600 border-blue-300",
-      activeColor: "text-blue-600 border-blue-500 bg-blue-50",
-    },
-    "da-duyet": {
-      label: "Đã duyệt",
-      filter: { trang_thai: "approved" },
-      color: "text-green-600 border-green-300",
-      activeColor: "text-green-600 border-green-500 bg-green-50",
-    },
-    "can-sua": {
-      label: "Cần sửa",
-      filter: { trang_thai: "revision_required" },
-      color: "text-orange-600 border-orange-300",
-      activeColor: "text-orange-600 border-orange-500 bg-orange-50",
-    },
-    "hoan-thanh": {
-      label: "Hoàn thành",
-      filter: { trang_thai: "completed" },
-      color: "text-green-600 border-green-300",
-      activeColor: "text-green-600 border-green-500 bg-green-50",
-    },
-    "da-huy": {
-      label: "Đã hủy",
-      filter: { trang_thai: "cancelled" },
-      color: "text-red-600 border-red-300",
-      activeColor: "text-red-600 border-red-500 bg-red-50",
-    },
-  },
-  xuat_kho: {
-    "tat-ca": {
-      label: "Tất cả",
-      filter: {},
-      color: "text-gray-600 border-gray-300",
-      activeColor: "text-red-600 border-red-500 bg-red-50",
-    },
-    "can-duyet": {
-      label: "Cần duyệt",
-      filter: { trang_thai: "confirmed" },
-      adminOnly: true,
-      color: "text-blue-600 border-blue-300",
-      activeColor: "text-blue-600 border-blue-500 bg-blue-50",
-    },
-    "da-duyet": {
-      label: "Đã duyệt",
-      filter: { trang_thai: "approved" },
-      color: "text-green-600 border-green-300",
-      activeColor: "text-green-600 border-green-500 bg-green-50",
-    },
-    "can-sua": {
-      label: "Cần sửa",
-      filter: { trang_thai: "revision_required" },
-      color: "text-orange-600 border-orange-300",
-      activeColor: "text-orange-600 border-orange-500 bg-orange-50",
-    },
-    "hoan-thanh": {
-      label: "Hoàn thành",
-      filter: { trang_thai: "completed" },
-      color: "text-green-600 border-green-300",
-      activeColor: "text-green-600 border-green-500 bg-green-50",
-    },
-    "da-huy": {
-      label: "Đã hủy",
-      filter: { trang_thai: "cancelled" },
-      color: "text-red-600 border-red-300",
-      activeColor: "text-red-600 border-red-500 bg-red-50",
-    },
-  },
+// API Endpoints - CHÍNH XÁC theo backend server.js
+export const API_ENDPOINTS = {
+  NHAP_KHO: "/api/nhap-kho",
+  NHAP_KHO_SUBMIT: "/api/nhap-kho/:id/submit",
+  NHAP_KHO_MANAGER_APPROVE: "/api/nhap-kho/:id/manager-approve",
+  NHAP_KHO_APPROVE: "/api/nhap-kho/:id/approve",
+  NHAP_KHO_REQUEST_REVISION: "/api/nhap-kho/:id/request-revision",
+  NHAP_KHO_COMPLETE: "/api/nhap-kho/:id/complete",
+  NHAP_KHO_UPLOAD: "/api/nhap-kho/:id/upload-decision",
+  NHAP_KHO_PHONG_BAN_LIST: "/api/nhap-kho/phong-ban-list",
+
+  XUAT_KHO: "/api/xuat-kho",
+  HANG_HOA: "/api/hang-hoa",
+  NHA_CUNG_CAP: "/api/nha-cung-cap",
+  DON_VI_NHAN: "/api/don-vi-nhan",
+  PHONG_BAN: "/api/phong-ban",
+  NOTIFICATIONS: "/api/notifications",
+  SEARCH_NHA_CUNG_CAP: "/api/search/nha-cung-cap",
+  SEARCH_HANG_HOA: "/api/search/hang-hoa",
 };
 
-// Supplier/Receiver type mapping for workflow validation
-export const NHA_CUNG_CAP_TYPE = {
-  tren_cap: "internal", // Từ cấp trên - phải là phòng ban cấp trên
-  tu_mua: "external", // Tự mua - nhà cung cấp ngoài
-  dieu_chuyen: "internal", // Điều chuyển - nội bộ
-  tra_lai: "external", // Trả lại - bên ngoài
-  khac: "both",
-};
-
-export const DON_VI_NHAN_TYPE = {
-  don_vi_nhan: "internal", // Cấp phát cho đơn vị - nội bộ
-  su_dung: "internal", // Xuất sử dụng - nội bộ
-  thanh_ly: "external", // Thanh lý - bên ngoài
-  chuyen_kho: "internal", // Chuyển kho - nội bộ
-  tra_lai: "external", // Trả lại - bên ngoài
-  khac: "both",
-};
-
-// Workflow validation rules - Updated theo yêu cầu mới
-export const PHIEU_VALIDATION_RULES = {
-  nhap_kho: {
-    tren_cap: {
-      requireSupplier: true,
-      allowNewItems: false, // Không được tạo hàng hóa mới
-      requireDecision: true,
-      supplierType: "internal",
-      description: "Nhập từ cấp trên - phải chọn phòng ban cấp trên",
-    },
-    tu_mua: {
-      requireSupplier: true,
-      allowNewItems: true, // Được tạo hàng hóa mới khi tự mua
-      requireDecision: false,
-      supplierType: "external",
-      description: "Tự mua sắm - chọn nhà cung cấp bên ngoài",
-    },
-    khac: {
-      requireSupplier: false,
-      allowNewItems: true,
-      requireDecision: false,
-      supplierType: "both",
-      description: "Loại khác - tùy chọn",
-    },
-  },
-  xuat_kho: {
-    su_dung: {
-      requireReceiver: false,
-      checkInventory: true,
-      requireDecision: false,
-      receiverType: "internal",
-      description: "Xuất sử dụng - sử dụng nội bộ",
-    },
-    don_vi_nhan: {
-      requireReceiver: true,
-      checkInventory: true,
-      requireDecision: true,
-      receiverType: "internal",
-      description: "Xuất cho đơn vị - phải chọn đơn vị nhận",
-    },
-    khac: {
-      requireReceiver: false,
-      checkInventory: true,
-      requireDecision: false,
-      receiverType: "both",
-      description: "Loại khác - tùy chọn",
-    },
-  },
-};
-
-// Notification types cho hệ thống
-export const NOTIFICATION_TYPES = {
-  phieu_can_duyet: {
-    label: "Cần duyệt",
-    icon: "info",
-    color: "blue",
-    priority: "high",
-  },
-  phieu_duyet: {
-    label: "Đã duyệt",
-    icon: "check-circle",
-    color: "green",
-    priority: "normal",
-  },
-  phieu_can_sua: {
-    label: "Cần sửa",
-    icon: "alert-triangle",
-    color: "orange",
-    priority: "high",
-  },
-  phieu_hoan_thanh: {
-    label: "Hoàn thành",
-    icon: "check",
-    color: "green",
-    priority: "normal",
-  },
-  phieu_huy: {
-    label: "Đã hủy",
-    icon: "x",
-    color: "red",
-    priority: "normal",
-  },
-  quyet_dinh_upload: {
-    label: "Quyết định",
-    icon: "upload",
-    color: "purple",
-    priority: "normal",
-  },
-  canh_bao_ton_kho: {
-    label: "Cảnh báo tồn kho",
-    icon: "alert-triangle",
-    color: "yellow",
-    priority: "medium",
-  },
-  sap_den_han: {
-    label: "Sắp hết hạn",
-    icon: "clock",
-    color: "red",
-    priority: "urgent",
-  },
-  system: {
-    label: "Hệ thống",
-    icon: "info",
-    color: "gray",
-    priority: "low",
-  },
-};
-
-// Rest of the constants remain the same...
-export const TRANG_THAI_KIEM_KE = {
-  draft: {
-    label: "Nháp",
-    color: "gray",
-    description: "Phiếu kiểm kê đang được soạn thảo",
-  },
-  in_progress: {
-    label: "Đang kiểm kê",
-    color: "blue",
-    description: "Đang thực hiện kiểm kê",
-  },
-  completed: {
-    label: "Hoàn thành",
-    color: "yellow",
-    description: "Đã hoàn thành kiểm kê, chờ duyệt",
-  },
-  confirmed: {
-    label: "Đã duyệt",
-    color: "green",
-    description: "Đã được duyệt và cập nhật vào hệ thống",
-  },
-  cancelled: {
-    label: "Đã hủy",
-    color: "red",
-    description: "Phiếu kiểm kê bị hủy",
-  },
-};
-
-export const LOAI_KIEM_KE = {
-  dinh_ky: "Định kỳ",
-  dot_xuat: "Đột xuất",
-  dac_biet: "Đặc biệt",
-  chuyen_giao: "Chuyển giao",
-  thanh_ly: "Thanh lý",
-  theo_yeu_cau: "Theo yêu cầu",
-  cuoi_nam: "Cuối năm",
-};
-
-export const PHAM_CHAT = {
-  tot: {
-    label: "Tốt 100%",
-    color: "green",
-    description: "Hàng hóa còn tốt, sử dụng bình thường",
-  },
-  kem_pham_chat: {
-    label: "Kém phẩm chất",
-    color: "orange",
-    description: "Hàng hóa bị giảm chất lượng nhưng vẫn sử dụng được",
-  },
-  mat_pham_chat: {
-    label: "Mất phẩm chất",
-    color: "red",
-    description: "Hàng hóa không còn sử dụng được",
-  },
-  hong: {
-    label: "Hỏng",
-    color: "red",
-    description: "Hàng hóa bị hỏng hóc",
-  },
-  can_thanh_ly: {
-    label: "Cần thanh lý",
-    color: "yellow",
-    description: "Hàng hóa cần được thanh lý",
-  },
-};
-
-export const LY_DO_CHENH_LECH = {
-  bao_cao_sai: "Báo cáo sai số liệu",
-  mat_cap: "Mất cắp",
-  hu_hong: "Hư hỏng trong quá trình sử dụng",
-  bay_hoi: "Bay hơi, thất thoát tự nhiên",
-  xuat_chua_ghi_so: "Xuất chưa ghi sổ",
-  nhap_chua_ghi_so: "Nhập chưa ghi sổ",
-  chuyen_kho: "Chuyển kho chưa ghi nhận",
-  kiem_ke_sai: "Kiểm kê sai sót",
-  bao_quan_kem: "Bảo quản kém",
-  qua_han_su_dung: "Quá hạn sử dụng",
-  dieu_kien_moi_truong: "Điều kiện môi trường",
-  van_chuyen_hu_hong: "Vận chuyển hư hỏng",
-  khac: "Lý do khác",
-};
-
-export const DE_NGHI_XU_LY = {
-  ghi_giam: "Ghi giảm tồn kho",
-  ghi_tang: "Ghi tăng tồn kho",
-  chuyen_phan_loai: "Chuyển phân loại phẩm chất",
-  thanh_ly: "Đề nghị thanh lý",
-  sua_chua: "Sửa chữa, bảo dưỡng",
-  kiem_tra_lai: "Kiểm tra lại",
-  bao_cao_cap_tren: "Báo cáo cấp trên",
-  cai_thien_bao_quan: "Cải thiện điều kiện bảo quản",
-  thay_the_moi: "Thay thế mới",
-  chuyen_kho_khac: "Chuyển kho khác",
-  khac: "Đề nghị khác",
-};
-
-export const VAI_TRO_KIEM_KE = {
-  to_truong: "Tổ trưởng",
-  uy_vien: "Ủy viên",
-  thu_kho: "Thủ kho",
-  kiem_soan: "Kiểm soát - Soạn thảo",
-  chung_kien: "Chứng kiến",
-};
-
-export const LOAI_HANG_HOA = {
-  thiet_bi: "Thiết bị",
-  vat_tu: "Vật tư",
-  linh_kien: "Linh kiện",
-  phu_tung: "Phụ tùng",
-  dung_cu: "Dụng cụ",
-  van_phong_pham: "Văn phòng phẩm",
-  khac: "Khác",
-};
-
+// Đơn vị tính
 export const DON_VI_TINH = [
   "Cái",
   "Chiếc",
@@ -561,240 +482,213 @@ export const DON_VI_TINH = [
   "Khác",
 ];
 
-export const VAI_TRO = {
-  admin: "Quản trị viên",
-  thu_kho: "Thủ kho",
-  ke_toan: "Kế toán",
-  user: "Người dùng",
-};
-
-export const USER_ROLES = {
-  ADMIN: "admin",
-  USER: "user",
-  approver: "Người duyệt",
-};
-
-export const TRANG_THAI_USER = {
-  active: {
-    label: "Hoạt động",
-    color: "green",
+// Message templates cho notifications
+export const NOTIFICATION_MESSAGES = {
+  PHIEU_NHAP_CAN_DUYET: {
+    title: "Phiếu nhập cần duyệt",
+    template: "Phiếu nhập {so_phieu} từ {phong_ban} cần được duyệt",
   },
-  inactive: {
-    label: "Ngừng hoạt động",
-    color: "red",
+  PHIEU_NHAP_DUYET: {
+    title: "Phiếu nhập đã duyệt",
+    template: "Phiếu nhập {so_phieu} đã được duyệt bởi {nguoi_duyet}",
+  },
+  PHIEU_NHAP_CAN_SUA: {
+    title: "Phiếu nhập cần chỉnh sửa",
+    template: "Phiếu nhập {so_phieu} cần chỉnh sửa: {ly_do}",
   },
 };
 
-export const LOAI_BAO_CAO = {
-  ton_kho: "Báo cáo tồn kho",
-  nhap_xuat: "Báo cáo nhập xuất",
-  kiem_ke: "Báo cáo kiểm kê",
-  pham_chat: "Báo cáo phẩm chất",
-  chenh_lech: "Báo cáo chênh lệch",
-  thong_ke_kiem_ke: "Thống kê kiểm kê",
-  hieu_qua_kiem_ke: "Hiệu quả kiểm kê",
-  hang_het_han: "Báo cáo hàng hết hạn",
-  tinh_hinh_su_dung: "Báo cáo tình hình sử dụng",
-  so_sanh_ky_truoc: "Báo cáo so sánh kỳ trước",
-  tong_hop_kiem_ke: "Tổng hợp kiểm kê",
-};
-
-export const DINH_DANG_BAO_CAO = {
-  excel: "Excel (.xlsx)",
-  pdf: "PDF (.pdf)",
-  csv: "CSV (.csv)",
-};
-
-export const CHU_KY_BAO_CAO = {
-  ngay: "Hàng ngày",
-  tuan: "Hàng tuần",
-  thang: "Hàng tháng",
-  quy: "Hàng quý",
-  nam: "Hàng năm",
-  tuy_chon: "Tùy chọn",
-};
-
-export const PERMISSIONS = {
-  VIEW_DASHBOARD: "view_dashboard",
-  MANAGE_INVENTORY: "manage_inventory",
-  VIEW_REPORTS: "view_reports",
-  APPROVE_TRANSACTIONS: "approve_transactions",
-  CREATE_KIEM_KE: "create_kiem_ke",
-  APPROVE_KIEM_KE: "approve_kiem_ke",
-  VIEW_KIEM_KE: "view_kiem_ke",
-  PRINT_KIEM_KE: "print_kiem_ke",
-  EXPORT_KIEM_KE: "export_kiem_ke",
-  MANAGE_USERS: "manage_users",
-  MANAGE_DEPARTMENTS: "manage_departments",
-};
-
-export const ROLE_PERMISSIONS = {
-  [USER_ROLES.ADMIN]: [
-    PERMISSIONS.VIEW_DASHBOARD,
-    PERMISSIONS.MANAGE_INVENTORY,
-    PERMISSIONS.VIEW_REPORTS,
-    PERMISSIONS.APPROVE_TRANSACTIONS,
-    PERMISSIONS.CREATE_KIEM_KE,
-    PERMISSIONS.APPROVE_KIEM_KE,
-    PERMISSIONS.VIEW_KIEM_KE,
-    PERMISSIONS.PRINT_KIEM_KE,
-    PERMISSIONS.EXPORT_KIEM_KE,
-    PERMISSIONS.MANAGE_USERS,
-    PERMISSIONS.MANAGE_DEPARTMENTS,
-  ],
-  [USER_ROLES.USER]: [
-    PERMISSIONS.VIEW_DASHBOARD,
-    PERMISSIONS.MANAGE_INVENTORY,
-    PERMISSIONS.VIEW_REPORTS,
-    PERMISSIONS.APPROVE_TRANSACTIONS,
-    PERMISSIONS.CREATE_KIEM_KE,
-    PERMISSIONS.APPROVE_KIEM_KE,
-    PERMISSIONS.VIEW_KIEM_KE,
-    PERMISSIONS.PRINT_KIEM_KE,
-    PERMISSIONS.EXPORT_KIEM_KE,
-  ],
-};
-
-export const LOAI_NCC = {
-  ca_nhan: "Cá nhân",
-  doanh_nghiep: "Doanh nghiệp",
-  hop_tac_xa: "Hợp tác xã",
-  don_vi_su_nghiep: "Đơn vị sự nghiệp",
-  co_quan_nha_nuoc: "Cơ quan nhà nước",
-};
-
-export const LOAI_DON_VI_NHAN = {
-  noi_bo: "Nội bộ",
-  ben_ngoai: "Bên ngoài",
-  ca_nhan: "Cá nhân",
-  don_vi_cap_tren: "Đơn vị cấp trên",
-  don_vi_cap_duoi: "Đơn vị cấp dưới",
-  don_vi_cung_cap: "Đơn vị cùng cấp",
-};
-
-export const TRANG_THAI_HANG_HOA = {
-  active: {
-    label: "Đang sử dụng",
-    color: "green",
+// Status progression cho workflow tracking
+export const STATUS_PROGRESSION = {
+  draft: {
+    next: ["confirmed", "cancelled"],
+    allowedActions: ["edit", "submit", "cancel"],
   },
-  inactive: {
-    label: "Ngừng sử dụng",
-    color: "yellow",
+  confirmed: {
+    next: [
+      "pending_approval",
+      "pending_level3_approval",
+      "revision_required",
+      "cancelled",
+    ],
+    allowedActions: ["approve", "request_revision", "cancel"],
   },
-  deleted: {
-    label: "Đã xóa",
-    color: "red",
+  pending_approval: {
+    next: ["approved", "revision_required", "cancelled"],
+    allowedActions: ["approve", "request_revision", "cancel"],
+  },
+  pending_level3_approval: {
+    next: ["approved", "revision_required", "cancelled"],
+    allowedActions: ["approve", "request_revision", "cancel"],
+  },
+  approved: {
+    next: ["completed"],
+    allowedActions: ["upload", "complete"],
+  },
+  completed: {
+    next: [],
+    allowedActions: ["view", "print"],
+  },
+  cancelled: {
+    next: [],
+    allowedActions: ["view", "print"],
+  },
+  revision_required: {
+    next: ["confirmed", "cancelled"],
+    allowedActions: ["edit", "submit", "cancel"],
   },
 };
 
-export const CHU_KY_KIEM_KE = {
-  thang: "Hàng tháng",
-  quy: "Hàng quý",
-  nam: "Hàng năm",
+export const LOAI_KIEM_KE = {
+  dinh_ky: "Định kỳ",
+  dot_xuat: "Đột xuất",
   theo_yeu_cau: "Theo yêu cầu",
+  cuoi_nam: "Cuối năm",
+  chuyen_giao: "Chuyển giao",
+  khac: "Khác",
 };
-
-export const MUC_DO_UU_TIEN = {
-  cao: {
-    label: "Cao",
-    color: "red",
-    description: "Cần kiểm kê ngay",
+export const TRANG_THAI_KIEM_KE = {
+  draft: {
+    label: "Nháp",
+    color: "gray",
+    description: "Phiếu kiểm kê đang được soạn thảo",
   },
-  trung_binh: {
-    label: "Trung bình",
-    color: "yellow",
-    description: "Kiểm kê theo kế hoạch",
-  },
-  thap: {
-    label: "Thấp",
-    color: "green",
-    description: "Có thể hoãn kiểm kê",
-  },
-};
-
-export const TRANG_THAI_XU_LY = {
-  cho_xu_ly: {
-    label: "Chờ xử lý",
-    color: "yellow",
-  },
-  dang_xu_ly: {
-    label: "Đang xử lý",
-    color: "blue",
-  },
-  hoan_thanh: {
+  completed: {
     label: "Hoàn thành",
-    color: "green",
-  },
-  tu_choi: {
-    label: "Từ chối",
-    color: "red",
-  },
-};
-
-export const FORMAT_SETTINGS = {
-  currency: {
-    locale: "vi-VN",
-    currency: "VND",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  },
-  number: {
-    locale: "vi-VN",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  },
-  date: {
-    locale: "vi-VN",
-    format: "DD/MM/YYYY",
-  },
-};
-
-export const CHART_COLORS = [
-  "#3B82F6",
-  "#EF4444",
-  "#10B981",
-  "#F59E0B",
-  "#8B5CF6",
-  "#06B6D4",
-  "#84CC16",
-  "#F97316",
-  "#EC4899",
-  "#6B7280",
-];
-
-export const FILE_LIMITS = {
-  maxSize: 10 * 1024 * 1024, // 10MB
-  allowedTypes: [
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.ms-excel",
-    "text/csv",
-    "application/pdf",
-    "image/jpeg",
-    "image/png",
-  ],
-};
-
-export const CANH_BAO_KIEM_KE = {
-  qua_han: {
-    label: "Quá hạn kiểm kê",
-    color: "red",
-    priority: "high",
-  },
-  sap_den_han: {
-    label: "Sắp đến hạn",
     color: "yellow",
-    priority: "medium",
+    description: "Đã hoàn thành kiểm kê, chờ duyệt",
   },
-  can_kiem_ke: {
-    label: "Cần kiểm kê",
-    color: "blue",
-    priority: "normal",
+  confirmed: {
+    label: "Đã duyệt",
+    color: "green",
+    description: "Đã được duyệt và cập nhật vào hệ thống",
+  },
+  cancelled: {
+    label: "Đã hủy",
+    color: "red",
+    description: "Phiếu kiểm kê bị hủy",
   },
 };
 
-export const LOAI_TEMPLATE = {
-  dinh_ky: "Template định kỳ",
-  dac_biet: "Template đặc biệt",
-  theo_loai: "Template theo loại hàng",
-  tuy_chinh: "Template tùy chỉnh",
+export const XUAT_KHO_WORKFLOW = {
+  // Loại xuất và quy trình duyệt
+  LOAI_XUAT: {
+    don_vi_su_dung: {
+      label: "Đơn vị sử dụng",
+      description: "Xuất cho đơn vị sử dụng nội bộ",
+      duyet_boi: ["cap1", "cap2"], // Cấp 1 hoặc cấp 2 quản lý trực tiếp duyệt
+    },
+    don_vi_nhan: {
+      label: "Đơn vị nhận",
+      description: "Xuất cho đơn vị khác (đơn vị 3A)",
+      duyet_boi: ["don_vi_nhan"], // Bên nhận (đơn vị 3A) sẽ duyệt
+    },
+  },
+
+  // Workflow duyệt cho từng loại
+  APPROVAL_WORKFLOW: {
+    don_vi_su_dung: {
+      steps: [
+        {
+          role: ["admin", "manager"],
+          action: "approve",
+          description: "Cấp 1 hoặc cấp 2 quản lý trực tiếp duyệt",
+        },
+      ],
+    },
+    don_vi_nhan: {
+      steps: [
+        {
+          role: ["don_vi_nhan_user"],
+          action: "approve",
+          description: "Bên nhận (đơn vị 3A) duyệt",
+        },
+      ],
+    },
+  },
+};
+
+export const VALIDATION_RULES = {
+  COMPLETE_PHIEU_NHAP: {
+    required_fields: ["nguoi_giao_hang", "nguoi_nhap_hang"],
+    messages: {
+      nguoi_giao_hang: "Vui lòng nhập thông tin người giao hàng",
+      nguoi_nhap_hang: "Vui lòng nhập thông tin người nhận hàng",
+    },
+  },
+
+  COMPLETE_PHIEU_XUAT: {
+    required_fields: ["nguoi_giao_hang", "nguoi_nhan"],
+    messages: {
+      nguoi_giao_hang: "Vui lòng nhập thông tin người giao hàng",
+      nguoi_nhan: "Vui lòng nhập thông tin người nhận hàng",
+    },
+  },
+};
+
+// =============================================
+// THÔNG BÁO WORKFLOW - FIX VẤN ĐỀ 5
+// =============================================
+
+export const NOTIFICATION_WORKFLOW = {
+  // Khi phiếu tự động thì thông báo cho phiếu liên kết
+  AUTO_LINKED_PHIEU: {
+    description:
+      "Khi có phiếu tự động, thông báo cho phiếu bên kia biết và tự động accept",
+    rules: [
+      "Phiếu nhập điều chuyển được duyệt → tự động tạo phiếu xuất → thông báo cho phòng ban cung cấp",
+      "Phiếu xuất đơn vị nhận được duyệt → tự động tạo phiếu nhập → thông báo cho đơn vị nhận",
+      "Khi chỉnh sửa phiếu gốc → thông báo và cập nhật phiếu tự động liên kết",
+    ],
+  },
+
+  // Quy trình thông báo chính xác
+  NOTIFICATION_FLOW: {
+    phieu_nhap: {
+      confirmed: ["manager", "admin"], // Gửi thông báo cho manager và admin
+      approved: ["nguoi_tao"], // Thông báo cho người tạo
+      revision_required: ["nguoi_tao"], // Thông báo cho người tạo
+      completed: ["nguoi_tao"], // Thông báo hoàn thành
+    },
+    phieu_xuat: {
+      confirmed: ["manager", "admin"], // Tùy theo loại xuất
+      approved: ["nguoi_tao"],
+      revision_required: ["nguoi_tao"],
+      completed: ["nguoi_tao"],
+    },
+  },
+};
+
+// Default export
+export default {
+  LOAI_PHIEU_NHAP,
+  LOAI_PHIEU_XUAT,
+  TRANG_THAI_PHIEU,
+  WORKFLOW_TYPES,
+  PHAM_CHAT,
+  USER_ROLES,
+  CAP_BAC,
+  LOAI_THONG_BAO,
+  TRANG_THAI_THONG_BAO,
+  WORKFLOW_RULES,
+  getActionPermissions,
+  TAB_CONFIG,
+  NHA_CUNG_CAP_BY_LOAI,
+  DON_VI_NHAN_BY_LOAI,
+  getTrangThaiPhieuLabel,
+  getTrangThaiPhieuColor,
+  getTrangThaiPhieuBgColor,
+  getTrangThaiPhieuTextColor,
+  VALIDATION_RULES,
+  formatLoaiPhieuNhap,
+  formatLoaiPhieuXuat,
+  formatUserRole,
+  formatWorkflowType,
+  getWorkflowDescription,
+  API_ENDPOINTS,
+  DON_VI_TINH,
+  LOAI_KIEM_KE,
+  TRANG_THAI_KIEM_KE,
+  XUAT_KHO_WORKFLOW,
+  NOTIFICATION_WORKFLOW,
 };

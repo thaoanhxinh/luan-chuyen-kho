@@ -635,6 +635,109 @@ const print = async (req, res, params, body, user) => {
     sendResponse(res, 500, false, "Lỗi server");
   }
 };
+const update = async (req, res, params, body, user) => {
+  const client = await pool.connect();
+  try {
+    const { id } = params;
+    const {
+      ngay_kiem_ke,
+      gio_kiem_ke,
+      so_quyet_dinh,
+      don_vi_kiem_ke,
+      ly_do_kiem_ke,
+      loai_kiem_ke,
+      ghi_chu,
+      to_kiem_ke,
+      chi_tiet = [],
+    } = body;
+
+    await client.query("BEGIN");
+
+    // 1. Kiểm tra phiếu có tồn tại và ở trạng thái 'draft' không
+    const phieuCheck = await client.query(
+      "SELECT trang_thai FROM phieu_kiem_ke WHERE id = $1",
+      [id]
+    );
+    if (phieuCheck.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return sendResponse(res, 404, false, "Không tìm thấy phiếu kiểm kê.");
+    }
+    if (phieuCheck.rows[0].trang_thai !== "draft") {
+      await client.query("ROLLBACK");
+      return sendResponse(
+        res,
+        400,
+        false,
+        "Chỉ có thể sửa phiếu ở trạng thái Nháp."
+      );
+    }
+
+    // 2. Cập nhật thông tin chính của phiếu
+    const updatedPhieu = await client.query(
+      `UPDATE phieu_kiem_ke SET 
+        ngay_kiem_ke = $1, gio_kiem_ke = $2, so_quyet_dinh = $3, don_vi_kiem_ke = $4,
+        ly_do_kiem_ke = $5, loai_kiem_ke = $6, ghi_chu = $7, to_kiem_ke = $8, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $9 RETURNING *`,
+      [
+        ngay_kiem_ke,
+        gio_kiem_ke,
+        so_quyet_dinh,
+        don_vi_kiem_ke,
+        ly_do_kiem_ke,
+        loai_kiem_ke,
+        ghi_chu,
+        JSON.stringify(to_kiem_ke),
+        id,
+      ]
+    );
+
+    // 3. Xóa tất cả chi tiết cũ
+    await client.query(
+      "DELETE FROM chi_tiet_kiem_ke WHERE phieu_kiem_ke_id = $1",
+      [id]
+    );
+
+    // 4. Thêm lại chi tiết mới
+    if (chi_tiet.length > 0) {
+      for (const item of chi_tiet) {
+        await client.query(
+          `INSERT INTO chi_tiet_kiem_ke (
+             phieu_kiem_ke_id, hang_hoa_id, so_luong_so_sach, sl_tot, sl_kem_pham_chat, 
+             sl_mat_pham_chat, sl_hong, sl_can_thanh_ly, don_gia, ly_do_chenh_lech, de_nghi_xu_ly
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          [
+            id,
+            item.hang_hoa_id,
+            item.so_luong_so_sach,
+            item.sl_tot || 0,
+            item.sl_kem_pham_chat || 0,
+            item.sl_mat_pham_chat || 0,
+            item.sl_hong || 0,
+            item.sl_can_thanh_ly || 0,
+            item.don_gia,
+            item.ly_do_chenh_lech,
+            item.de_nghi_xu_ly,
+          ]
+        );
+      }
+    }
+
+    await client.query("COMMIT");
+    sendResponse(
+      res,
+      200,
+      true,
+      "Cập nhật phiếu kiểm kê thành công.",
+      updatedPhieu.rows[0]
+    );
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Update Kiem Ke error:", error);
+    sendResponse(res, 500, false, "Lỗi server khi cập nhật phiếu kiểm kê.");
+  } finally {
+    client.release();
+  }
+};
 
 module.exports = {
   getList,

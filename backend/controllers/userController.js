@@ -4,8 +4,8 @@ const { hashPassword } = require("../utils/auth");
 
 const getUsers = async (req, res, query, user) => {
   try {
-    // Check if user has admin role
-    if (user.role !== "admin") {
+    // Only cấp 1 (admin) and cấp 2 (manager) can view this page
+    if (!["admin", "manager"].includes(user.role)) {
       return sendResponse(res, 403, false, "Không có quyền truy cập");
     }
 
@@ -14,6 +14,8 @@ const getUsers = async (req, res, query, user) => {
     const offset = (page - 1) * limit;
     const search = query.search || "";
     const role = query.role || "";
+    const phongBanId = query.phong_ban_id || "";
+    const isActive = query.is_active;
 
     let whereClause = "WHERE 1=1";
     let queryParams = [];
@@ -28,6 +30,40 @@ const getUsers = async (req, res, query, user) => {
     if (role && role !== "all") {
       whereClause += ` AND u.role = $${paramIndex}`;
       queryParams.push(role);
+      paramIndex++;
+    }
+
+    if (phongBanId) {
+      // Include users in selected department (cấp 2 or 3) and all cấp 3 whose parent is the selected cấp 2
+      whereClause += ` AND EXISTS (
+        SELECT 1 FROM phong_ban dp
+        WHERE dp.id = u.phong_ban_id
+          AND (dp.id = $${paramIndex} OR dp.phong_ban_cha_id = $${paramIndex})
+      )`;
+      queryParams.push(parseInt(phongBanId));
+      paramIndex++;
+    }
+
+    if (typeof isActive !== "undefined" && isActive !== "") {
+      // accept true/false or 'active'/'inactive'
+      const statusValue =
+        String(isActive) === "true" || isActive === "active"
+          ? "active"
+          : "inactive";
+      whereClause += ` AND u.trang_thai = $${paramIndex}`;
+      queryParams.push(statusValue);
+      paramIndex++;
+    }
+
+    // Role-based visibility
+    if (user.role === "manager") {
+      // Manager chỉ xem cấp 3 thuộc quyền (phòng ban con của phòng ban mình)
+      whereClause += ` AND (
+        u.phong_ban_id IN (
+          SELECT id FROM phong_ban WHERE phong_ban_cha_id = $${paramIndex} AND cap_bac = 3
+        )
+      )`;
+      queryParams.push(user.phong_ban_id);
       paramIndex++;
     }
 
@@ -173,6 +209,7 @@ const updateUser = async (req, res, params, body, user) => {
       role: userRole,
       phong_ban_id,
       trang_thai,
+      is_active,
     } = body;
 
     // Map role to enum values in current schema
@@ -184,9 +221,23 @@ const updateUser = async (req, res, params, body, user) => {
 
     const dbRole = roleMapping[userRole] || "user";
 
+    // Determine status from either boolean is_active or trang_thai string
+    let statusValue;
+    if (typeof is_active !== "undefined") {
+      statusValue = is_active ? "active" : "inactive";
+    } else if (typeof trang_thai !== "undefined") {
+      statusValue = [true, "active", "true"].includes(trang_thai)
+        ? "active"
+        : "inactive";
+    } else {
+      // keep current if not provided
+      statusValue = undefined;
+    }
+
     const updateQuery = `
       UPDATE users 
-      SET ho_ten = $1, email = $2, phone = $3, role = $4, phong_ban_id = $5, trang_thai = $6, updated_at = NOW()
+      SET ho_ten = $1, email = $2, phone = $3, role = $4, phong_ban_id = $5, 
+          trang_thai = COALESCE($6, trang_thai), updated_at = NOW()
       WHERE id = $7
       RETURNING id, username, ho_ten, email, phone, role::text, phong_ban_id, trang_thai::text
     `;
@@ -197,7 +248,7 @@ const updateUser = async (req, res, params, body, user) => {
       phone,
       dbRole,
       phong_ban_id,
-      trang_thai ? "active" : "inactive",
+      statusValue,
       id,
     ]);
 
@@ -247,6 +298,122 @@ const deleteUser = async (req, res, params, user) => {
   } catch (error) {
     console.error("Delete user error:", error);
     sendResponse(res, 500, false, "Lỗi server", { error: error.message });
+  }
+};
+
+// Get user detail
+const getUserDetail = async (req, res, params, user) => {
+  try {
+    if (!["admin", "manager"].includes(user.role)) {
+      return sendResponse(res, 403, false, "Không có quyền truy cập");
+    }
+
+    const { id } = params;
+
+    // Manager visibility restriction: only users in cấp 3 under their department
+    let visibilityClause = "";
+    let visParams = [];
+    if (user.role === "manager") {
+      visibilityClause = ` AND (
+        u.phong_ban_id IN (
+          SELECT id FROM phong_ban WHERE phong_ban_cha_id = $1 AND cap_bac = 3
+        )
+      )`;
+      visParams = [user.phong_ban_id];
+    }
+
+    const detailQuery = `
+      SELECT 
+        u.id,
+        u.username,
+        u.ho_ten,
+        u.email,
+        u.phone,
+        u.role::text as role,
+        u.trang_thai::text as trang_thai,
+        u.created_at,
+        u.updated_at,
+        u.phong_ban_id,
+        pb.ten_phong_ban,
+        pb.ma_phong_ban,
+        pb.cap_bac,
+        pb.phong_ban_cha_id
+      FROM users u
+      LEFT JOIN phong_ban pb ON u.phong_ban_id = pb.id
+      WHERE u.id = $${visibilityClause ? 2 : 1}
+      ${visibilityClause}
+    `;
+
+    const result = await pool.query(
+      detailQuery,
+      visibilityClause ? [id, ...visParams] : [id]
+    );
+
+    if (result.rows.length === 0) {
+      return sendResponse(res, 404, false, "Không tìm thấy người dùng");
+    }
+
+    const row = result.rows[0];
+    return sendResponse(res, 200, true, "Lấy chi tiết người dùng thành công", {
+      ...row,
+      is_active: row.trang_thai === "active",
+      phong_ban: row.ten_phong_ban
+        ? {
+            id: row.phong_ban_id,
+            ten_phong_ban: row.ten_phong_ban,
+            ma_phong_ban: row.ma_phong_ban,
+            cap_bac: row.cap_bac,
+            phong_ban_cha_id: row.phong_ban_cha_id,
+          }
+        : null,
+    });
+  } catch (error) {
+    console.error("Get user detail error:", error);
+    return sendResponse(res, 500, false, "Lỗi server", {
+      error: error.message,
+    });
+  }
+};
+
+// Update user active status (enable/disable)
+const updateUserStatus = async (req, res, params, body, user) => {
+  try {
+    if (user.role !== "admin") {
+      return sendResponse(res, 403, false, "Không có quyền truy cập");
+    }
+
+    const { id } = params;
+    const { is_active } = body;
+    if (typeof is_active === "undefined") {
+      return sendResponse(res, 400, false, "Thiếu tham số is_active");
+    }
+
+    const statusValue = is_active ? "active" : "inactive";
+    const updateQuery = `
+      UPDATE users 
+      SET trang_thai = $1, updated_at = NOW()
+      WHERE id = $2
+      RETURNING id, username, ho_ten, role::text, trang_thai::text
+    `;
+    const result = await pool.query(updateQuery, [statusValue, id]);
+    if (result.rows.length === 0) {
+      return sendResponse(res, 404, false, "Không tìm thấy người dùng");
+    }
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Cập nhật trạng thái tài khoản thành công",
+      {
+        ...result.rows[0],
+        is_active: result.rows[0].trang_thai === "active",
+      }
+    );
+  } catch (error) {
+    console.error("Update user status error:", error);
+    return sendResponse(res, 500, false, "Lỗi server", {
+      error: error.message,
+    });
   }
 };
 
@@ -302,36 +469,71 @@ const updateUserRole = async (req, res, params, body, user) => {
   }
 };
 
-const resetPassword = async (req, res, params, user) => {
+// Self-only: change password
+const changeOwnPassword = async (req, res, body, user) => {
   try {
-    if (user.role !== "admin") {
-      return sendResponse(res, 403, false, "Không có quyền truy cập");
+    const { current_password, new_password } = body;
+    if (!current_password || !new_password) {
+      return sendResponse(res, 400, false, "Thiếu thông tin mật khẩu");
     }
 
-    const { id } = params;
-    const newPassword = "123456"; // Default password
-    const hashedPassword = await hashPassword(newPassword);
-
-    const updateQuery = `
-      UPDATE users 
-      SET password = $1, updated_at = NOW()
-      WHERE id = $2
-      RETURNING id, username, ho_ten
-    `;
-
-    const result = await pool.query(updateQuery, [hashedPassword, id]);
-
-    if (result.rows.length === 0) {
+    // Verify current password
+    const getQuery = `SELECT id, password FROM users WHERE id = $1`;
+    const userResult = await pool.query(getQuery, [user.id]);
+    if (userResult.rows.length === 0) {
       return sendResponse(res, 404, false, "Không tìm thấy người dùng");
     }
+    const bcrypt = require("bcryptjs");
+    const valid = await bcrypt.compare(
+      current_password,
+      userResult.rows[0].password
+    );
+    if (!valid) {
+      return sendResponse(res, 400, false, "Mật khẩu hiện tại không đúng");
+    }
 
-    sendResponse(res, 200, true, "Reset mật khẩu thành công", {
-      user: result.rows[0],
-      newPassword: newPassword,
+    const hashedPassword = await hashPassword(new_password);
+    await pool.query(
+      `UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2`,
+      [hashedPassword, user.id]
+    );
+    return sendResponse(res, 200, true, "Đổi mật khẩu thành công");
+  } catch (error) {
+    console.error("Change own password error:", error);
+    return sendResponse(res, 500, false, "Lỗi server", {
+      error: error.message,
+    });
+  }
+};
+
+// Self-only: change username
+const changeOwnUsername = async (req, res, body, user) => {
+  try {
+    const { username } = body;
+    if (!username) {
+      return sendResponse(res, 400, false, "Thiếu username");
+    }
+    // Check exists
+    const exists = await pool.query(
+      `SELECT id FROM users WHERE username = $1 AND id != $2`,
+      [username, user.id]
+    );
+    if (exists.rows.length > 0) {
+      return sendResponse(res, 400, false, "Tên đăng nhập đã tồn tại");
+    }
+    await pool.query(
+      `UPDATE users SET username = $1, updated_at = NOW() WHERE id = $2`,
+      [username, user.id]
+    );
+    return sendResponse(res, 200, true, "Cập nhật tên đăng nhập thành công", {
+      id: user.id,
+      username,
     });
   } catch (error) {
-    console.error("Reset password error:", error);
-    sendResponse(res, 500, false, "Lỗi server", { error: error.message });
+    console.error("Change own username error:", error);
+    return sendResponse(res, 500, false, "Lỗi server", {
+      error: error.message,
+    });
   }
 };
 
@@ -341,5 +543,8 @@ module.exports = {
   updateUser,
   deleteUser,
   updateUserRole,
-  resetPassword,
+  getUserDetail,
+  updateUserStatus,
+  changeOwnPassword,
+  changeOwnUsername,
 };

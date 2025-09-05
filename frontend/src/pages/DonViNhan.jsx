@@ -17,6 +17,7 @@ import { formatDate } from "../utils/helpers";
 import Modal from "../components/common/Modal";
 import Pagination from "../components/common/Pagination";
 import Loading from "../components/common/Loading";
+import PageHeader from "../components/common/PageHeader";
 import toast from "react-hot-toast";
 
 // Form tạo/chỉnh sửa đơn vị nhận
@@ -488,16 +489,13 @@ const DonViNhan = () => {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center">
-            <Building2 className="mr-2 h-5 w-5 text-green-600" />
-            Quản lý đơn vị nhận
-          </h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Quản lý thông tin các đơn vị nhận hàng hóa
-          </p>
-        </div>
+      <PageHeader
+        title="Quản lý đơn vị nhận"
+        subtitle="Quản lý thông tin các đơn vị nhận hàng hóa"
+        Icon={Building2}
+      />
+
+      <div className="flex justify-end">
         <button
           onClick={() => setShowCreateModal(true)}
           className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors"
@@ -570,8 +568,8 @@ const DonViNhan = () => {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            <div className="overflow-hidden">
+              <table className="w-full table-fixed">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th
@@ -612,16 +610,16 @@ const DonViNhan = () => {
                       key={item.id}
                       className="hover:bg-gray-50 transition-colors"
                     >
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className="px-4 py-3">
                         <div className="flex items-center">
                           <Users className="h-4 w-4 text-green-600 mr-2" />
-                          <span className="text-sm font-medium text-gray-900">
+                          <span className="text-sm font-medium text-gray-900 truncate">
                             {item.ma_don_vi}
                           </span>
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="text-sm text-gray-900 font-medium">
+                        <div className="text-sm text-gray-900 font-medium truncate">
                           {item.ten_don_vi}
                         </div>
                       </td>
@@ -660,12 +658,12 @@ const DonViNhan = () => {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className="px-4 py-3">
                         <div className="text-sm text-gray-900">
                           {formatDate(item.created_at)}
                         </div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                      <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center space-x-1">
                           <button
                             onClick={() => handleViewDetail(item)}

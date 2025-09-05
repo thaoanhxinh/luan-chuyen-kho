@@ -16,6 +16,7 @@ import { formatDate } from "../../utils/helpers";
 import Modal from "../../components/common/Modal";
 import Pagination from "../../components/common/Pagination";
 import Loading from "../../components/common/Loading";
+import PageHeader from "../../components/common/PageHeader";
 import toast from "react-hot-toast";
 
 const Departments = () => {
@@ -39,6 +40,8 @@ const Departments = () => {
     ma_phong_ban: "",
     mo_ta: "",
     quan_ly_id: "",
+    cap_bac: 3,
+    phong_ban_cha_id: "",
     is_active: true,
   });
 
@@ -251,32 +254,28 @@ const Departments = () => {
   return (
     <div className="p-6">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Quản lý phòng ban
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Quản lý cơ cấu tổ chức và phân công nhân sự
-          </p>
-        </div>
-        <div className="flex space-x-3">
-          <button
-            onClick={loadDepartments}
-            disabled={loading}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center space-x-2"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-            <span>Làm mới</span>
-          </button>
-          <button
-            onClick={handleCreateDepartment}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Thêm phòng ban</span>
-          </button>
-        </div>
+      <PageHeader
+        title="Quản lý phòng ban"
+        subtitle="Quản lý cơ cấu tổ chức và phân công nhân sự"
+        Icon={Building2}
+      />
+
+      <div className="flex justify-end space-x-3">
+        <button
+          onClick={loadDepartments}
+          disabled={loading}
+          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center space-x-2"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          <span>Làm mới</span>
+        </button>
+        <button
+          onClick={handleCreateDepartment}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Thêm phòng ban</span>
+        </button>
       </div>
 
       {/* Search */}
@@ -300,8 +299,8 @@ const Departments = () => {
           <Loading />
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+            <div className="overflow-hidden">
+              <table className="w-full table-fixed divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">

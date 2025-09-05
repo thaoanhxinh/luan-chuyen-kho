@@ -1,8 +1,5 @@
 const pool = require("../config/database");
 
-/**
- * Tạo thông báo mới
- */
 const createNotification = async (notificationData) => {
   const {
     nguoi_nhan,
@@ -39,9 +36,6 @@ const createNotification = async (notificationData) => {
   }
 };
 
-/**
- * Tạo thông báo cho nhiều users - HELPER FUNCTION
- */
 const createNotifications = async (
   userIds,
   title,
@@ -72,9 +66,6 @@ const createNotifications = async (
   }
 };
 
-/**
- * Lấy danh sách thông báo của user với phân trang
- */
 const getUserNotifications = async (userId, filters = {}) => {
   const {
     page = 1,
@@ -143,9 +134,6 @@ const getUserNotifications = async (userId, filters = {}) => {
   }
 };
 
-/**
- * Đánh dấu thông báo đã đọc
- */
 const markAsRead = async (notificationIds, userId) => {
   try {
     const result = await pool.query(
@@ -163,9 +151,6 @@ const markAsRead = async (notificationIds, userId) => {
   }
 };
 
-/**
- * Đánh dấu tất cả thông báo đã đọc
- */
 const markAllAsRead = async (userId) => {
   try {
     const result = await pool.query(
@@ -183,9 +168,6 @@ const markAllAsRead = async (userId) => {
   }
 };
 
-/**
- * Lấy số lượng thông báo chưa đọc
- */
 const getUnreadCount = async (userId) => {
   try {
     const result = await pool.query(
@@ -202,9 +184,6 @@ const getUnreadCount = async (userId) => {
   }
 };
 
-/**
- * Lấy thống kê thông báo
- */
 const getNotificationStats = async (userId) => {
   try {
     const result = await pool.query(
@@ -233,9 +212,6 @@ const getNotificationStats = async (userId) => {
   }
 };
 
-/**
- * Dọn dẹp thông báo cũ
- */
 const cleanupOldNotifications = async (daysToKeep) => {
   try {
     const result = await pool.query(
@@ -251,9 +227,6 @@ const cleanupOldNotifications = async (daysToKeep) => {
   }
 };
 
-/**
- * Tạo thông báo hệ thống cho nhiều users
- */
 const notifySystemMessage = async (userIds, title, content, metadata = {}) => {
   try {
     return await createNotifications(
@@ -276,157 +249,283 @@ const notifySystemMessage = async (userIds, title, content, metadata = {}) => {
 /**
  * PHIẾU NHẬP - CẦN DUYỆT
  */
-const notifyPhieuNhapCanDuyet = async (phieuData, nguoiDuyet) => {
-  const metadata = {
-    phieu_id: phieuData.id,
-    loai_phieu: "nhap_kho",
-    so_phieu: phieuData.so_phieu,
-    action: "can_duyet",
-  };
+const notifyPhieuNhapCanDuyet = async (phieuData, nguoiDuyetIds) => {
+  const title = `Phiếu nhập ${phieuData.so_phieu} cần duyệt`;
+  const content = `Phiếu nhập kho từ ${
+    phieuData.phong_ban?.ten_phong_ban || "N/A"
+  } đang chờ phê duyệt`;
 
-  // URL đúng với tab và highlight
-  const url = `/nhap-kho?tab=can-duyet&highlight=${phieuData.id}`;
-
-  return await createNotification({
-    nguoi_nhan: nguoiDuyet,
-    loai_thong_bao: "phieu_nhap_can_duyet",
-    tieu_de: `Phiếu nhập ${phieuData.so_phieu} cần duyệt`,
-    noi_dung: `Phiếu nhập kho từ ${
-      phieuData.phong_ban?.ten_phong_ban || "N/A"
-    } đang chờ phê duyệt`,
-    url_redirect: url,
-    metadata,
-    muc_do_uu_tien: "high",
-  });
+  return await createNotificationsWithDynamicURL(
+    Array.isArray(nguoiDuyetIds) ? nguoiDuyetIds : [nguoiDuyetIds],
+    title,
+    content,
+    "phieu_nhap_can_duyet",
+    phieuData,
+    { priority: "high", action: "can_duyet" }
+  );
 };
 
 /**
  * PHIẾU NHẬP - ĐÃ DUYỆT
  */
-const notifyPhieuNhapDuyet = async (phieuData, nguoiTao) => {
-  const metadata = {
-    phieu_id: phieuData.id,
-    loai_phieu: "nhap_kho",
-    so_phieu: phieuData.so_phieu,
-    action: "duyet",
-  };
+const notifyPhieuNhapDuyet = async (phieuData, nguoiTaoIds) => {
+  const title = `Phiếu nhập ${phieuData.so_phieu} đã được duyệt`;
+  const content = `Phiếu nhập kho của bạn đã được phê duyệt và có thể thực hiện`;
 
-  // URL đúng với tab và highlight
-  const url = `/nhap-kho?tab=da-duyet&highlight=${phieuData.id}`;
-
-  return await createNotification({
-    nguoi_nhan: nguoiTao,
-    loai_thong_bao: "phieu_nhap_duyet",
-    tieu_de: `Phiếu nhập ${phieuData.so_phieu} đã được duyệt`,
-    noi_dung: `Phiếu nhập kho của bạn đã được phê duyệt và có thể thực hiện`,
-    url_redirect: url,
-    metadata,
-    muc_do_uu_tien: "normal",
-  });
+  return await createNotificationsWithDynamicURL(
+    Array.isArray(nguoiTaoIds) ? nguoiTaoIds : [nguoiTaoIds],
+    title,
+    content,
+    "phieu_nhap_duyet",
+    phieuData,
+    { priority: "normal", action: "duyet" }
+  );
 };
 
-/**
- * PHIẾU NHẬP - CẦN SỬA
- */
-const notifyPhieuNhapCanSua = async (phieuData, nguoiTao, ghiChuPhanHoi) => {
-  const metadata = {
-    phieu_id: phieuData.id,
-    loai_phieu: "nhap_kho",
-    so_phieu: phieuData.so_phieu,
-    action: "can_sua",
-    ghi_chu_phan_hoi: ghiChuPhanHoi,
-  };
+const notifyPhieuNhapCanSua = async (phieuData, nguoiTaoId, ghiChuPhanHoi) => {
+  const title = `Phiếu nhập ${phieuData.so_phieu} cần chỉnh sửa`;
+  const content = `Phiếu nhập kho của bạn cần được chỉnh sửa. Lý do: ${ghiChuPhanHoi}`;
 
-  // URL đúng với tab và highlight
-  const url = `/nhap-kho?tab=can-sua&highlight=${phieuData.id}`;
-
-  return await createNotification({
-    nguoi_nhan: nguoiTao,
-    loai_thong_bao: "phieu_nhap_can_sua",
-    tieu_de: `Phiếu nhập ${phieuData.so_phieu} cần chỉnh sửa`,
-    noi_dung: `Phiếu nhập kho của bạn cần được chỉnh sửa. Lý do: ${ghiChuPhanHoi}`,
-    url_redirect: url,
-    metadata,
-    muc_do_uu_tien: "high",
-  });
+  return await createNotificationsWithDynamicURL(
+    [nguoiTaoId],
+    title,
+    content,
+    "phieu_nhap_can_sua",
+    phieuData,
+    {
+      priority: "high",
+      action: "can_sua",
+      ghi_chu_phan_hoi: ghiChuPhanHoi,
+    }
+  );
 };
 
-/**
- * PHIẾU XUẤT - CẦN DUYỆT
- */
-const notifyPhieuXuatCanDuyet = async (phieuData, nguoiDuyet) => {
-  const metadata = {
-    phieu_id: phieuData.id,
-    loai_phieu: "xuat_kho",
-    so_phieu: phieuData.so_phieu,
-    action: "can_duyet",
-  };
+const notifyPhieuXuatCanDuyet = async (phieuData, nguoiDuyetIds) => {
+  let title, content;
 
-  // URL đúng với tab và highlight
-  const url = `/xuat-kho?tab=can-duyet&highlight=${phieuData.id}`;
-
-  return await createNotification({
-    nguoi_nhan: nguoiDuyet,
-    loai_thong_bao: "phieu_xuat_can_duyet",
-    tieu_de: `Phiếu xuất ${phieuData.so_phieu} cần duyệt`,
-    noi_dung: `Phiếu xuất kho từ ${
+  // Xác định người duyệt dựa trên loại xuất
+  if (phieuData.loai_xuat === "don_vi_su_dung") {
+    title = `Phiếu xuất ${phieuData.so_phieu} cần duyệt (Sử dụng)`;
+    content = `Phiếu xuất cho đơn vị sử dụng từ ${
       phieuData.phong_ban?.ten_phong_ban || "N/A"
-    } đang chờ phê duyệt`,
-    url_redirect: url,
-    metadata,
-    muc_do_uu_tien: "high",
-  });
+    } cần được cấp trên duyệt`;
+  } else if (phieuData.loai_xuat === "don_vi_nhan") {
+    title = `Phiếu xuất ${phieuData.so_phieu} cần xác nhận (Đơn vị nhận)`;
+    content = `Phiếu xuất giao cho đơn vị ${
+      phieuData.don_vi_nhan?.ten || "N/A"
+    } cần xác nhận nhận hàng`;
+  }
+
+  return await createNotificationsWithDynamicURL(
+    Array.isArray(nguoiDuyetIds) ? nguoiDuyetIds : [nguoiDuyetIds],
+    title,
+    content,
+    "phieu_xuat_can_duyet",
+    phieuData,
+    { priority: "high", action: "can_duyet" }
+  );
+};
+const notifyPhieuXuatDuyet = async (phieuData, nguoiTaoId) => {
+  const title = `Phiếu xuất ${phieuData.so_phieu} đã được duyệt`;
+  const content = `Phiếu xuất kho của bạn đã được phê duyệt và có thể thực hiện`;
+
+  return await createNotificationsWithDynamicURL(
+    [nguoiTaoId],
+    title,
+    content,
+    "phieu_xuat_duyet",
+    phieuData,
+    { priority: "normal", action: "duyet" }
+  );
 };
 
-/**
- * PHIẾU XUẤT - ĐÃ DUYỆT
- */
-const notifyPhieuXuatDuyet = async (phieuData, nguoiTao) => {
-  const metadata = {
-    phieu_id: phieuData.id,
-    loai_phieu: "xuat_kho",
-    so_phieu: phieuData.so_phieu,
-    action: "duyet",
-  };
+const notifyPhieuXuatCanSua = async (phieuData, nguoiTaoId, ghiChuPhanHoi) => {
+  const title = `Phiếu xuất ${phieuData.so_phieu} cần chỉnh sửa`;
+  const content = `Phiếu xuất kho của bạn cần được chỉnh sửa. Lý do: ${ghiChuPhanHoi}`;
 
-  // URL đúng với tab và highlight
-  const url = `/xuat-kho?tab=da-duyet&highlight=${phieuData.id}`;
-
-  return await createNotification({
-    nguoi_nhan: nguoiTao,
-    loai_thong_bao: "phieu_xuat_duyet",
-    tieu_de: `Phiếu xuất ${phieuData.so_phieu} đã được duyệt`,
-    noi_dung: `Phiếu xuất kho của bạn đã được phê duyệt và có thể thực hiện`,
-    url_redirect: url,
-    metadata,
-    muc_do_uu_tien: "normal",
-  });
+  return await createNotificationsWithDynamicURL(
+    [nguoiTaoId],
+    title,
+    content,
+    "phieu_xuat_can_sua",
+    phieuData,
+    {
+      priority: "high",
+      action: "can_sua",
+      ghi_chu_phan_hoi: ghiChuPhanHoi,
+    }
+  );
 };
 
-/**
- * PHIẾU XUẤT - CẦN SỬA
- */
-const notifyPhieuXuatCanSua = async (phieuData, nguoiTao, ghiChuPhanHoi) => {
-  const metadata = {
-    phieu_id: phieuData.id,
-    loai_phieu: "xuat_kho",
-    so_phieu: phieuData.so_phieu,
-    action: "can_sua",
-    ghi_chu_phan_hoi: ghiChuPhanHoi,
-  };
+const generateNotificationURL = (
+  phieuData,
+  notificationType,
+  recipientRole,
+  recipientCapBac,
+  recipientPhongBanId
+) => {
+  const baseURL = "/nhap-kho";
+  let tab = "tat-ca"; // default fallback
 
-  // URL đúng với tab và highlight
-  const url = `/xuat-kho?tab=can-sua&highlight=${phieuData.id}`;
+  // Logic xác định tab dựa trên workflow type và notification type
+  switch (notificationType) {
+    case "phieu_nhap_can_duyet":
+      // Phiếu cần người nhận duyệt
+      if (
+        phieuData.workflow_type === "cap3_tu_mua" &&
+        recipientRole === "manager"
+      ) {
+        tab = "can-toi-duyet"; // Manager duyệt cho cấp 3 tự mua
+      } else if (
+        phieuData.workflow_type === "cap3_tu_cap_tren" &&
+        recipientRole === "admin"
+      ) {
+        tab = "can-duyet-cuoi"; // Admin duyệt cuối cho cấp 3 từ cấp trên
+      } else if (phieuData.workflow_type === "cap3_dieu_chuyen") {
+        if (recipientRole === "manager") {
+          tab = "can-toi-duyet"; // Manager duyệt trước cho điều chuyển
+        } else if (
+          recipientCapBac === 3 &&
+          recipientPhongBanId === phieuData.phong_ban_cung_cap_id
+        ) {
+          tab = "dieu-chuyen-can-duyet"; // Cấp 3 đích duyệt xuất
+        }
+      } else if (recipientRole === "admin") {
+        tab = "can-duyet-cuoi"; // Admin duyệt các trường hợp khác
+      }
+      break;
 
-  return await createNotification({
-    nguoi_nhan: nguoiTao,
-    loai_thong_bao: "phieu_xuat_can_sua",
-    tieu_de: `Phiếu xuất ${phieuData.so_phieu} cần chỉnh sửa`,
-    noi_dung: `Phiếu xuất kho của bạn cần được chỉnh sửa. Lý do: ${ghiChuPhanHoi}`,
-    url_redirect: url,
-    metadata,
-    muc_do_uu_tien: "high",
-  });
+    case "phieu_nhap_duyet":
+      // Phiếu đã được duyệt
+      tab = "da-duyet";
+      break;
+
+    case "phieu_nhap_can_sua":
+      // Phiếu cần sửa
+      tab = "can-sua";
+      break;
+
+    case "phieu_xuat_can_duyet":
+      // Phiếu xuất cần duyệt
+      if (recipientRole === "manager") {
+        tab = "can-toi-duyet";
+      } else if (recipientRole === "admin") {
+        tab = "can-duyet-cuoi";
+      }
+      break;
+
+    case "phieu_xuat_duyet":
+      tab = "da-duyet";
+      break;
+
+    case "phieu_xuat_can_sua":
+      tab = "can-sua";
+      break;
+
+    default:
+      tab = "tat-ca";
+  }
+
+  return `${baseURL}?tab=${tab}`;
+};
+
+const createNotificationsWithDynamicURL = async (
+  userIds,
+  title,
+  content,
+  type,
+  phieuData,
+  metadata = {}
+) => {
+  try {
+    const notifications = [];
+
+    for (const userId of userIds) {
+      // 🔧 THÊM VALIDATION ĐÂY:
+      const validUserId = parseInt(userId);
+
+      if (isNaN(validUserId)) {
+        console.error(`Invalid userId: ${userId}, skipping...`);
+        continue;
+      }
+
+      const recipientInfo = await pool.query(
+        `SELECT u.role, pb.cap_bac, u.phong_ban_id 
+         FROM users u 
+         LEFT JOIN phong_ban pb ON u.phong_ban_id = pb.id 
+         WHERE u.id = $1`,
+        [validUserId] // ← SỬA: dùng validUserId
+      );
+
+      let url = "/nhap-kho?tab=tat-ca"; // default fallback
+
+      if (recipientInfo.rows.length > 0) {
+        const recipient = recipientInfo.rows[0];
+        url = generateNotificationURL(
+          phieuData,
+          type,
+          recipient.role,
+          recipient.cap_bac,
+          recipient.phong_ban_id
+        );
+      }
+
+      const notification = await createNotification({
+        nguoi_nhan: userId,
+        loai_thong_bao: type,
+        tieu_de: title,
+        noi_dung: content,
+        url_redirect: url,
+        metadata: {
+          ...metadata,
+          phieu_id: phieuData.id,
+          workflow_type: phieuData.workflow_type,
+          so_phieu: phieuData.so_phieu,
+        },
+        muc_do_uu_tien: metadata.priority || "normal",
+      });
+
+      notifications.push(notification);
+    }
+
+    return notifications;
+  } catch (error) {
+    console.error("Error creating notifications with dynamic URL:", error);
+    throw error;
+  }
+};
+
+const notifyAutoLinkedPhieu = async (phieuGoc, phieuTuDong, action) => {
+  let title,
+    content,
+    recipients = [];
+
+  if (action === "created") {
+    title = `Phiếu ${phieuTuDong.so_phieu} được tạo tự động`;
+    content = `Hệ thống đã tự động tạo phiếu ${phieuTuDong.loai_phieu} liên kết với phiếu ${phieuGoc.so_phieu}`;
+
+    // Thông báo cho người liên quan
+    if (phieuTuDong.loai_phieu === "xuat") {
+      recipients = [phieuTuDong.nguoi_tao]; // Thông báo cho phòng ban cung cấp
+    } else if (phieuTuDong.loai_phieu === "nhap") {
+      recipients = [phieuTuDong.nguoi_tao]; // Thông báo cho đơn vị nhận
+    }
+  } else if (action === "updated") {
+    title = `Phiếu liên kết ${phieuTuDong.so_phieu} được cập nhật`;
+    content = `Do phiếu ${phieuGoc.so_phieu} thay đổi, phiếu liên kết đã được tự động cập nhật`;
+    recipients = [phieuTuDong.nguoi_tao];
+  }
+
+  if (recipients.length > 0) {
+    return await createNotificationsWithDynamicURL(
+      recipients,
+      title,
+      content,
+      "system",
+      phieuTuDong,
+      { priority: "normal", action: "auto_linked" }
+    );
+  }
 };
 
 module.exports = {
@@ -446,4 +545,8 @@ module.exports = {
   notifyPhieuXuatCanDuyet,
   notifyPhieuXuatDuyet,
   notifyPhieuXuatCanSua,
+  generateNotificationURL,
+  createNotificationsWithDynamicURL,
+  createNotifications: createNotificationsWithDynamicURL,
+  notifyAutoLinkedPhieu,
 };

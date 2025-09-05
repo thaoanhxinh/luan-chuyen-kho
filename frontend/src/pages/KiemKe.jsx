@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   Printer,
   MoreVertical,
+  Pencil,
 } from "lucide-react";
 import { kiemKeService } from "../services/kiemKeService";
 import { formatCurrency, formatDate, formatNumber } from "../utils/helpers";
@@ -16,8 +17,10 @@ import { TRANG_THAI_KIEM_KE, LOAI_KIEM_KE } from "../utils/constants";
 import Modal from "../components/common/Modal";
 import Pagination from "../components/common/Pagination";
 import Loading from "../components/common/Loading";
+import PageHeader from "../components/common/PageHeader";
 import CreateKiemKeForm from "../components/forms/CreateKiemKeForm";
 import PhieuKiemKeDetail from "../components/details/PhieuKiemKeDetail";
+import EditKiemKeForm from "../components/forms/EditKiemKeForm";
 import toast from "react-hot-toast";
 
 // Component Dropdown Actions
@@ -49,6 +52,13 @@ const ActionDropdown = ({ phieu, onAction }) => {
       icon: Eye,
       color: "text-blue-600 hover:text-blue-800 hover:bg-blue-50",
       show: true,
+    },
+    {
+      key: "edit",
+      label: "Sửa phiếu",
+      icon: Pencil,
+      color: "text-yellow-600 hover:text-yellow-800 hover:bg-yellow-50",
+      show: phieu.trang_thai === "draft",
     },
     {
       key: "approve",
@@ -136,6 +146,7 @@ const KiemKe = () => {
   });
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [selectedPhieu, setSelectedPhieu] = useState(null);
   const [data, setData] = useState(null);
@@ -191,6 +202,11 @@ const KiemKe = () => {
     setShowPrintModal(true);
   };
 
+  const handleEdit = (phieu) => {
+    setSelectedPhieu(phieu);
+    setShowEditModal(true);
+  };
+
   const handleApprove = async (id) => {
     if (window.confirm("Bạn có chắc muốn duyệt phiếu kiểm kê này?")) {
       try {
@@ -236,11 +252,6 @@ const KiemKe = () => {
     return sortConfig.direction === "asc" ? "↑" : "↓";
   };
 
-  const handleFormSuccess = () => {
-    setShowCreateModal(false);
-    fetchData();
-  };
-
   const handleFormCancel = () => {
     setShowCreateModal(false);
   };
@@ -252,6 +263,9 @@ const KiemKe = () => {
     switch (actionKey) {
       case "view":
         handleViewDetail(phieuId);
+        break;
+      case "edit":
+        handleEdit(phieu);
         break;
       case "approve":
         handleApprove(phieuId);
@@ -267,19 +281,22 @@ const KiemKe = () => {
     }
   };
 
+  const handleFormSuccess = (modalType) => {
+    if (modalType === "create") setShowCreateModal(false);
+    if (modalType === "edit") setShowEditModal(false);
+    fetchData();
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center">
-            <ClipboardCheck className="mr-2 h-5 w-5 text-indigo-600" />
-            Quản lý kiểm kê kho
-          </h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Quản lý các phiếu kiểm kê định kỳ và đột xuất
-          </p>
-        </div>
+      <PageHeader
+        title="Quản lý kiểm kê kho"
+        subtitle="Quản lý các phiếu kiểm kê định kỳ và đột xuất"
+        Icon={ClipboardCheck}
+      />
+
+      <div className="flex justify-end">
         <button
           onClick={() => setShowCreateModal(true)}
           className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors"
@@ -392,8 +409,8 @@ const KiemKe = () => {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-full table-fixed">
+            <div className="overflow-hidden">
+              <table className="w-full table-fixed">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th
@@ -543,6 +560,21 @@ const KiemKe = () => {
           onSuccess={handleFormSuccess}
           onCancel={handleFormCancel}
         />
+      </Modal>
+
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title={`Sửa phiếu kiểm kê: ${selectedPhieu?.so_phieu}`}
+        size="full"
+      >
+        {selectedPhieu && (
+          <EditKiemKeForm
+            phieuId={selectedPhieu.id}
+            onSuccess={() => handleFormSuccess("edit")}
+            onCancel={() => setShowEditModal(false)}
+          />
+        )}
       </Modal>
 
       {/* Detail Modal */}

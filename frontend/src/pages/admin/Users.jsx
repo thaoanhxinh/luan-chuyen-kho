@@ -680,20 +680,17 @@ import {
   Search,
   Edit,
   Trash2,
-  Shield,
   RefreshCw,
-  Eye,
-  EyeOff,
   UserCheck,
-  UserX,
-  Mail,
-  Key,
+  MoreVertical,
 } from "lucide-react";
 import { userService } from "../../services/userService";
+import { departmentService } from "../../services/departmentService";
 import { formatDate } from "../../utils/helpers";
 import Modal from "../../components/common/Modal";
 import Pagination from "../../components/common/Pagination";
 import Loading from "../../components/common/Loading";
+import PageHeader from "../../components/common/PageHeader";
 import toast from "react-hot-toast";
 
 const Users = () => {
@@ -711,9 +708,11 @@ const Users = () => {
   });
 
   // Modal states
-  const [showUserModal, setShowUserModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [openActionMenuId, setOpenActionMenuId] = useState(null);
 
   // Form states
   const [userForm, setUserForm] = useState({
@@ -726,11 +725,44 @@ const Users = () => {
     is_active: true,
   });
 
+  // Department hierarchy selection for role-based assignment
+  const [selectedCap2Id, setSelectedCap2Id] = useState("");
+
   // Load data
   useEffect(() => {
     loadUsers();
     loadDepartments();
   }, [currentPage, search, filters]);
+
+  // Sync cap2 selection when editing or role changes
+  useEffect(() => {
+    if (!Array.isArray(departments) || departments.length === 0) return;
+
+    if (userForm.role === "manager") {
+      // manager must pick a cấp 2 department
+      const current = departments.find(
+        (d) => d.id === Number(userForm.phong_ban_id)
+      );
+      if (!current || current.cap_bac !== 2) {
+        setSelectedCap2Id("");
+      } else {
+        setSelectedCap2Id(String(current.id));
+      }
+    } else if (userForm.role === "user") {
+      // user must pick cap2 then cap3
+      const current = departments.find(
+        (d) => d.id === Number(userForm.phong_ban_id)
+      );
+      if (current && current.cap_bac === 3) {
+        setSelectedCap2Id(String(current.phong_ban_cha_id || ""));
+      } else {
+        // reset when role changes
+        setSelectedCap2Id("");
+      }
+    } else {
+      setSelectedCap2Id("");
+    }
+  }, [userForm.role, userForm.phong_ban_id, departments]);
 
   const loadUsers = async () => {
     try {
@@ -761,17 +793,14 @@ const Users = () => {
 
   const loadDepartments = async () => {
     try {
-      const response = await userService.getDepartmentsList();
+      const response = await departmentService.getList({ page: 1, limit: 999 });
       if (response.success) {
-        // Ensure departments is always an array
-        setDepartments(Array.isArray(response.data) ? response.data : []);
+        setDepartments(response.data.items || []);
       } else {
-        // Set empty array on failure
         setDepartments([]);
       }
     } catch (error) {
       console.error("Load departments error:", error);
-      // Set empty array on error
       setDepartments([]);
     }
   };
@@ -807,7 +836,8 @@ const Users = () => {
 
   const handleCreateUser = () => {
     resetForm();
-    setShowUserModal(true);
+    setIsEditing(false);
+    setShowEditModal(true);
   };
 
   const handleEditUser = (user) => {
@@ -822,7 +852,7 @@ const Users = () => {
     });
     setSelectedUser(user);
     setIsEditing(true);
-    setShowUserModal(true);
+    setShowEditModal(true);
   };
 
   const handleSubmitUser = async (e) => {
@@ -862,7 +892,7 @@ const Users = () => {
             ? "Cập nhật người dùng thành công"
             : "Tạo người dùng thành công"
         );
-        setShowUserModal(false);
+        setShowEditModal(false);
         resetForm();
         loadUsers();
       } else {
@@ -901,29 +931,36 @@ const Users = () => {
     }
   };
 
-  const handleResetPassword = async (user) => {
-    if (
-      !window.confirm(
-        `Bạn có chắc chắn muốn reset mật khẩu cho "${user.ho_ten}"?`
-      )
-    ) {
-      return;
-    }
-
+  const handleToggleActive = async (u) => {
     try {
       setLoading(true);
-      const response = await userService.resetPassword(user.id);
-
-      if (response.success) {
-        toast.success("Reset mật khẩu thành công");
+      const resp = await userService.updateStatus(u.id, !u.is_active);
+      if (resp.success) {
+        toast.success("Cập nhật trạng thái thành công");
+        await loadUsers();
       } else {
-        toast.error(response.message || "Có lỗi xảy ra khi reset mật khẩu");
+        toast.error(resp.message || "Không thể cập nhật trạng thái");
       }
-    } catch (error) {
-      console.error("Reset password error:", error);
-      toast.error("Có lỗi xảy ra khi reset mật khẩu");
+    } catch (e) {
+      console.error("Update status error:", e);
+      toast.error("Lỗi khi cập nhật trạng thái");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleViewDetail = async (u) => {
+    try {
+      const resp = await userService.getDetail(u.id);
+      if (resp.success) {
+        setSelectedUser(resp.data);
+        setShowDetailModal(true);
+      } else {
+        toast.error(resp.message || "Không thể lấy chi tiết tài khoản");
+      }
+    } catch (e) {
+      console.error("Get detail error:", e);
+      toast.error("Lỗi khi lấy chi tiết tài khoản");
     }
   };
 
@@ -960,32 +997,28 @@ const Users = () => {
   return (
     <div className="p-6">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Quản lý người dùng
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Quản lý tài khoản và phân quyền người dùng
-          </p>
-        </div>
-        <div className="flex space-x-3">
-          <button
-            onClick={loadUsers}
-            disabled={loading}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center space-x-2"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-            <span>Làm mới</span>
-          </button>
-          <button
-            onClick={handleCreateUser}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Thêm người dùng</span>
-          </button>
-        </div>
+      <PageHeader
+        title="Quản lý người dùng"
+        subtitle="Quản lý tài khoản và phân quyền người dùng"
+        Icon={UserCheck}
+      />
+
+      <div className="flex justify-end space-x-3">
+        <button
+          onClick={loadUsers}
+          disabled={loading}
+          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center space-x-2"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          <span>Làm mới</span>
+        </button>
+        <button
+          onClick={handleCreateUser}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Thêm người dùng</span>
+        </button>
       </div>
 
       {/* Filters */}
@@ -1003,7 +1036,7 @@ const Users = () => {
               <option value="">Tất cả vai trò</option>
               <option value="admin">Admin</option>
               <option value="manager">Quản lý</option>
-              <option value="supervisor">Giám sát</option>
+              {/* Only 3 roles as required */}
               <option value="user">Người dùng</option>
             </select>
           </div>
@@ -1060,13 +1093,13 @@ const Users = () => {
       </div>
 
       {/* Users Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white rounded-lg shadow overflow-visible">
         {loading ? (
           <Loading />
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+            <div className="overflow-hidden">
+              <table className="w-full table-fixed divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1117,30 +1150,51 @@ const Users = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {formatDate(user.created_at)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex justify-end space-x-2">
-                          <button
-                            onClick={() => handleEditUser(user)}
-                            className="text-blue-600 hover:text-blue-900"
-                            title="Chỉnh sửa"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleResetPassword(user)}
-                            className="text-yellow-600 hover:text-yellow-900"
-                            title="Reset mật khẩu"
-                          >
-                            <Key className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteUser(user)}
-                            className="text-red-600 hover:text-red-900"
-                            title="Xóa"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
+                        <button
+                          onClick={() =>
+                            setOpenActionMenuId(
+                              openActionMenuId === user.id ? null : user.id
+                            )
+                          }
+                          className="p-1 rounded hover:bg-gray-100 inline-flex"
+                          title="Thao tác"
+                        >
+                          <MoreVertical className="w-5 h-5" />
+                        </button>
+                        {openActionMenuId === user.id && (
+                          <div className="absolute right-4 mt-2 w-44 bg-white border border-gray-200 rounded shadow-lg z-10">
+                            <button
+                              onClick={async () => {
+                                await handleViewDetail(user);
+                                setOpenActionMenuId(null);
+                              }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                            >
+                              Chi tiết
+                            </button>
+                            <button
+                              onClick={async () => {
+                                await handleToggleActive(user);
+                                setOpenActionMenuId(null);
+                              }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                            >
+                              {user.is_active ? "Vô hiệu hóa" : "Kích hoạt"}
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleEditUser(user);
+                                setOpenActionMenuId(null);
+                              }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center space-x-2"
+                            >
+                              <Edit className="w-4 h-4" />
+                              <span>Chỉnh sửa</span>
+                            </button>
+                            {/* Delete removed per requirement: only allow disable/enable */}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -1176,11 +1230,53 @@ const Users = () => {
         )}
       </div>
 
-      {/* User Modal */}
+      {/* Detail Modal */}
+      {showDetailModal && selectedUser && (
+        <Modal
+          isOpen={showDetailModal}
+          onClose={() => setShowDetailModal(false)}
+          title="Chi tiết tài khoản"
+        >
+          <div className="space-y-2 text-sm">
+            <div>
+              <span className="font-medium">Họ tên:</span> {selectedUser.ho_ten}
+            </div>
+            <div>
+              <span className="font-medium">Username:</span>{" "}
+              {selectedUser.username}
+            </div>
+            <div>
+              <span className="font-medium">Email:</span>{" "}
+              {selectedUser.email || "-"}
+            </div>
+            <div>
+              <span className="font-medium">SĐT:</span>{" "}
+              {selectedUser.phone || "-"}
+            </div>
+            <div>
+              <span className="font-medium">Vai trò:</span> {selectedUser.role}
+            </div>
+            <div>
+              <span className="font-medium">Phòng ban:</span>{" "}
+              {selectedUser?.ten_phong_ban || "-"}
+            </div>
+            <div>
+              <span className="font-medium">Trạng thái:</span>{" "}
+              {selectedUser.trang_thai}
+            </div>
+            <div>
+              <span className="font-medium">Tạo lúc:</span>{" "}
+              {formatDate(selectedUser.created_at)}
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Edit/Create Modal */}
       <Modal
-        isOpen={showUserModal}
+        isOpen={showEditModal}
         onClose={() => {
-          setShowUserModal(false);
+          setShowEditModal(false);
           resetForm();
         }}
         title={isEditing ? "Chỉnh sửa người dùng" : "Thêm người dùng mới"}
@@ -1260,7 +1356,6 @@ const Users = () => {
               className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="user">Người dùng</option>
-              <option value="supervisor">Giám sát</option>
               <option value="manager">Quản lý</option>
               <option value="admin">Admin</option>
             </select>
@@ -1270,25 +1365,82 @@ const Users = () => {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Phòng ban
             </label>
-            <select
-              value={userForm.phong_ban_id}
-              onChange={(e) =>
-                setUserForm((prev) => ({
-                  ...prev,
-                  phong_ban_id: e.target.value,
-                }))
-              }
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Chọn phòng ban</option>
-              {/* Ensure departments is always an array before mapping */}
-              {Array.isArray(departments) &&
-                departments.map((dept) => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.ten_phong_ban}
-                  </option>
-                ))}
-            </select>
+            {userForm.role === "admin" && (
+              <div className="text-sm text-gray-600">
+                Admin không cần gán phòng ban
+              </div>
+            )}
+            {userForm.role === "manager" && (
+              <select
+                value={userForm.phong_ban_id}
+                onChange={(e) =>
+                  setUserForm((prev) => ({
+                    ...prev,
+                    phong_ban_id: e.target.value,
+                  }))
+                }
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Chọn phòng ban cấp 2</option>
+                {Array.isArray(departments) &&
+                  departments
+                    .filter((d) => d.cap_bac === 2)
+                    .map((dept) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.ten_phong_ban}
+                      </option>
+                    ))}
+              </select>
+            )}
+            {userForm.role === "user" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <select
+                  value={selectedCap2Id}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedCap2Id(val);
+                    // clear cap3 selection if parent changes
+                    setUserForm((prev) => ({ ...prev, phong_ban_id: "" }));
+                  }}
+                  className="border border-gray-300 rounded-md px-3 py-2"
+                >
+                  <option value="">Chọn phòng ban cấp 2</option>
+                  {Array.isArray(departments) &&
+                    departments
+                      .filter((d) => d.cap_bac === 2)
+                      .map((dept) => (
+                        <option key={dept.id} value={dept.id}>
+                          {dept.ten_phong_ban}
+                        </option>
+                      ))}
+                </select>
+                <select
+                  value={userForm.phong_ban_id}
+                  onChange={(e) =>
+                    setUserForm((prev) => ({
+                      ...prev,
+                      phong_ban_id: e.target.value,
+                    }))
+                  }
+                  disabled={!selectedCap2Id}
+                  className="border border-gray-300 rounded-md px-3 py-2"
+                >
+                  <option value="">Chọn phòng ban cấp 3</option>
+                  {Array.isArray(departments) &&
+                    departments
+                      .filter(
+                        (d) =>
+                          d.cap_bac === 3 &&
+                          String(d.phong_ban_cha_id) === String(selectedCap2Id)
+                      )
+                      .map((dept) => (
+                        <option key={dept.id} value={dept.id}>
+                          {dept.ten_phong_ban}
+                        </option>
+                      ))}
+                </select>
+              </div>
+            )}
           </div>
 
           <div>
@@ -1314,7 +1466,7 @@ const Users = () => {
             <button
               type="button"
               onClick={() => {
-                setShowUserModal(false);
+                setShowEditModal(false);
                 resetForm();
               }}
               className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"

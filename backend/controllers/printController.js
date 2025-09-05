@@ -21,12 +21,12 @@ const generatePhieuNhapExcel = async (req, res, params, body, user) => {
         pn.*, 
         ncc.id as ncc_id, ncc.ma_ncc, ncc.ten_ncc, ncc.dia_chi as ncc_dia_chi,
         u1.id as nguoi_tao_id, u1.ho_ten as nguoi_tao_ten,
-        u2.id as nguoi_duyet_id, u2.ho_ten as nguoi_duyet_ten,
+        u2.id as nguoi_duyet_cap1_id, u2.ho_ten as nguoi_duyet_cap1_ten,
         pb.ten_phong_ban
       FROM phieu_nhap pn
       LEFT JOIN nha_cung_cap ncc ON pn.nha_cung_cap_id = ncc.id
       LEFT JOIN users u1 ON pn.nguoi_tao = u1.id
-      LEFT JOIN users u2 ON pn.nguoi_duyet = u2.id
+      LEFT JOIN users u2 ON pn.nguoi_duyet_cap1 = u2.id
       LEFT JOIN phong_ban pb ON pn.phong_ban_id = pb.id
       WHERE pn.id = $1
     `;
@@ -465,12 +465,12 @@ const generatePhieuXuatExcel = async (req, res, params, body, user) => {
         px.*, 
         dvn.id as dvn_id, dvn.ten_don_vi, dvn.dia_chi as dvn_dia_chi, dvn.loai_don_vi,
         u1.id as nguoi_tao_id, u1.ho_ten as nguoi_tao_ten,
-        u2.id as nguoi_duyet_id, u2.ho_ten as nguoi_duyet_ten,
+        u2.id as nguoi_duyet_cap1_id, u2.ho_ten as nguoi_duyet_cap1_ten,
         pb.ten_phong_ban
       FROM phieu_xuat px
       LEFT JOIN don_vi_nhan dvn ON px.don_vi_nhan_id = dvn.id
       LEFT JOIN users u1 ON px.nguoi_tao = u1.id
-      LEFT JOIN users u2 ON px.nguoi_duyet = u2.id
+      LEFT JOIN users u2 ON px.nguoi_duyet_cap1 = u2.id
       LEFT JOIN phong_ban pb ON px.phong_ban_id = pb.id
       WHERE px.id = $1
     `;
@@ -1635,14 +1635,32 @@ const generateLuanChuyenKhoReport = async (req, res, query, user) => {
     let queryParams = [];
     let paramIndex = 1;
 
-    if (user.role !== "admin") {
+    if (user.role === "user") {
+      // Cấp 3: Chỉ xem được phòng ban của mình
       phongBanFilter = `AND pb.id = $${paramIndex}`;
       queryParams.push(user.phong_ban_id);
       paramIndex++;
-    } else if (phong_ban_id && phong_ban_id !== "all") {
-      phongBanFilter = `AND pb.id = $${paramIndex}`;
-      queryParams.push(phong_ban_id);
-      paramIndex++;
+    } else if (user.role === "manager") {
+      // Cấp 2: Xem được phòng ban của mình và các phòng ban cấp 3 dưới quyền
+      if (phong_ban_id && phong_ban_id !== "all") {
+        phongBanFilter = `AND pb.id = $${paramIndex}`;
+        queryParams.push(phong_ban_id);
+        paramIndex++;
+      } else {
+        // Nếu chọn "all", chỉ xem được phòng ban của mình và các phòng ban cấp 3 dưới quyền
+        phongBanFilter = `AND (pb.id = $${paramIndex} OR pb.id IN (
+          SELECT id FROM phong_ban WHERE phong_ban_cha_id = $${paramIndex} AND cap_bac = 3
+        ))`;
+        queryParams.push(user.phong_ban_id);
+        paramIndex++;
+      }
+    } else if (user.role === "admin") {
+      // Cấp 1: Xem được tất cả
+      if (phong_ban_id && phong_ban_id !== "all") {
+        phongBanFilter = `AND pb.id = $${paramIndex}`;
+        queryParams.push(phong_ban_id);
+        paramIndex++;
+      }
     }
 
     queryParams.push(tu_ngay, den_ngay);
@@ -2411,14 +2429,32 @@ const generateBaoCaoNhapExcel = async (req, res, query, user) => {
     let queryParams = [tu_ngay, den_ngay];
     let paramIndex = 3;
 
-    if (user.role !== "admin") {
+    if (user.role === "user") {
+      // Cấp 3: Chỉ xem được phòng ban của mình
       phongBanFilter = `AND pn.phong_ban_id = $${paramIndex}`;
       queryParams.push(user.phong_ban_id);
       paramIndex++;
-    } else if (phong_ban_id && phong_ban_id !== "all") {
-      phongBanFilter = `AND pn.phong_ban_id = $${paramIndex}`;
-      queryParams.push(phong_ban_id);
-      paramIndex++;
+    } else if (user.role === "manager") {
+      // Cấp 2: Xem được phòng ban của mình và các phòng ban cấp 3 dưới quyền
+      if (phong_ban_id && phong_ban_id !== "all") {
+        phongBanFilter = `AND pn.phong_ban_id = $${paramIndex}`;
+        queryParams.push(phong_ban_id);
+        paramIndex++;
+      } else {
+        // Nếu chọn "all", chỉ xem được phòng ban của mình và các phòng ban cấp 3 dưới quyền
+        phongBanFilter = `AND (pn.phong_ban_id = $${paramIndex} OR pn.phong_ban_id IN (
+          SELECT id FROM phong_ban WHERE phong_ban_cha_id = $${paramIndex} AND cap_bac = 3
+        ))`;
+        queryParams.push(user.phong_ban_id);
+        paramIndex++;
+      }
+    } else if (user.role === "admin") {
+      // Cấp 1: Xem được tất cả
+      if (phong_ban_id && phong_ban_id !== "all") {
+        phongBanFilter = `AND pn.phong_ban_id = $${paramIndex}`;
+        queryParams.push(phong_ban_id);
+        paramIndex++;
+      }
     }
 
     // Query lấy dữ liệu phiếu nhập
@@ -2709,14 +2745,32 @@ const generateBaoCaoXuatExcel = async (req, res, query, user) => {
     let queryParams = [tu_ngay, den_ngay];
     let paramIndex = 3;
 
-    if (user.role !== "admin") {
+    if (user.role === "user") {
+      // Cấp 3: Chỉ xem được phòng ban của mình
       phongBanFilter = `AND px.phong_ban_id = $${paramIndex}`;
       queryParams.push(user.phong_ban_id);
       paramIndex++;
-    } else if (phong_ban_id && phong_ban_id !== "all") {
-      phongBanFilter = `AND px.phong_ban_id = $${paramIndex}`;
-      queryParams.push(phong_ban_id);
-      paramIndex++;
+    } else if (user.role === "manager") {
+      // Cấp 2: Xem được phòng ban của mình và các phòng ban cấp 3 dưới quyền
+      if (phong_ban_id && phong_ban_id !== "all") {
+        phongBanFilter = `AND px.phong_ban_id = $${paramIndex}`;
+        queryParams.push(phong_ban_id);
+        paramIndex++;
+      } else {
+        // Nếu chọn "all", chỉ xem được phòng ban của mình và các phòng ban cấp 3 dưới quyền
+        phongBanFilter = `AND (px.phong_ban_id = $${paramIndex} OR px.phong_ban_id IN (
+          SELECT id FROM phong_ban WHERE phong_ban_cha_id = $${paramIndex} AND cap_bac = 3
+        ))`;
+        queryParams.push(user.phong_ban_id);
+        paramIndex++;
+      }
+    } else if (user.role === "admin") {
+      // Cấp 1: Xem được tất cả
+      if (phong_ban_id && phong_ban_id !== "all") {
+        phongBanFilter = `AND px.phong_ban_id = $${paramIndex}`;
+        queryParams.push(phong_ban_id);
+        paramIndex++;
+      }
     }
 
     // Query lấy dữ liệu phiếu xuất
@@ -3017,30 +3071,79 @@ const generateNhapReportWithTabs = async (req, res, query, user) => {
     let queryParams = [tu_ngay, den_ngay];
     let paramIndex = 3;
 
-    if (user.role !== "admin") {
-      phongBanFilter = `AND pn.phong_ban_id = ${paramIndex}`;
+    if (user.role === "user") {
+      // Cấp 3: Chỉ xem được phòng ban của mình
+      phongBanFilter = `AND pn.phong_ban_id = $${paramIndex}`;
       queryParams.push(user.phong_ban_id);
       paramIndex++;
-    } else if (phong_ban_id && phong_ban_id !== "all") {
-      phongBanFilter = `AND pn.phong_ban_id = ${paramIndex}`;
-      queryParams.push(phong_ban_id);
-      paramIndex++;
+    } else if (user.role === "manager") {
+      // Cấp 2: Xem được phòng ban của mình và các phòng ban cấp 3 dưới quyền
+      if (phong_ban_id && phong_ban_id !== "all") {
+        phongBanFilter = `AND pn.phong_ban_id = $${paramIndex}`;
+        queryParams.push(phong_ban_id);
+        paramIndex++;
+      } else {
+        // Nếu chọn "all", chỉ xem được phòng ban của mình và các phòng ban cấp 3 dưới quyền
+        phongBanFilter = `AND (pn.phong_ban_id = $${paramIndex} OR pn.phong_ban_id IN (
+          SELECT id FROM phong_ban WHERE phong_ban_cha_id = $${paramIndex} AND cap_bac = 3
+        ))`;
+        queryParams.push(user.phong_ban_id);
+        paramIndex++;
+      }
+    } else if (user.role === "admin") {
+      // Cấp 1: Xem được tất cả
+      if (phong_ban_id && phong_ban_id !== "all") {
+        phongBanFilter = `AND pn.phong_ban_id = $${paramIndex}`;
+        queryParams.push(phong_ban_id);
+        paramIndex++;
+      }
     }
 
-    // Query lấy dữ liệu cho cả 2 loại
-    const [tuMuaData, trenCapData] = await Promise.all([
+    // Query lấy dữ liệu cho cả 3 loại
+    const [tuMuaData, trenCapData, luanChuyenData] = await Promise.all([
       getNhapDataByTypeForExport("tu_mua", queryParams, phongBanFilter),
       getNhapDataByTypeForExport("tren_cap", queryParams, phongBanFilter),
+      getNhapDataByTypeForExport("luan_chuyen", queryParams, phongBanFilter),
     ]);
 
+    // Tạo dữ liệu tổng hợp (tất cả phiếu)
+    const tongHopData = [...tuMuaData, ...trenCapData, ...luanChuyenData];
+
     console.log(
-      `📊 Found ${tuMuaData.length} tu_mua and ${trenCapData.length} tren_cap records`
+      `📊 Found ${tuMuaData.length} tu_mua, ${trenCapData.length} tren_cap, ${luanChuyenData.length} luan_chuyen records`
     );
 
     // Tạo workbook Excel
     const workbook = new ExcelJS.Workbook();
 
-    // Tạo sheet cho tự mua sắm
+    // Lấy thông tin phòng ban được chọn
+    let selectedPhongBan = user.phong_ban;
+    if (phong_ban_id && phong_ban_id !== "all") {
+      const phongBanQuery = `SELECT id, ten_phong_ban, ma_phong_ban FROM phong_ban WHERE id = $1`;
+      const phongBanResult = await pool.query(phongBanQuery, [phong_ban_id]);
+      if (phongBanResult.rows.length > 0) {
+        selectedPhongBan = phongBanResult.rows[0];
+      }
+    }
+
+    // Tạo sheet tổng hợp (Tab 1)
+    await createNhapSheet(
+      workbook,
+      "Tổng hợp",
+      tongHopData,
+      tu_ngay,
+      den_ngay,
+      timeFrame,
+      {
+        nguoi_lap,
+        truong_ban_tmkh,
+        chu_nhiem_hckt,
+      },
+      user,
+      selectedPhongBan
+    );
+
+    // Tạo sheet cho tự mua sắm (Tab 2)
     await createNhapSheet(
       workbook,
       "Tự mua sắm",
@@ -3052,10 +3155,12 @@ const generateNhapReportWithTabs = async (req, res, query, user) => {
         nguoi_lap,
         truong_ban_tmkh,
         chu_nhiem_hckt,
-      }
+      },
+      user,
+      selectedPhongBan
     );
 
-    // Tạo sheet cho trên cấp
+    // Tạo sheet cho trên cấp (Tab 3)
     await createNhapSheet(
       workbook,
       "Trên cấp",
@@ -3067,10 +3172,29 @@ const generateNhapReportWithTabs = async (req, res, query, user) => {
         nguoi_lap,
         truong_ban_tmkh,
         chu_nhiem_hckt,
-      }
+      },
+      user,
+      selectedPhongBan
     );
 
-    console.log("📝 Workbook created successfully with 2 tabs");
+    // Tạo sheet cho luân chuyển (Tab 4)
+    await createNhapSheet(
+      workbook,
+      "Luân chuyển",
+      luanChuyenData,
+      tu_ngay,
+      den_ngay,
+      timeFrame,
+      {
+        nguoi_lap,
+        truong_ban_tmkh,
+        chu_nhiem_hckt,
+      },
+      user,
+      selectedPhongBan
+    );
+
+    console.log("📝 Workbook created successfully with 4 tabs");
 
     // Tạo buffer và trả về
     const buffer = await workbook.xlsx.writeBuffer();
@@ -3107,6 +3231,12 @@ const getNhapDataByTypeForExport = async (
   baseParams,
   phongBanFilter
 ) => {
+  // Tạo parameter array mới bao gồm loaiPhieu
+  const queryParams = [...baseParams, loaiPhieu];
+
+  // Tạo placeholder cho loaiPhieu
+  const loaiPhieuParamIndex = baseParams.length + 1;
+
   const query = `
     SELECT 
       pn.id,
@@ -3127,14 +3257,14 @@ const getNhapDataByTypeForExport = async (
     LEFT JOIN chi_tiet_nhap ctn ON pn.id = ctn.phieu_nhap_id
     WHERE pn.ngay_nhap BETWEEN $1::date AND $2::date 
       AND pn.trang_thai = 'completed'
-      AND pn.loai_phieu = '${loaiPhieu}'
+      AND pn.loai_phieu = $${loaiPhieuParamIndex}
       ${phongBanFilter}
     GROUP BY pn.id, pn.so_phieu, pn.so_quyet_dinh, pn.ngay_nhap, pn.tong_tien, 
              pn.ly_do_nhap, pn.loai_phieu, pb.ten_phong_ban, ncc.ten_ncc, u.ho_ten
     ORDER BY pn.ngay_nhap DESC, pn.id DESC
   `;
 
-  const result = await pool.query(query, baseParams);
+  const result = await pool.query(query, queryParams);
   return result.rows || [];
 };
 
@@ -3146,7 +3276,9 @@ const createNhapSheet = async (
   tu_ngay,
   den_ngay,
   timeFrame,
-  signatures
+  signatures,
+  user,
+  selectedPhongBan
 ) => {
   const worksheet = workbook.addWorksheet(sheetName);
 
@@ -3164,8 +3296,11 @@ const createNhapSheet = async (
   // Header - Thông tin tổ chức
   worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
   const headerCell = worksheet.getCell(`A${currentRow}`);
-  headerCell.value =
-    "BỘ TƯ LỆNH CẢNH SÁT BIỂN\nBỘ TƯ LỆNH VÙNG CẢNH SÁT BIỂN 1";
+  const unitName =
+    selectedPhongBan?.ten_phong_ban ||
+    user?.phong_ban?.ten_phong_ban ||
+    "BỘ TƯ LỆNH CẢNH SÁT BIỂN";
+  headerCell.value = unitName;
   headerCell.font = { name: "Times New Roman", size: 12, bold: true };
   headerCell.alignment = {
     horizontal: "center",
@@ -3204,7 +3339,11 @@ const createNhapSheet = async (
 
   worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
   const donVi = worksheet.getCell(`A${currentRow}`);
-  donVi.value = "Đơn vị: Ban Quân khí - Phòng Hậu cần, Kỹ thuật";
+  donVi.value = `Đơn vị: ${
+    selectedPhongBan?.ten_phong_ban ||
+    user?.phong_ban?.ten_phong_ban ||
+    "Ban Quân khí - Phòng Hậu cần, Kỹ thuật"
+  }`;
   donVi.font = { name: "Times New Roman", size: 11, bold: true };
   donVi.alignment = { horizontal: "center", vertical: "middle" };
 
@@ -3515,6 +3654,466 @@ function convertNumberToText(number) {
     return result;
   }
 }
+
+//============================== báo cáo xuất mới=============================//
+
+const generateXuatReportWithTabs = async (req, res, query, user) => {
+  try {
+    const { tu_ngay, den_ngay, timeFrame, phong_ban_id } = query;
+    const { nguoi_lap = "", truong_ban_tmkh = "", chu_nhiem_hckt = "" } = query;
+
+    if (!tu_ngay || !den_ngay) {
+      return sendResponse(res, 400, false, "Vui lòng chọn khoảng thời gian");
+    }
+
+    console.log(
+      `📊 Generating Xuat report with tabs from ${tu_ngay} to ${den_ngay}`
+    );
+
+    // Xác định phòng ban dựa trên role
+    let phongBanFilter = "";
+    let queryParams = [tu_ngay, den_ngay];
+    let paramIndex = 3;
+
+    if (user.role === "user") {
+      // Cấp 3: Chỉ xem được phòng ban của mình
+      phongBanFilter = `AND px.phong_ban_id = $${paramIndex}`;
+      queryParams.push(user.phong_ban_id);
+      paramIndex++;
+    } else if (user.role === "manager") {
+      // Cấp 2: Xem được phòng ban của mình và các phòng ban cấp 3 dưới quyền
+      if (phong_ban_id && phong_ban_id !== "all") {
+        phongBanFilter = `AND px.phong_ban_id = $${paramIndex}`;
+        queryParams.push(phong_ban_id);
+        paramIndex++;
+      } else {
+        // Nếu chọn "all", chỉ xem được phòng ban của mình và các phòng ban cấp 3 dưới quyền
+        phongBanFilter = `AND (px.phong_ban_id = $${paramIndex} OR px.phong_ban_id IN (
+          SELECT id FROM phong_ban WHERE phong_ban_cha_id = $${paramIndex} AND cap_bac = 3
+        ))`;
+        queryParams.push(user.phong_ban_id);
+        paramIndex++;
+      }
+    } else if (user.role === "admin") {
+      // Cấp 1: Xem được tất cả
+      if (phong_ban_id && phong_ban_id !== "all") {
+        phongBanFilter = `AND px.phong_ban_id = $${paramIndex}`;
+        queryParams.push(phong_ban_id);
+        paramIndex++;
+      }
+    }
+
+    // Query lấy dữ liệu cho cả 2 loại
+    const [donViSuDungData, donViNhanData] = await Promise.all([
+      getXuatDataByTypeForExport("don_vi_su_dung", queryParams, phongBanFilter),
+      getXuatDataByTypeForExport("don_vi_nhan", queryParams, phongBanFilter),
+    ]);
+
+    // Tạo dữ liệu tổng hợp (tất cả phiếu)
+    const tongHopData = [...donViSuDungData, ...donViNhanData];
+
+    console.log(
+      `📊 Found ${donViSuDungData.length} don_vi_su_dung and ${donViNhanData.length} don_vi_nhan records`
+    );
+
+    // Tạo workbook Excel
+    const workbook = new ExcelJS.Workbook();
+
+    // Lấy thông tin phòng ban được chọn
+    let selectedPhongBan = user.phong_ban;
+    if (phong_ban_id && phong_ban_id !== "all") {
+      const phongBanQuery = `SELECT id, ten_phong_ban, ma_phong_ban FROM phong_ban WHERE id = $1`;
+      const phongBanResult = await pool.query(phongBanQuery, [phong_ban_id]);
+      if (phongBanResult.rows.length > 0) {
+        selectedPhongBan = phongBanResult.rows[0];
+      }
+    }
+
+    // Tạo sheet tổng hợp (Tab 1)
+    await createXuatSheet(
+      workbook,
+      "Tổng hợp",
+      tongHopData,
+      tu_ngay,
+      den_ngay,
+      timeFrame,
+      {
+        nguoi_lap,
+        truong_ban_tmkh,
+        chu_nhiem_hckt,
+      },
+      user,
+      selectedPhongBan
+    );
+
+    // Tạo sheet cho đơn vị sử dụng (Tab 2)
+    await createXuatSheet(
+      workbook,
+      "Đơn vị sử dụng",
+      donViSuDungData,
+      tu_ngay,
+      den_ngay,
+      timeFrame,
+      {
+        nguoi_lap,
+        truong_ban_tmkh,
+        chu_nhiem_hckt,
+      },
+      user,
+      selectedPhongBan
+    );
+
+    // Tạo sheet cho đơn vị nhận (Tab 3)
+    await createXuatSheet(
+      workbook,
+      "Đơn vị nhận",
+      donViNhanData,
+      tu_ngay,
+      den_ngay,
+      timeFrame,
+      {
+        nguoi_lap,
+        truong_ban_tmkh,
+        chu_nhiem_hckt,
+      },
+      user,
+      selectedPhongBan
+    );
+
+    console.log("📝 Workbook created successfully with 3 tabs");
+
+    // Tạo buffer và trả về
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    if (buffer.length === 0) {
+      throw new Error("Generated Excel buffer is empty");
+    }
+
+    res.writeHead(200, {
+      "Content-Type":
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="bao-cao-xuat-${timeFrame}-${Date.now()}.xlsx"`,
+      "Content-Length": buffer.length,
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    });
+
+    res.end(buffer);
+    console.log("✅ Xuất report with tabs sent successfully");
+  } catch (error) {
+    console.error("❌ Generate Xuất Excel with tabs error:", error);
+    if (!res.headersSent) {
+      return sendResponse(res, 500, false, "Lỗi tạo báo cáo Excel", {
+        error: error.message,
+      });
+    }
+  }
+};
+
+// Helper function để lấy dữ liệu xuất theo loại cho export
+const getXuatDataByTypeForExport = async (
+  loaiPhieu,
+  baseParams,
+  phongBanFilter
+) => {
+  // Tạo parameter array mới bao gồm loaiPhieu
+  const queryParams = [...baseParams, loaiPhieu];
+
+  // Tạo placeholder cho loaiPhieu
+  const loaiPhieuParamIndex = baseParams.length + 1;
+
+  const query = `
+    SELECT 
+      px.id,
+      px.so_phieu,
+      px.ngay_xuat,
+      px.tong_tien,
+      px.ly_do_xuat,
+      px.loai_xuat,
+      pb.ten_phong_ban,
+      dvn.ten_don_vi as don_vi_nhan,
+      u.ho_ten as nguoi_tao_ten,
+      COUNT(ctx.id) as so_mat_hang
+    FROM phieu_xuat px
+    LEFT JOIN phong_ban pb ON px.phong_ban_id = pb.id
+    LEFT JOIN don_vi_nhan dvn ON px.don_vi_nhan_id = dvn.id
+    LEFT JOIN users u ON px.nguoi_tao = u.id
+    LEFT JOIN chi_tiet_xuat ctx ON px.id = ctx.phieu_xuat_id
+    WHERE px.ngay_xuat BETWEEN $1::date AND $2::date 
+      AND px.trang_thai = 'completed'
+      AND px.loai_xuat = $${loaiPhieuParamIndex}
+      ${phongBanFilter}
+    GROUP BY px.id, px.so_phieu, px.ngay_xuat, px.tong_tien, 
+             px.ly_do_xuat, px.loai_xuat, pb.ten_phong_ban, dvn.ten_don_vi, u.ho_ten
+    ORDER BY px.ngay_xuat DESC, px.id DESC
+  `;
+
+  const result = await pool.query(query, queryParams);
+  return result.rows || [];
+};
+
+// Function tạo từng sheet xuất
+const createXuatSheet = async (
+  workbook,
+  sheetName,
+  data,
+  tu_ngay,
+  den_ngay,
+  timeFrame,
+  signatures,
+  user,
+  selectedPhongBan
+) => {
+  const worksheet = workbook.addWorksheet(sheetName);
+
+  // Hàm helper để format ngày
+  const formatDate = (dateStr) => {
+    const date = new Date(dateStr);
+    return `${String(date.getDate()).padStart(2, "0")}/${String(
+      date.getMonth() + 1
+    ).padStart(2, "0")}/${date.getFullYear()}`;
+  };
+
+  // Thiết lập độ rộng cột
+  worksheet.columns = [
+    { width: 5 }, // STT
+    { width: 15 }, // Số phiếu
+    { width: 12 }, // Ngày, tháng
+    { width: 35 }, // Nội dung
+    { width: 20 }, // Số tiền
+  ];
+
+  let currentRow = 1;
+
+  // Header - Thông tin tổ chức
+  worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
+  const headerCell = worksheet.getCell(`A${currentRow}`);
+  const unitName =
+    selectedPhongBan?.ten_phong_ban ||
+    user?.phong_ban?.ten_phong_ban ||
+    "BỘ TƯ LỆNH CẢNH SÁT BIỂN";
+  headerCell.value = unitName;
+  headerCell.font = { name: "Times New Roman", size: 12, bold: true };
+  headerCell.alignment = {
+    horizontal: "center",
+    vertical: "middle",
+    wrapText: true,
+  };
+
+  currentRow += 3;
+
+  // Tiêu đề chính
+  worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
+  const title = worksheet.getCell(`A${currentRow}`);
+  title.value = `BẢNG KÊ PHIẾU XUẤT KHO - ${sheetName.toUpperCase()}`;
+  title.font = { name: "Times New Roman", size: 14, bold: true };
+  title.alignment = { horizontal: "center", vertical: "middle" };
+
+  currentRow++;
+
+  // Thời gian và đơn vị
+  worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
+  const timeUnit = worksheet.getCell(`A${currentRow}`);
+  const timeFrameText =
+    timeFrame === "month" ? "Tháng" : timeFrame === "quarter" ? "Quý" : "Năm";
+  const date = new Date(tu_ngay);
+  const period =
+    timeFrame === "month"
+      ? `${date.getMonth() + 1}`
+      : timeFrame === "quarter"
+      ? `${Math.ceil((date.getMonth() + 1) / 3)}`
+      : `${date.getFullYear()}`;
+  timeUnit.value = `${timeFrameText} ${period} năm ${date.getFullYear()}`;
+  timeUnit.font = { name: "Times New Roman", size: 12, bold: true };
+  timeUnit.alignment = { horizontal: "center", vertical: "middle" };
+
+  currentRow++;
+
+  worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
+  const donVi = worksheet.getCell(`A${currentRow}`);
+  donVi.value = `Đơn vị: ${
+    selectedPhongBan?.ten_phong_ban ||
+    user?.phong_ban?.ten_phong_ban ||
+    "Ban Quân khí - Phòng Hậu cần, Kỹ thuật"
+  }`;
+  donVi.font = { name: "Times New Roman", size: 11, bold: true };
+  donVi.alignment = { horizontal: "center", vertical: "middle" };
+
+  currentRow += 2;
+
+  // Đơn vị tính (góc phải)
+  worksheet.mergeCells(`D${currentRow}:E${currentRow}`);
+  const donViTinh = worksheet.getCell(`D${currentRow}`);
+  donViTinh.value = "Đơn vị tính: đồng";
+  donViTinh.font = { name: "Times New Roman", size: 10, italic: true };
+  donViTinh.alignment = { horizontal: "right", vertical: "middle" };
+
+  currentRow++;
+
+  // Headers bảng
+  const headers = ["STT", "Số phiếu", "Ngày, tháng", "Nội dung", "Số tiền"];
+
+  const headerRow = worksheet.addRow(headers);
+  headerRow.eachCell((cell) => {
+    cell.font = { name: "Times New Roman", size: 10, bold: true };
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFB0E0E6" },
+    };
+    cell.border = {
+      top: { style: "thin" },
+      left: { style: "thin" },
+      bottom: { style: "thin" },
+      right: { style: "thin" },
+    };
+  });
+
+  currentRow++;
+
+  // Dữ liệu
+  let tongTien = 0;
+
+  data.forEach((item, index) => {
+    const rowData = [
+      index + 1,
+      item.so_phieu,
+      formatDate(item.ngay_xuat),
+      item.ly_do_xuat || "Xuất kho",
+      parseFloat(item.tong_tien) || 0,
+    ];
+
+    rowData.forEach((value, colIndex) => {
+      const cell = worksheet.getCell(currentRow, colIndex + 1);
+      cell.value = value;
+
+      if (colIndex === 4) {
+        // Cột số tiền - format số và alignment phải
+        cell.numFmt = "#,##0";
+        cell.alignment = { horizontal: "right", vertical: "middle" };
+      } else if (colIndex === 0) {
+        // STT - center
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+      } else {
+        // Các cột khác - left align
+        cell.alignment = {
+          horizontal: "left",
+          vertical: "middle",
+          wrapText: true,
+        };
+      }
+
+      cell.font = { name: "Times New Roman", size: 10 };
+      cell.border = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      };
+    });
+
+    tongTien += parseFloat(item.tong_tien) || 0;
+    currentRow++;
+  });
+
+  // Dòng tổng cộng
+  const tongData = ["", "", "", "Cộng", tongTien];
+
+  tongData.forEach((value, colIndex) => {
+    const cell = worksheet.getCell(currentRow, colIndex + 1);
+    cell.value = value;
+
+    if (colIndex === 4) {
+      // Cột số tiền - format số và alignment phải
+      cell.numFmt = "#,##0";
+      cell.alignment = { horizontal: "right", vertical: "middle" };
+    } else if (colIndex === 3) {
+      // Cột "Cộng" - center
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+    } else {
+      // Các cột khác - left align
+      cell.alignment = {
+        horizontal: "left",
+        vertical: "middle",
+      };
+    }
+
+    cell.font = { name: "Times New Roman", size: 10, bold: true };
+    cell.border = {
+      top: { style: "thin" },
+      left: { style: "thin" },
+      bottom: { style: "thin" },
+      right: { style: "thin" },
+    };
+  });
+
+  currentRow++;
+
+  // Chữ ký
+  if (
+    signatures.nguoi_lap ||
+    signatures.truong_ban_tmkh ||
+    signatures.chu_nhiem_hckt
+  ) {
+    worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
+    const signatureTitle = worksheet.getCell(`A${currentRow}`);
+    signatureTitle.value = "CHỮ KÝ";
+    signatureTitle.font = { name: "Times New Roman", size: 12, bold: true };
+    signatureTitle.alignment = { horizontal: "center", vertical: "middle" };
+
+    currentRow++;
+
+    // Người lập
+    if (signatures.nguoi_lap) {
+      worksheet.mergeCells(`A${currentRow}:B${currentRow}`);
+      const nguoiLap = worksheet.getCell(`A${currentRow}`);
+      nguoiLap.value = "Người lập";
+      nguoiLap.font = { name: "Times New Roman", size: 10, bold: true };
+      nguoiLap.alignment = { horizontal: "center", vertical: "middle" };
+
+      worksheet.mergeCells(`C${currentRow}:E${currentRow}`);
+      const nguoiLapName = worksheet.getCell(`C${currentRow}`);
+      nguoiLapName.value = signatures.nguoi_lap;
+      nguoiLapName.font = { name: "Times New Roman", size: 10 };
+      nguoiLapName.alignment = { horizontal: "center", vertical: "middle" };
+      currentRow++;
+    }
+
+    // Trưởng ban TMKH
+    if (signatures.truong_ban_tmkh) {
+      worksheet.mergeCells(`A${currentRow}:B${currentRow}`);
+      const truongBan = worksheet.getCell(`A${currentRow}`);
+      truongBan.value = "Trưởng ban TMKH";
+      truongBan.font = { name: "Times New Roman", size: 10, bold: true };
+      truongBan.alignment = { horizontal: "center", vertical: "middle" };
+
+      worksheet.mergeCells(`C${currentRow}:E${currentRow}`);
+      const truongBanName = worksheet.getCell(`C${currentRow}`);
+      truongBanName.value = signatures.truong_ban_tmkh;
+      truongBanName.font = { name: "Times New Roman", size: 10 };
+      truongBanName.alignment = { horizontal: "center", vertical: "middle" };
+      currentRow++;
+    }
+
+    // Chủ nhiệm HC-KT
+    if (signatures.chu_nhiem_hckt) {
+      worksheet.mergeCells(`A${currentRow}:B${currentRow}`);
+      const chuNhiem = worksheet.getCell(`A${currentRow}`);
+      chuNhiem.value = "Chủ nhiệm HC-KT";
+      chuNhiem.font = { name: "Times New Roman", size: 10, bold: true };
+      chuNhiem.alignment = { horizontal: "center", vertical: "middle" };
+
+      worksheet.mergeCells(`C${currentRow}:E${currentRow}`);
+      const chuNhiemName = worksheet.getCell(`C${currentRow}`);
+      chuNhiemName.value = signatures.chu_nhiem_hckt;
+      chuNhiemName.font = { name: "Times New Roman", size: 10 };
+      chuNhiemName.alignment = { horizontal: "center", vertical: "middle" };
+    }
+  }
+};
+
 module.exports = {
   generatePhieuNhapExcel,
   generatePhieuXuatExcel,
@@ -3523,6 +4122,9 @@ module.exports = {
   generateBaoCaoNhapExcel,
   generateBaoCaoXuatExcel,
   generateNhapReportWithTabs,
+  generateXuatReportWithTabs,
   getNhapDataByTypeForExport,
+  getXuatDataByTypeForExport,
   createNhapSheet,
+  createXuatSheet,
 };
