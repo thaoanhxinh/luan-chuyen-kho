@@ -1,5 +1,6 @@
 import api from "./api";
 
+// Deprecated: yêu cầu đã loại bỏ
 export const yeuCauService = {
   // =============================================
   // YÊU CẦU NHẬP KHO SERVICES

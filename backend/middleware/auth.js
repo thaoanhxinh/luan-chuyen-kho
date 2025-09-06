@@ -56,13 +56,6 @@ const auth = async (req, res, next) => {
         : null,
     };
 
-    console.log("🔍 Auth middleware - User:", {
-      id: user.id,
-      role: user.role,
-      phong_ban_id: user.phong_ban_id,
-      cap_bac: user.phong_ban?.cap_bac,
-    });
-
     req.user = user;
     next();
   } catch (error) {

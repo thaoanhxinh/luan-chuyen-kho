@@ -8,7 +8,6 @@ import {
   Users,
   RefreshCw,
   Building2,
-  UserPlus,
 } from "lucide-react";
 import { departmentService } from "../../services/departmentService";
 import { userService } from "../../services/userService";
@@ -30,9 +29,13 @@ const Departments = () => {
 
   // Modal states
   const [showDepartmentModal, setShowDepartmentModal] = useState(false);
-  const [showAssignUsersModal, setShowAssignUsersModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDepartment, setSelectedDepartment] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [departmentMembers, setDepartmentMembers] = useState([]);
+  const [parentDepartments, setParentDepartments] = useState([]);
+  const [expandedDeptIds, setExpandedDeptIds] = useState([]);
+  const [childrenByParent, setChildrenByParent] = useState({});
 
   // Form states
   const [departmentForm, setDepartmentForm] = useState({
@@ -45,14 +48,13 @@ const Departments = () => {
     is_active: true,
   });
 
-  const [assignForm, setAssignForm] = useState({
-    user_ids: [],
-  });
+  // no assign form; we show detail members instead
 
   // Load data
   useEffect(() => {
     loadDepartments();
     loadUsers();
+    loadParentDepartments();
   }, [currentPage, search]);
 
   const loadDepartments = async () => {
@@ -67,7 +69,18 @@ const Departments = () => {
       const response = await departmentService.getList(params);
 
       if (response.success) {
-        setDepartments(response.data.items || []);
+        const all = response.data.items || [];
+        // Only show cấp 2 at the top-level list
+        const items = all.filter((d) => d.cap_bac === 2);
+        setDepartments(items);
+        // Index cấp 3 by parent id
+        const children = all.filter((d) => d.cap_bac === 3);
+        const map = {};
+        children.forEach((c) => {
+          if (!map[c.phong_ban_cha_id]) map[c.phong_ban_cha_id] = [];
+          map[c.phong_ban_cha_id].push(c);
+        });
+        setChildrenByParent(map);
         setTotalPages(response.data.pagination?.pages || 1);
         setTotalItems(response.data.pagination?.total || 0);
       } else {
@@ -81,6 +94,14 @@ const Departments = () => {
     }
   };
 
+  const toggleExpand = (deptId) => {
+    setExpandedDeptIds((prev) =>
+      prev.includes(deptId)
+        ? prev.filter((id) => id !== deptId)
+        : [...prev, deptId]
+    );
+  };
+
   const loadUsers = async () => {
     try {
       const response = await userService.getList({ limit: 1000 });
@@ -89,6 +110,19 @@ const Departments = () => {
       }
     } catch (error) {
       console.error("Load users error:", error);
+    }
+  };
+
+  const loadParentDepartments = async () => {
+    try {
+      const res = await departmentService.getList({ page: 1, limit: 1000 });
+      if (res.success) {
+        setParentDepartments(
+          (res.data.items || []).filter((d) => d.cap_bac === 2)
+        );
+      }
+    } catch (e) {
+      console.error("Load parent departments error:", e);
     }
   };
 
@@ -104,7 +138,8 @@ const Departments = () => {
       ten_phong_ban: "",
       ma_phong_ban: "",
       mo_ta: "",
-      quan_ly_id: "",
+      cap_bac: 2,
+      phong_ban_cha_id: "",
       is_active: true,
     });
     setSelectedDepartment(null);
@@ -121,7 +156,8 @@ const Departments = () => {
       ten_phong_ban: department.ten_phong_ban,
       ma_phong_ban: department.ma_phong_ban,
       mo_ta: department.mo_ta || "",
-      quan_ly_id: department.quan_ly_id || "",
+      cap_bac: department.cap_bac || 2,
+      phong_ban_cha_id: department.phong_ban_cha_id || "",
       is_active: department.is_active,
     });
     setSelectedDepartment(department);
@@ -200,12 +236,24 @@ const Departments = () => {
     }
   };
 
-  const handleAssignUsers = (department) => {
-    setSelectedDepartment(department);
-    setAssignForm({
-      user_ids: department.users?.map((u) => u.id) || [],
-    });
-    setShowAssignUsersModal(true);
+  const handleViewDetail = async (department) => {
+    try {
+      setSelectedDepartment(department);
+      setShowDetailModal(true);
+      // Fetch members of this department and its children (handled by backend filter)
+      const res = await userService.getList({
+        phong_ban_id: department.id,
+        limit: 1000,
+      });
+      if (res.success) {
+        setDepartmentMembers(res.data.items || []);
+      } else {
+        setDepartmentMembers([]);
+      }
+    } catch (e) {
+      console.error("Load department members error:", e);
+      setDepartmentMembers([]);
+    }
   };
 
   const handleSubmitAssignUsers = async (e) => {
@@ -252,136 +300,187 @@ const Departments = () => {
   };
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <PageHeader
-        title="Quản lý phòng ban"
-        subtitle="Quản lý cơ cấu tổ chức và phân công nhân sự"
-        Icon={Building2}
-      />
+    <div className="space-y-6">
+      <PageHeader title="Quản lý phòng ban" />
 
-      <div className="flex justify-end space-x-3">
-        <button
-          onClick={loadDepartments}
-          disabled={loading}
-          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center space-x-2"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          <span>Làm mới</span>
-        </button>
-        <button
-          onClick={handleCreateDepartment}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Thêm phòng ban</span>
-        </button>
-      </div>
+      {/* Filters */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex-1 min-w-64">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <input
+                type="text"
+                placeholder="Tìm kiếm theo tên hoặc mã phòng ban..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyPress={handleSearch}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
 
-      {/* Search */}
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Tìm kiếm theo tên hoặc mã phòng ban..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyPress={handleSearch}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+          <button
+            onClick={loadDepartments}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Làm mới
+          </button>
         </div>
       </div>
 
-      {/* Departments Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      {/* Actions */}
+      <div className="flex justify-between items-center">
+        <div className="text-sm text-gray-600">
+          Tổng cộng: {totalItems} phòng ban
+        </div>
+        <button
+          onClick={handleCreateDepartment}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Tạo phòng ban
+        </button>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         {loading ? (
           <Loading />
         ) : (
           <>
-            <div className="overflow-hidden">
+            <div className="overflow-auto max-h-[60vh]">
               <table className="w-full table-fixed divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+                <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-auto">
                       Phòng ban
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Quản lý
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
                       Số nhân sự
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
                       Trạng thái
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-36">
                       Ngày tạo
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
                       Thao tác
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {departments.map((department) => (
-                    <tr key={department.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {department.ten_phong_ban}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {department.ma_phong_ban}
-                          </div>
-                          {department.mo_ta && (
-                            <div className="text-xs text-gray-400 mt-1">
-                              {department.mo_ta}
+                    <React.Fragment key={department.id}>
+                      <tr className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-start">
+                            <button
+                              onClick={() => toggleExpand(department.id)}
+                              className="mr-2 text-gray-500 hover:text-gray-700"
+                              title={
+                                expandedDeptIds.includes(department.id)
+                                  ? "Thu gọn"
+                                  : "Mở rộng"
+                              }
+                            >
+                              {expandedDeptIds.includes(department.id)
+                                ? "▾"
+                                : "▸"}
+                            </button>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {department.ten_phong_ban}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {department.ma_phong_ban}
+                              </div>
+                              {department.mo_ta && (
+                                <div className="text-xs text-gray-400 mt-1">
+                                  {department.mo_ta}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {getManagerName(department)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center text-sm text-gray-900">
-                          <Users className="w-4 h-4 mr-1" />
-                          {department.user_count || 0} người
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(department.is_active)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(department.created_at)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex justify-end space-x-2">
-                          <button
-                            onClick={() => handleAssignUsers(department)}
-                            className="text-purple-600 hover:text-purple-900"
-                            title="Phân công nhân sự"
-                          >
-                            <UserPlus className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleEditDepartment(department)}
-                            className="text-blue-600 hover:text-blue-900"
-                            title="Chỉnh sửa"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteDepartment(department)}
-                            className="text-red-600 hover:text-red-900"
-                            title="Xóa"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap w-32">
+                          <div className="flex items-center text-sm text-gray-900">
+                            <Users className="w-4 h-4 mr-1" />
+                            {department.so_nhan_vien || 0} người
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap w-32">
+                          {getStatusBadge(department.is_active)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 w-36">
+                          {formatDate(department.created_at)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium w-40">
+                          <div className="flex justify-end space-x-2">
+                            <button
+                              onClick={() => handleViewDetail(department)}
+                              className="text-purple-600 hover:text-purple-900"
+                              title="Xem chi tiết nhân sự"
+                            >
+                              <Users className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleEditDepartment(department)}
+                              className="text-blue-600 hover:text-blue-900"
+                              title="Chỉnh sửa"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDepartment(department)}
+                              className="text-red-600 hover:text-red-900"
+                              title="Xóa"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedDeptIds.includes(department.id) &&
+                        (childrenByParent[department.id] || []).map((child) => (
+                          <tr key={`child-${child.id}`} className="bg-gray-50">
+                            <td className="px-12 py-3 whitespace-nowrap align-top">
+                              <div className="text-sm text-gray-700">
+                                {child.ten_phong_ban}
+                              </div>
+                              <div className="text-xs text-gray-400">
+                                {child.ma_phong_ban}
+                              </div>
+                            </td>
+                            <td className="px-6 py-3 whitespace-nowrap w-32">
+                              <div className="flex items-center text-sm text-gray-700">
+                                <Users className="w-4 h-4 mr-1" />
+                                {child.so_nhan_vien || 0} người
+                              </div>
+                            </td>
+                            <td className="px-6 py-3 whitespace-nowrap w-32">
+                              {getStatusBadge(child.is_active)}
+                            </td>
+                            <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500 w-36">
+                              {formatDate(child.created_at)}
+                            </td>
+                            <td className="px-6 py-3 whitespace-nowrap text-right text-sm font-medium w-40">
+                              <div className="flex justify-end space-x-2">
+                                <button
+                                  onClick={() => handleViewDetail(child)}
+                                  className="text-purple-600 hover:text-purple-900"
+                                  title="Xem chi tiết nhân sự"
+                                >
+                                  <Users className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
@@ -463,6 +562,68 @@ const Departments = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
+              Cấp bậc <span className="text-red-500">*</span>
+            </label>
+            <div className="flex items-center space-x-4">
+              <label className="flex items-center space-x-2">
+                <input
+                  type="radio"
+                  name="cap_bac"
+                  value={2}
+                  checked={Number(departmentForm.cap_bac) === 2}
+                  onChange={() =>
+                    setDepartmentForm((prev) => ({
+                      ...prev,
+                      cap_bac: 2,
+                      phong_ban_cha_id: "",
+                    }))
+                  }
+                />
+                <span>Cấp 2</span>
+              </label>
+              <label className="flex items-center space-x-2">
+                <input
+                  type="radio"
+                  name="cap_bac"
+                  value={3}
+                  checked={Number(departmentForm.cap_bac) === 3}
+                  onChange={() =>
+                    setDepartmentForm((prev) => ({ ...prev, cap_bac: 3 }))
+                  }
+                />
+                <span>Cấp 3</span>
+              </label>
+            </div>
+          </div>
+
+          {Number(departmentForm.cap_bac) === 3 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Thuộc phòng ban cấp 2 <span className="text-red-500">*</span>
+              </label>
+              <select
+                required
+                value={departmentForm.phong_ban_cha_id}
+                onChange={(e) =>
+                  setDepartmentForm((prev) => ({
+                    ...prev,
+                    phong_ban_cha_id: e.target.value,
+                  }))
+                }
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Chọn phòng ban cấp 2</option>
+                {parentDepartments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.ten_phong_ban} ({d.ma_phong_ban})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Mô tả
             </label>
             <textarea
@@ -478,30 +639,7 @@ const Departments = () => {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Quản lý phòng ban
-            </label>
-            <select
-              value={departmentForm.quan_ly_id}
-              onChange={(e) =>
-                setDepartmentForm((prev) => ({
-                  ...prev,
-                  quan_ly_id: e.target.value,
-                }))
-              }
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Chọn quản lý</option>
-              {users
-                .filter((u) => u.role === "manager" || u.role === "admin")
-                .map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.ho_ten} ({user.email})
-                  </option>
-                ))}
-            </select>
-          </div>
+          {/* Bỏ chọn quản lý; backend không dùng trường này */}
 
           <div>
             <label className="flex items-center">
@@ -544,73 +682,33 @@ const Departments = () => {
         </form>
       </Modal>
 
-      {/* Assign Users Modal */}
+      {/* Detail Members Modal */}
       <Modal
-        isOpen={showAssignUsersModal}
-        onClose={() => setShowAssignUsersModal(false)}
-        title={`Phân công nhân sự - ${selectedDepartment?.ten_phong_ban}`}
+        isOpen={showDetailModal}
+        onClose={() => setShowDetailModal(false)}
+        title={`Nhân sự - ${selectedDepartment?.ten_phong_ban || ""}`}
       >
-        <form onSubmit={handleSubmitAssignUsers} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Chọn nhân viên cho phòng ban
-            </label>
-            <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-md p-2">
-              {users.map((user) => (
-                <label
-                  key={user.id}
-                  className="flex items-center p-2 hover:bg-gray-50 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    checked={assignForm.user_ids.includes(user.id)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setAssignForm((prev) => ({
-                          ...prev,
-                          user_ids: [...prev.user_ids, user.id],
-                        }));
-                      } else {
-                        setAssignForm((prev) => ({
-                          ...prev,
-                          user_ids: prev.user_ids.filter(
-                            (id) => id !== user.id
-                          ),
-                        }));
-                      }
-                    }}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <div className="ml-3">
-                    <div className="text-sm font-medium text-gray-900">
-                      {user.ho_ten}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {user.email} - {user.role}
-                    </div>
+        <div className="space-y-3 max-h-96 overflow-y-auto">
+          {departmentMembers.length === 0 ? (
+            <div className="text-sm text-gray-500">Không có tài khoản</div>
+          ) : (
+            departmentMembers.map((user) => (
+              <div key={user.id} className="p-2 border rounded">
+                <div className="text-sm font-medium text-gray-900">
+                  {user.ho_ten}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {user.email} • {user.role}
+                </div>
+                {user.phong_ban?.ten_phong_ban && (
+                  <div className="text-xs text-gray-400">
+                    {user.phong_ban.ten_phong_ban}
                   </div>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={() => setShowAssignUsersModal(false)}
-              className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? "Đang lưu..." : "Phân công"}
-            </button>
-          </div>
-        </form>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       </Modal>
     </div>
   );

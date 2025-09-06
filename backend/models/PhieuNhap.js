@@ -45,7 +45,15 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: 0,
       },
       trang_thai: {
-        type: DataTypes.ENUM("draft", "confirmed", "cancelled"),
+        type: DataTypes.ENUM(
+          "draft",
+          "confirmed",
+          "pending_level3_approval",
+          "approved",
+          "completed",
+          "cancelled",
+          "revision_required"
+        ),
         defaultValue: "draft",
       },
       nguoi_tao: {
@@ -72,6 +80,54 @@ module.exports = (sequelize, DataTypes) => {
           model: "phong_ban",
           key: "id",
         },
+      },
+      phong_ban_cung_cap_id: {
+        type: DataTypes.INTEGER,
+        references: {
+          model: "phong_ban",
+          key: "id",
+        },
+      },
+      phieu_xuat_lien_ket_id: {
+        type: DataTypes.INTEGER,
+        references: {
+          model: "phieu_xuat",
+          key: "id",
+        },
+      },
+      is_tu_dong: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+      },
+      workflow_type: {
+        type: DataTypes.ENUM("standard", "dieu_chuyen"),
+        defaultValue: "standard",
+      },
+      nguoi_duyet_cap1: {
+        type: DataTypes.INTEGER,
+        references: {
+          model: "users",
+          key: "id",
+        },
+      },
+      ngay_duyet_cap1: {
+        type: DataTypes.DATE,
+      },
+      nguoi_phan_hoi: {
+        type: DataTypes.INTEGER,
+        references: {
+          model: "users",
+          key: "id",
+        },
+      },
+      ngay_phan_hoi: {
+        type: DataTypes.DATE,
+      },
+      ghi_chu_phan_hoi: {
+        type: DataTypes.TEXT,
+      },
+      ngay_gui_duyet: {
+        type: DataTypes.DATE,
       },
       ghi_chu: {
         type: DataTypes.TEXT,

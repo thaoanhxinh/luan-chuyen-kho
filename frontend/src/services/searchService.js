@@ -29,47 +29,12 @@ export const searchService = {
         results = [];
       }
 
-      // ✅ FIX 4: ADD CREATE NEW OPTION if no exact match
-      if (query && query.trim().length >= 2 && results.length === 0) {
-        const newOption = {
-          id: `new_${Date.now()}`,
-          ten_hang_hoa: query.trim(),
-          ma_hang_hoa: `NEW_${Date.now()}`,
-          don_vi_tinh: "Cái",
-          co_so_seri: false,
-          gia_nhap_gan_nhat: 0,
-          isNewItem: true,
-        };
-
-        results.push(newOption);
-        console.log("➕ Added create new option:", newOption);
-      }
-
-      // ✅ FIX 5: ADD CREATE NEW OPTION if no exact name match
-      if (query && query.trim().length >= 2 && results.length > 0) {
-        const queryLower = query.trim().toLowerCase();
-        const hasExactMatch = results.some(
-          (item) => item.ten_hang_hoa?.toLowerCase() === queryLower
-        );
-
-        if (!hasExactMatch) {
-          const newOption = {
-            id: `new_${Date.now()}`,
-            ten_hang_hoa: query.trim(),
-            ma_hang_hoa: `NEW_${Date.now()}`,
-            don_vi_tinh: "Cái",
-            co_so_seri: false,
-            gia_nhap_gan_nhat: 0,
-            isNewItem: true,
-          };
-
-          results.push(newOption);
-          console.log(
-            "➕ Added create new option for partial match:",
-            newOption
-          );
-        }
-      }
+      // ✅ FIX: KHÔNG thêm "create new option" vào results
+      // Để AutoComplete có thể hiện button "Tạo hàng hóa mới" khi không có kết quả
+      console.log(
+        "🔍 Search results (no create option added):",
+        results.length
+      );
 
       console.log("🎯 Final results:", results);
       return results;
@@ -306,6 +271,32 @@ export const searchService = {
           searchService.searchNhaCungCapByType(keyword, "dieu_chuyen");
       default:
         return searchService.searchNhaCungCap;
+    }
+  },
+
+  // ✅ Lấy danh sách phòng ban cấp 2
+  async getPhongBanCap2() {
+    try {
+      console.log("🔍 Getting phong ban cap 2 list");
+      const response = await api.get("/departments/cap-2");
+      console.log("✅ Cap 2 list response:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("❌ Error fetching phong ban cap 2:", error);
+      throw error;
+    }
+  },
+
+  // ✅ Lấy danh sách phòng ban cấp 3 theo cấp 2
+  async getPhongBanCap3ByParent(parentId) {
+    try {
+      console.log("🔍 Getting phong ban cap 3 for parent:", parentId);
+      const response = await api.get(`/departments/cap-3/${parentId}`);
+      console.log("✅ Cap 3 list response:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("❌ Error fetching phong ban cap 3:", error);
+      throw error;
     }
   },
 

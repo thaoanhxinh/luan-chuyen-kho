@@ -12,6 +12,17 @@ export const baoCaoService = {
     }
   },
 
+  // Lấy danh sách phòng ban cho filter tồn kho
+  getPhongBanForTonKho: async () => {
+    try {
+      const response = await api.get("/bao-cao/phong-ban-for-report");
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching phong ban for ton kho:", error);
+      throw error;
+    }
+  },
+
   // Báo cáo nhập xuất
   getNhapXuatReport: async (params = {}) => {
     try {
@@ -37,10 +48,32 @@ export const baoCaoService = {
   // Dashboard stats
   getDashboardStats: async (params = {}) => {
     try {
-      const response = await api.get("/bao-cao/dashboard", { params });
+      const response = await api.get("/bao-cao/dashboard-stats", { params });
       return response.data;
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
+      throw error;
+    }
+  },
+
+  // Chart data for 6 months
+  getChartData: async (params = {}) => {
+    try {
+      const response = await api.get("/bao-cao/chart-data", { params });
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching chart data:", error);
+      throw error;
+    }
+  },
+
+  // Pham chat stats
+  getPhamChatStats: async (params = {}) => {
+    try {
+      const response = await api.get("/bao-cao/pham-chat-stats", { params });
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching pham chat stats:", error);
       throw error;
     }
   },

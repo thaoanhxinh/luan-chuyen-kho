@@ -715,23 +715,32 @@ const LuanChuyenReport = () => {
         if (user?.role === "user" && user?.phong_ban?.cap_bac === 3) {
           console.log("🔍 CẤP 3 USER - Chi tiết dữ liệu nhận được:");
           const tongHopData = response.data.luanChuyen?.tongHop || [];
-          console.log("  - Tổng số phòng ban trong dữ liệu:", tongHopData.length);
-          console.log("  - Danh sách phòng ban:", tongHopData.map(item => ({
-            id: item.id,
-            noi_dung: item.noi_dung,
-            cap_bac: item.cap_bac,
-            phong_ban_cha_id: item.phong_ban_cha_id
-          })));
-          
+          console.log(
+            "  - Tổng số phòng ban trong dữ liệu:",
+            tongHopData.length
+          );
+          console.log(
+            "  - Danh sách phòng ban:",
+            tongHopData.map((item) => ({
+              id: item.id,
+              noi_dung: item.noi_dung,
+              cap_bac: item.cap_bac,
+              phong_ban_cha_id: item.phong_ban_cha_id,
+            }))
+          );
+
           // Kiểm tra xem có phòng ban nào không thuộc về user không
           const userPhongBanId = user.phong_ban_id;
-          const unauthorizedData = tongHopData.filter(item => 
-            item.id !== userPhongBanId && 
-            item.phong_ban_cha_id !== userPhongBanId
+          const unauthorizedData = tongHopData.filter(
+            (item) =>
+              item.id !== userPhongBanId &&
+              item.phong_ban_cha_id !== userPhongBanId
           );
-          
+
           if (unauthorizedData.length > 0) {
-            console.error("❌ PHÂN QUYỀN BỊ VI PHẠM! User cấp 3 thấy dữ liệu không thuộc quyền:");
+            console.error(
+              "❌ PHÂN QUYỀN BỊ VI PHẠM! User cấp 3 thấy dữ liệu không thuộc quyền:"
+            );
             console.error("  - Dữ liệu không được phép:", unauthorizedData);
           } else {
             console.log("✅ Phân quyền OK - Chỉ thấy dữ liệu thuộc quyền");
@@ -779,63 +788,47 @@ const LuanChuyenReport = () => {
       );
     }
 
-    // Logic cho manager và admin
-    const availableCap3 =
-      filters.phong_ban_cap2_id !== "all"
-        ? phongBanOptions.cap3.filter(
-            (cap3) =>
-              cap3.phong_ban_cha_id === parseInt(filters.phong_ban_cap2_id)
-          )
-        : phongBanOptions.cap3;
+    // Manager/Admin: gộp dropdown gọn để tránh tràn
+    const cap2Options = phongBanOptions.cap2 || [];
+    const cap3All = phongBanOptions.cap3 || [];
+    const selectedCap2 = filters.phong_ban_cap2_id;
+    const cap3Options =
+      selectedCap2 !== "all"
+        ? cap3All.filter((c) => c.phong_ban_cha_id === parseInt(selectedCap2))
+        : cap3All;
 
     return (
-      <div className="flex items-center space-x-4">
-        {/* Dropdown Cấp 2 */}
-        <div className="flex items-center space-x-2">
-          <Building2 className="h-4 w-4 text-gray-500" />
-          <label className="text-sm font-medium text-gray-700">Cấp 2:</label>
-          <select
-            value={filters.phong_ban_cap2_id}
-            onChange={(e) =>
-              handleFilterChange("phong_ban_cap2_id", e.target.value)
-            }
-            className="border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="all">Tất cả cấp 2</option>
-            {phongBanOptions.cap2.map((cap2) => (
-              <option key={cap2.id} value={cap2.id}>
-                {cap2.ten_phong_ban}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Dropdown Cấp 3 */}
-        <div className="flex items-center space-x-2">
-          <Warehouse className="h-4 w-4 text-gray-500" />
-          <label className="text-sm font-medium text-gray-700">Cấp 3:</label>
-          <select
-            value={filters.phong_ban_cap3_id}
-            onChange={(e) =>
-              handleFilterChange("phong_ban_cap3_id", e.target.value)
-            }
-            className="border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            disabled={
-              filters.phong_ban_cap2_id !== "all" && availableCap3.length === 0
-            }
-          >
-            <option value="all">
-              {filters.phong_ban_cap2_id !== "all"
-                ? "Tất cả cấp 3 thuộc cấp 2"
-                : "Tất cả cấp 3"}
+      <div className="flex items-center space-x-2">
+        <Building2 className="h-4 w-4 text-gray-500" />
+        <label className="text-sm font-medium text-gray-700">Đơn vị:</label>
+        <select
+          value={filters.phong_ban_cap2_id}
+          onChange={(e) =>
+            handleFilterChange("phong_ban_cap2_id", e.target.value)
+          }
+          className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+        >
+          <option value="all">Cấp 2: Tất cả</option>
+          {cap2Options.map((cap2) => (
+            <option key={cap2.id} value={cap2.id}>
+              {cap2.ten_phong_ban}
             </option>
-            {availableCap3.map((cap3) => (
-              <option key={cap3.id} value={cap3.id}>
-                {cap3.ten_phong_ban}
-              </option>
-            ))}
-          </select>
-        </div>
+          ))}
+        </select>
+        <select
+          value={filters.phong_ban_cap3_id}
+          onChange={(e) =>
+            handleFilterChange("phong_ban_cap3_id", e.target.value)
+          }
+          className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+        >
+          <option value="all">Cấp 3: Tất cả</option>
+          {cap3Options.map((cap3) => (
+            <option key={cap3.id} value={cap3.id}>
+              {cap3.ten_phong_ban}
+            </option>
+          ))}
+        </select>
       </div>
     );
   };
@@ -965,7 +958,9 @@ const LuanChuyenReport = () => {
                   className="bg-blue-50 font-semibold"
                 >
                   <td className="px-4 py-3 text-sm font-bold text-blue-900">
-                    🏛️ {item.noi_dung}
+                    <div className="truncate max-w-[280px]">
+                      🏛️ {item.noi_dung}
+                    </div>
                   </td>
                   <td className="px-3 py-3 text-right text-sm font-bold text-blue-900">
                     {formatCurrency(item.ton_dau_ky)}
@@ -1003,7 +998,9 @@ const LuanChuyenReport = () => {
                   {/* Dòng cấp 2 */}
                   <tr className="bg-yellow-50 font-medium">
                     <td className="px-4 py-3 text-sm font-semibold text-yellow-800">
-                      &nbsp;&nbsp;🏢 {cap2Item.noi_dung}
+                      <div className="truncate max-w-[260px]">
+                        &nbsp;&nbsp;🏢 {cap2Item.noi_dung}
+                      </div>
                     </td>
                     <td className="px-3 py-3 text-right text-sm font-semibold text-yellow-800">
                       {formatCurrency(cap2Item.ton_dau_ky)}
@@ -1173,23 +1170,18 @@ const LuanChuyenReport = () => {
 
   // ✅ MAIN RENDER
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+        <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-white">
-                📊 Báo cáo luân chuyển kho
-              </h2>
-              <p className="text-blue-100 text-sm mt-1">
-                Báo cáo tổng hợp giá trị vật tư hàng hóa luân chuyển qua kho
-              </p>
-            </div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Báo cáo luân chuyển kho
+            </h2>
             <button
               onClick={loadReportData}
               disabled={loading}
-              className="flex items-center space-x-2 bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-lg hover:bg-white/30 disabled:opacity-50 transition-all"
+              className="flex items-center space-x-2 text-blue-600 px-3 py-1.5 rounded-md hover:bg-blue-50 disabled:opacity-50 transition-colors"
             >
               <RefreshCw
                 className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
@@ -1199,9 +1191,9 @@ const LuanChuyenReport = () => {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="bg-white border-b border-gray-200 p-4">
-          <div className="flex flex-wrap items-center gap-4">
+        {/* Filters - compact, single row */}
+        <div className="border-b border-gray-200 px-4 py-3">
+          <div className="flex items-center gap-4 flex-nowrap overflow-x-auto">
             <div className="flex items-center space-x-2">
               <Calendar className="h-4 w-4 text-gray-500" />
               <label className="text-sm font-medium text-gray-700">
@@ -1229,7 +1221,7 @@ const LuanChuyenReport = () => {
             </div>
 
             {/* Filter phòng ban */}
-            {renderPhongBanFilter()}
+            <div className="whitespace-nowrap">{renderPhongBanFilter()}</div>
           </div>
         </div>
 

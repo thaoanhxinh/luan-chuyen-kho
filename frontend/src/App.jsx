@@ -13,8 +13,6 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 
 // Workflow Pages - Only existing files
-import YeuCauNhap from "./pages/YeuCauNhap";
-import YeuCauXuat from "./pages/YeuCauXuat";
 import WorkflowManagement from "./pages/WorkflowManagement";
 
 // Warehouse Operations Pages
@@ -150,30 +148,7 @@ const AppContent = () => {
         }
       />
 
-      {/* WORKFLOW ROUTES */}
-      {/* Yêu cầu nhập kho - Main page (create form is modal) */}
-      <Route
-        path="/yeu-cau-nhap"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <YeuCauNhap />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Yêu cầu xuất kho - Main page (create form is modal) */}
-      <Route
-        path="/yeu-cau-xuat"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <YeuCauXuat />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
+      {/* WORKFLOW ROUTES - yêu cầu nhập/xuất đã loại bỏ */}
 
       {/* Workflow Management - Manager/Admin only */}
       <Route

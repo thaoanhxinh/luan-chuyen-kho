@@ -1052,8 +1052,9 @@ const ActionDropdown = ({ phieu, onAction, user }) => {
     (isOwner || isAdmin) &&
     ["draft", "confirmed", "revision_required"].includes(phieu.trang_thai);
 
-  // ✅ LOGIC COMPLETE: admin/manager với phiếu approved
-  const canComplete = (isAdmin || isManager) && phieu.trang_thai === "approved";
+  // ✅ LOGIC COMPLETE: admin/manager hoặc chủ sở hữu với phiếu approved
+  const canComplete =
+    (isAdmin || isManager || isOwner) && phieu.trang_thai === "approved";
 
   const actions = [
     {
@@ -1274,8 +1275,9 @@ const XuatKho = () => {
     }
   };
 
-  // Check if user can create phieu
-  const canCreatePhieu = WORKFLOW_RULES.CAN_CREATE[user?.role] || false;
+  // Check if user can create phieu: only cấp 3 (user role at level 3)
+  const canCreatePhieu =
+    (user?.role === "user" && user?.phong_ban?.cap_bac === 3) || false;
 
   useEffect(() => {
     // Reset to first page when changing tabs or filters
@@ -1666,11 +1668,11 @@ const XuatKho = () => {
           <Loading />
         ) : (
           <>
-            <div className="overflow-hidden">
-              <table className="w-full table-fixed">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1200px]">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[140px]">
                       <button
                         onClick={() => handleSort("so_phieu")}
                         className="flex items-center space-x-1 hover:text-gray-700"
@@ -1679,7 +1681,7 @@ const XuatKho = () => {
                         {getSortIcon("so_phieu")}
                       </button>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                       <button
                         onClick={() => handleSort("ngay_xuat")}
                         className="flex items-center space-x-1 hover:text-gray-700"
@@ -1688,10 +1690,10 @@ const XuatKho = () => {
                         {getSortIcon("ngay_xuat")}
                       </button>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                       Loại xuất
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                       <button
                         onClick={() => handleSort("trang_thai")}
                         className="flex items-center space-x-1 hover:text-gray-700"
@@ -1700,7 +1702,7 @@ const XuatKho = () => {
                         {getSortIcon("trang_thai")}
                       </button>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                       <button
                         onClick={() => handleSort("tong_tien")}
                         className="flex items-center space-x-1 hover:text-gray-700"
@@ -1709,13 +1711,13 @@ const XuatKho = () => {
                         {getSortIcon("tong_tien")}
                       </button>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">
                       Đơn vị nhận
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
                       Phòng ban
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                       Thao tác
                     </th>
                   </tr>
@@ -1730,7 +1732,7 @@ const XuatKho = () => {
                           : ""
                       }`}
                     >
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-4">
                         <div className="flex flex-col">
                           <span className="text-sm font-medium text-gray-900 truncate">
                             {phieu.so_phieu}
@@ -1742,22 +1744,22 @@ const XuatKho = () => {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-4 whitespace-nowrap">
                         <div className="flex items-center text-sm text-gray-900">
                           <Calendar size={14} className="mr-2 text-gray-400" />
                           {formatDate(phieu.ngay_xuat)}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-4 whitespace-nowrap">
                         {getLoaiXuatBadge(phieu.loai_xuat)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-4 whitespace-nowrap">
                         {getStatusBadge(phieu.trang_thai)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {formatCurrency(phieu.tong_tien)}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-4">
                         <div className="flex items-center text-sm text-gray-900">
                           <Building size={14} className="mr-2 text-gray-400" />
                           <span className="truncate">
@@ -1771,12 +1773,12 @@ const XuatKho = () => {
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-4">
                         <span className="text-sm text-gray-900 truncate">
                           {phieu.phong_ban?.ten_phong_ban || "Chưa xác định"}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <td className="px-4 py-4 whitespace-nowrap text-right">
                         <ActionDropdown
                           phieu={phieu}
                           onAction={handleAction}

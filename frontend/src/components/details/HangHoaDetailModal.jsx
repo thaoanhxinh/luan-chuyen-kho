@@ -1041,6 +1041,7 @@ const HangHoaDetailModal = ({ hangHoaId, phongBanId, isOpen, onClose }) => {
     quarter: Math.ceil((new Date().getMonth() + 1) / 3),
   });
 
+  // Load hang hoa detail
   useEffect(() => {
     if (isOpen && hangHoaId) {
       loadHangHoaDetail();
@@ -1147,13 +1148,8 @@ const HangHoaDetailModal = ({ hangHoaId, phongBanId, isOpen, onClose }) => {
   const loadHangHoaDetail = async () => {
     try {
       setLoading(true);
-      let response;
-      if (phongBanId) {
-        response = await hangHoaService.getDetail(hangHoaId, phongBanId);
-      } else {
-        // Aggregated view: lấy chi tiết tổng hợp của hàng hóa
-        response = await hangHoaService.getById(hangHoaId);
-      }
+      // Sử dụng getDetail cho cả 2 trường hợp
+      const response = await hangHoaService.getDetail(hangHoaId, phongBanId);
       setHangHoa(response.data);
     } catch (error) {
       console.error("Error loading hang hoa detail:", error);

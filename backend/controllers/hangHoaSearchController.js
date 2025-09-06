@@ -451,6 +451,8 @@ const searchHangHoa = async (req, res) => {
 const createHangHoaAuto = async (req, res, body) => {
   console.log("\n🆕 === CREATE HANG HOA AUTO START ===");
   console.log("📦 Request body:", body);
+  console.log("📦 Request headers:", req.headers);
+  console.log("📦 Request method:", req.method);
 
   try {
     // ✅ Validation đầu vào

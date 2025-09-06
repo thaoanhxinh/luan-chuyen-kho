@@ -329,13 +329,15 @@ const YeuCauXuat = () => {
             Quản lý các yêu cầu xuất hàng từ kho
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 transition-colors"
-        >
-          <Plus size={14} />
-          <span>Tạo yêu cầu</span>
-        </button>
+        {user?.role === "user" && user?.phong_ban?.cap_bac === 3 && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 transition-colors"
+          >
+            <Plus size={14} />
+            <span>Tạo yêu cầu</span>
+          </button>
+        )}
       </div>
 
       {/* Ton Kho Alert Modal */}
@@ -718,4 +720,6 @@ const YeuCauXuat = () => {
   );
 };
 
-export default YeuCauXuat;
+export default function RemovedYeuCauXuat() {
+  return null;
+}

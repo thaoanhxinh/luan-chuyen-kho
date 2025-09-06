@@ -163,7 +163,95 @@ const getDashboardStats = async (req, res, query, user) => {
   }
 };
 
-const getTonKhoReport = async (req, res, query, user) => {
+// Hàm lấy dữ liệu nhập xuất cho export (không gọi sendResponse)
+const getNhapXuatDataForExport = async (query, user) => {
+  try {
+    const { tu_ngay, den_ngay, trang_thai } = query;
+    const page = parseInt(query.page) || 1;
+    const limit = parseInt(query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    let whereClause = "WHERE 1=1";
+    let queryParams = [];
+    let paramIndex = 1;
+
+    // User thường chỉ thấy phiếu của phòng ban mình
+    if (user.role !== "admin") {
+      whereClause += ` AND phong_ban_id = $${paramIndex}`;
+      queryParams.push(user.phong_ban_id);
+      paramIndex++;
+    }
+
+    // Bộ lọc phòng ban cho admin
+    if (query.phong_ban_id && user.role === "admin") {
+      whereClause += ` AND phong_ban_id = $${paramIndex}`;
+      queryParams.push(query.phong_ban_id);
+      paramIndex++;
+    }
+
+    if (tu_ngay) {
+      whereClause += ` AND ngay >= $${paramIndex}`;
+      queryParams.push(tu_ngay);
+      paramIndex++;
+    }
+
+    if (den_ngay) {
+      whereClause += ` AND ngay <= $${paramIndex}`;
+      queryParams.push(den_ngay);
+      paramIndex++;
+    }
+
+    if (trang_thai) {
+      whereClause += ` AND trang_thai = $${paramIndex}`;
+      queryParams.push(trang_thai);
+      paramIndex++;
+    }
+
+    const nhapXuatQuery = `
+      SELECT 
+        'Nhập' as loai_phieu,
+        so_phieu,
+        ngay,
+        tong_tien,
+        trang_thai,
+        nha_cung_cap_id,
+        ncc.ten_ncc as ten_nha_cung_cap,
+        phong_ban_id,
+        pb.ten_phong_ban
+      FROM phieu_nhap pn
+      LEFT JOIN nha_cung_cap ncc ON pn.nha_cung_cap_id = ncc.id
+      LEFT JOIN phong_ban pb ON pn.phong_ban_id = pb.id
+      ${whereClause}
+      UNION ALL
+      SELECT 
+        'Xuất' as loai_phieu,
+        so_phieu,
+        ngay,
+        tong_tien,
+        trang_thai,
+        don_vi_nhan_id as nha_cung_cap_id,
+        dvn.ten_don_vi as ten_nha_cung_cap,
+        phong_ban_id,
+        pb.ten_phong_ban
+      FROM phieu_xuat px
+      LEFT JOIN don_vi_nhan dvn ON px.don_vi_nhan_id = dvn.id
+      LEFT JOIN phong_ban pb ON px.phong_ban_id = pb.id
+      ${whereClause.replace("pn.", "px.")}
+      ORDER BY ngay DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    queryParams.push(limit, offset);
+    const result = await pool.query(nhapXuatQuery, queryParams);
+    return result.rows;
+  } catch (error) {
+    console.error("Get nhap xuat data for export error:", error);
+    throw error;
+  }
+};
+
+// Hàm lấy dữ liệu tồn kho cho export (không gọi sendResponse)
+const getTonKhoDataForExport = async (query, user) => {
   try {
     const page = parseInt(query.page) || 1;
     const limit = parseInt(query.limit) || 20;
@@ -181,10 +269,27 @@ const getTonKhoReport = async (req, res, query, user) => {
       paramIndex++;
     }
 
-    // Bộ lọc phòng ban cho admin
-    if (query.phong_ban_id && user.role === "admin") {
+    // Bộ lọc phòng ban cho admin và manager
+    if (
+      query.phong_ban_id &&
+      (user.role === "admin" || user.role === "manager")
+    ) {
       whereClause += ` AND tk.phong_ban_id = $${paramIndex}`;
       queryParams.push(query.phong_ban_id);
+      paramIndex++;
+    }
+
+    // Bộ lọc cấp 2 cho admin
+    if (query.cap2_id && user.role === "admin") {
+      whereClause += ` AND pb.cap_bac = 2 AND pb.id = $${paramIndex}`;
+      queryParams.push(query.cap2_id);
+      paramIndex++;
+    }
+
+    // Bộ lọc cấp 3 cho manager và admin
+    if (query.cap3_id && (user.role === "manager" || user.role === "admin")) {
+      whereClause += ` AND pb.cap_bac = 3 AND pb.id = $${paramIndex}`;
+      queryParams.push(query.cap3_id);
       paramIndex++;
     }
 
@@ -223,7 +328,6 @@ const getTonKhoReport = async (req, res, query, user) => {
       }
     }
 
-    // SỬA LỖI: Sử dụng paramIndex đúng cách
     const tonKhoQuery = `
       SELECT 
         hh.ma_hang_hoa,
@@ -239,7 +343,131 @@ const getTonKhoReport = async (req, res, query, user) => {
         tk.so_luong_ton,
         tk.gia_tri_ton,
         tk.don_gia_binh_quan,
-        tk.ngay_cap_nhat
+        tk.ngay_cap_nhat,
+        hh.gia_nhap_gan_nhat,
+        hh.mo_ta_ky_thuat,
+        hh.co_so_seri,
+        hh.theo_doi_pham_chat,
+        hh.la_tai_san_co_dinh
+      FROM ton_kho tk
+      JOIN hang_hoa hh ON tk.hang_hoa_id = hh.id
+      JOIN phong_ban pb ON tk.phong_ban_id = pb.id
+      LEFT JOIN loai_hang_hoa lhh ON hh.loai_hang_hoa_id = lhh.id
+      ${whereClause}
+      ORDER BY tk.gia_tri_ton DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    // Thêm limit và offset vào params
+    queryParams.push(limit, offset);
+
+    const tonKhoResult = await pool.query(tonKhoQuery, queryParams);
+    return tonKhoResult.rows;
+  } catch (error) {
+    console.error("Get ton kho data for export error:", error);
+    throw error;
+  }
+};
+
+const getTonKhoReport = async (req, res, query, user) => {
+  try {
+    const page = parseInt(query.page) || 1;
+    const limit = parseInt(query.limit) || 20;
+    const offset = (page - 1) * limit;
+    const search = query.search || "";
+
+    let whereClause = "WHERE tk.so_luong_ton >= 0";
+    let queryParams = [];
+    let paramIndex = 1;
+
+    // User thường chỉ thấy tồn kho của phòng ban mình
+    if (user.role !== "admin") {
+      whereClause += ` AND tk.phong_ban_id = $${paramIndex}`;
+      queryParams.push(user.phong_ban_id);
+      paramIndex++;
+    }
+
+    // Bộ lọc phòng ban cho admin và manager
+    if (
+      query.phong_ban_id &&
+      (user.role === "admin" || user.role === "manager")
+    ) {
+      whereClause += ` AND tk.phong_ban_id = $${paramIndex}`;
+      queryParams.push(query.phong_ban_id);
+      paramIndex++;
+    }
+
+    // Bộ lọc cấp 2 cho admin
+    if (query.cap2_id && user.role === "admin") {
+      whereClause += ` AND pb.cap_bac = 2 AND pb.id = $${paramIndex}`;
+      queryParams.push(query.cap2_id);
+      paramIndex++;
+    }
+
+    // Bộ lọc cấp 3 cho manager và admin
+    if (query.cap3_id && (user.role === "manager" || user.role === "admin")) {
+      whereClause += ` AND pb.cap_bac = 3 AND pb.id = $${paramIndex}`;
+      queryParams.push(query.cap3_id);
+      paramIndex++;
+    }
+
+    // Bộ lọc tìm kiếm
+    if (search) {
+      whereClause += ` AND (hh.ten_hang_hoa ILIKE $${paramIndex} OR hh.ma_hang_hoa ILIKE $${paramIndex})`;
+      queryParams.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    // Bộ lọc loại hàng hóa
+    if (query.loai_hang_hoa) {
+      whereClause += ` AND hh.loai_hang_hoa_id = $${paramIndex}`;
+      queryParams.push(query.loai_hang_hoa);
+      paramIndex++;
+    }
+
+    // Bộ lọc phẩm chất
+    if (query.pham_chat) {
+      switch (query.pham_chat) {
+        case "tot":
+          whereClause += ` AND tk.sl_tot > 0`;
+          break;
+        case "kem_pham_chat":
+          whereClause += ` AND tk.sl_kem_pham_chat > 0`;
+          break;
+        case "mat_pham_chat":
+          whereClause += ` AND tk.sl_mat_pham_chat > 0`;
+          break;
+        case "hong":
+          whereClause += ` AND tk.sl_hong > 0`;
+          break;
+        case "can_thanh_ly":
+          whereClause += ` AND tk.sl_can_thanh_ly > 0`;
+          break;
+      }
+    }
+
+    // SỬA LỖI: Sử dụng paramIndex đúng cách và cột đúng
+    const tonKhoQuery = `
+      SELECT 
+        hh.ma_hang_hoa,
+        hh.ten_hang_hoa,
+        hh.don_vi_tinh,
+        pb.ten_phong_ban,
+        lhh.ten_loai,
+        tk.sl_tot,
+        tk.sl_kem_pham_chat,
+        tk.sl_mat_pham_chat,
+        tk.sl_hong,
+        tk.sl_can_thanh_ly,
+        tk.so_luong_ton,
+        tk.gia_tri_ton,
+        tk.don_gia_binh_quan,
+        tk.ngay_cap_nhat,
+        hh.gia_nhap_gan_nhat,
+        hh.mo_ta_ky_thuat,
+        hh.co_so_seri,
+        hh.theo_doi_pham_chat,
+        hh.la_tai_san_co_dinh
       FROM ton_kho tk
       JOIN hang_hoa hh ON tk.hang_hoa_id = hh.id
       JOIN phong_ban pb ON tk.phong_ban_id = pb.id
@@ -260,12 +488,27 @@ const getTonKhoReport = async (req, res, query, user) => {
       ${whereClause}
     `;
 
-    const [tonKhoResult, countResult] = await Promise.all([
+    // Thống kê tổng quan
+    const statisticsQuery = `
+      SELECT 
+        COUNT(*) as total_items,
+        COALESCE(SUM(tk.gia_tri_ton), 0) as total_value,
+        COUNT(CASE WHEN tk.so_luong_ton <= 5 AND tk.so_luong_ton > 0 THEN 1 END) as low_stock_items,
+        0 as expiring_items
+      FROM ton_kho tk
+      JOIN hang_hoa hh ON tk.hang_hoa_id = hh.id
+      LEFT JOIN loai_hang_hoa lhh ON hh.loai_hang_hoa_id = lhh.id
+      ${whereClause}
+    `;
+
+    const [tonKhoResult, countResult, statisticsResult] = await Promise.all([
       pool.query(tonKhoQuery, queryParams),
       pool.query(countQuery, queryParams.slice(0, -2)), // Bỏ limit và offset cho count query
+      pool.query(statisticsQuery, queryParams.slice(0, -2)), // Bỏ limit và offset cho statistics query
     ]);
 
     const total = parseInt(countResult.rows[0].total);
+    const statistics = statisticsResult.rows[0];
 
     sendResponse(res, 200, true, "Lấy báo cáo tồn kho thành công", {
       items: tonKhoResult.rows,
@@ -273,7 +516,13 @@ const getTonKhoReport = async (req, res, query, user) => {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit),
+        pages: Math.ceil(total / limit),
+      },
+      statistics: {
+        total_items: parseInt(statistics.total_items),
+        total_value: parseFloat(statistics.total_value),
+        low_stock_items: parseInt(statistics.low_stock_items),
+        expiring_items: parseInt(statistics.expiring_items),
       },
     });
   } catch (error) {
@@ -635,14 +884,8 @@ const exportExcel = async (req, res, params, user) => {
       case "ton-kho":
         // Lấy tất cả dữ liệu (không phân trang)
         const tonKhoQuery = { ...query, limit: 10000, page: 1 };
-        const mockReq = { query: tonKhoQuery };
-        const mockRes = {
-          status: () => mockRes,
-          json: (result) => {
-            data = result.data;
-          },
-        };
-        await getTonKhoReport(mockReq, mockRes, tonKhoQuery, user);
+        const tonKhoData = await getTonKhoDataForExport(tonKhoQuery, user);
+        data = tonKhoData;
         filename = `bao-cao-ton-kho-${
           new Date().toISOString().split("T")[0]
         }.xlsx`;
@@ -651,14 +894,11 @@ const exportExcel = async (req, res, params, user) => {
 
       case "nhap-xuat":
         const nhapXuatQuery = { ...query, limit: 10000, page: 1 };
-        const mockReq2 = { query: nhapXuatQuery };
-        const mockRes2 = {
-          status: () => mockRes2,
-          json: (result) => {
-            data = result.data;
-          },
-        };
-        await getNhapXuatReport(mockReq2, mockRes2, nhapXuatQuery, user);
+        const nhapXuatData = await getNhapXuatDataForExport(
+          nhapXuatQuery,
+          user
+        );
+        data = nhapXuatData;
         filename = `bao-cao-nhap-xuat-${
           new Date().toISOString().split("T")[0]
         }.xlsx`;
@@ -727,7 +967,7 @@ const exportExcel = async (req, res, params, user) => {
       });
 
       // Thêm data
-      data.items.forEach((item) => {
+      data.forEach((item) => {
         worksheet.addRow([
           item.ma_hang_hoa,
           item.ten_hang_hoa,
@@ -761,7 +1001,7 @@ const exportExcel = async (req, res, params, user) => {
       });
 
       // Thêm data
-      data.items.forEach((item) => {
+      data.forEach((item) => {
         worksheet.addRow([
           item.so_phieu,
           new Date(item.ngay).toLocaleDateString("vi-VN"),
@@ -791,7 +1031,7 @@ const exportExcel = async (req, res, params, user) => {
       });
 
       // Thêm data
-      data.items.forEach((item) => {
+      data.forEach((item) => {
         worksheet.addRow([
           item.so_phieu,
           new Date(item.ngay_kiem_ke).toLocaleDateString("vi-VN"),
@@ -2197,30 +2437,38 @@ const getLuanChuyenReport = async (req, res, query, user) => {
 
     console.log("📊 Query result count:", result.rows.length);
     console.log("📊 Sample results:", result.rows.slice(0, 2));
-    
+
     // ✅ DEBUG: Kiểm tra chi tiết kết quả cho cấp 3
     if (user.role === "user" && user.phong_ban?.cap_bac === 3) {
       console.log("🔍 CẤP 3 USER - Chi tiết kết quả query:");
       console.log("  - Tổng số records:", result.rows.length);
-      console.log("  - Danh sách phòng ban:", result.rows.map(row => ({
-        id: row.phong_ban_id,
-        noi_dung: row.noi_dung,
-        cap_bac: row.cap_bac,
-        phong_ban_cha_id: row.phong_ban_cha_id
-      })));
-      
+      console.log(
+        "  - Danh sách phòng ban:",
+        result.rows.map((row) => ({
+          id: row.phong_ban_id,
+          noi_dung: row.noi_dung,
+          cap_bac: row.cap_bac,
+          phong_ban_cha_id: row.phong_ban_cha_id,
+        }))
+      );
+
       // Kiểm tra xem có phòng ban nào không thuộc về user không
       const userPhongBanId = user.phong_ban_id;
-      const unauthorizedRows = result.rows.filter(row => 
-        row.phong_ban_id !== userPhongBanId && 
-        row.phong_ban_cha_id !== userPhongBanId
+      const unauthorizedRows = result.rows.filter(
+        (row) =>
+          row.phong_ban_id !== userPhongBanId &&
+          row.phong_ban_cha_id !== userPhongBanId
       );
-      
+
       if (unauthorizedRows.length > 0) {
-        console.error("❌ BACKEND PHÂN QUYỀN BỊ VI PHẠM! Query trả về dữ liệu không thuộc quyền:");
+        console.error(
+          "❌ BACKEND PHÂN QUYỀN BỊ VI PHẠM! Query trả về dữ liệu không thuộc quyền:"
+        );
         console.error("  - Dữ liệu không được phép:", unauthorizedRows);
       } else {
-        console.log("✅ Backend phân quyền OK - Query chỉ trả về dữ liệu thuộc quyền");
+        console.log(
+          "✅ Backend phân quyền OK - Query chỉ trả về dữ liệu thuộc quyền"
+        );
       }
     }
 
@@ -2654,6 +2902,167 @@ const getXuatDataByType = async (req, res, query, user) => {
   }
 };
 
+// Thống kê biểu đồ theo thời gian
+const getChartData = async (req, res, query, user) => {
+  try {
+    console.log("Getting chart data for user:", user.role, user.phong_ban_id);
+
+    // Lấy tham số period từ query
+    const period = query.period || "6months";
+    let intervalMonths = 5; // default 6 months
+
+    switch (period) {
+      case "1year":
+        intervalMonths = 11; // 12 months
+        break;
+      case "2years":
+        intervalMonths = 23; // 24 months
+        break;
+      default:
+        intervalMonths = 5; // 6 months
+    }
+
+    // Xây dựng WHERE clause dựa trên role
+    let whereClause = "";
+    let queryParams = [];
+
+    if (user.role !== "admin") {
+      whereClause = "WHERE phong_ban_id = $1";
+      queryParams.push(user.phong_ban_id);
+    }
+
+    // Query lấy dữ liệu theo thời gian
+    const chartQuery = `
+      WITH months AS (
+        SELECT 
+          generate_series(
+            date_trunc('month', CURRENT_DATE - INTERVAL '${intervalMonths} months'),
+            date_trunc('month', CURRENT_DATE),
+            INTERVAL '1 month'
+          ) as month
+      ),
+      nhap_data AS (
+        SELECT 
+          date_trunc('month', ngay_nhap) as month,
+          COUNT(*) as nhap_count,
+          SUM(tong_tien) as nhap_value
+        FROM phieu_nhap 
+        ${whereClause ? whereClause + " AND" : "WHERE"} trang_thai = 'completed'
+        AND ngay_nhap >= date_trunc('month', CURRENT_DATE - INTERVAL '${intervalMonths} months')
+        GROUP BY date_trunc('month', ngay_nhap)
+      ),
+      xuat_data AS (
+        SELECT 
+          date_trunc('month', ngay_xuat) as month,
+          COUNT(*) as xuat_count,
+          SUM(tong_tien) as xuat_value
+        FROM phieu_xuat 
+        ${whereClause ? whereClause + " AND" : "WHERE"} trang_thai = 'completed'
+        AND ngay_xuat >= date_trunc('month', CURRENT_DATE - INTERVAL '${intervalMonths} months')
+        GROUP BY date_trunc('month', ngay_xuat)
+      )
+      SELECT 
+        to_char(m.month, 'MM') as thang,
+        to_char(m.month, 'TMMonth') as ten_thang,
+        COALESCE(n.nhap_count, 0) as nhap,
+        COALESCE(x.xuat_count, 0) as xuat,
+        COALESCE(n.nhap_value, 0) as nhap_value,
+        COALESCE(x.xuat_value, 0) as xuat_value
+      FROM months m
+      LEFT JOIN nhap_data n ON m.month = n.month
+      LEFT JOIN xuat_data x ON m.month = x.month
+      ORDER BY m.month
+    `;
+
+    const result = await pool.query(chartQuery, queryParams);
+
+    const chartData = result.rows.map((row) => ({
+      thang: row.thang,
+      ten_thang: row.ten_thang,
+      nhap: parseInt(row.nhap),
+      xuat: parseInt(row.xuat),
+      nhap_value: parseFloat(row.nhap_value),
+      xuat_value: parseFloat(row.xuat_value),
+    }));
+
+    sendResponse(res, 200, true, "Lấy dữ liệu biểu đồ thành công", chartData);
+  } catch (error) {
+    console.error("Chart data error:", error);
+    sendResponse(res, 500, false, "Lỗi server", { error: error.message });
+  }
+};
+
+// Thống kê phẩm chất hàng hóa
+const getPhamChatStats = async (req, res, query, user) => {
+  try {
+    console.log(
+      "Getting pham chat stats for user:",
+      user.role,
+      user.phong_ban_id
+    );
+
+    let whereClause = "WHERE tk.so_luong_ton > 0";
+    let queryParams = [];
+
+    if (user.role !== "admin") {
+      whereClause += " AND tk.phong_ban_id = $1";
+      queryParams.push(user.phong_ban_id);
+    }
+
+    const phamChatQuery = `
+      SELECT 
+        SUM(tk.sl_tot) as sl_tot,
+        SUM(tk.sl_kem_pham_chat) as sl_kem_pham_chat,
+        SUM(tk.sl_mat_pham_chat) as sl_mat_pham_chat,
+        SUM(tk.sl_hong) as sl_hong,
+        SUM(tk.so_luong_ton) as tong_so_luong
+      FROM ton_kho tk
+      JOIN hang_hoa hh ON tk.hang_hoa_id = hh.id
+      ${whereClause}
+    `;
+
+    const result = await pool.query(phamChatQuery, queryParams);
+    const data = result.rows[0];
+
+    const total = parseFloat(data.tong_so_luong) || 0;
+    const pieData = [
+      {
+        name: "Tốt",
+        value:
+          total > 0 ? Math.round((parseFloat(data.sl_tot) / total) * 100) : 0,
+        color: "#22c55e",
+      },
+      {
+        name: "Kém phẩm chất",
+        value:
+          total > 0
+            ? Math.round((parseFloat(data.sl_kem_pham_chat) / total) * 100)
+            : 0,
+        color: "#f59e0b",
+      },
+      {
+        name: "Mất phẩm chất",
+        value:
+          total > 0
+            ? Math.round((parseFloat(data.sl_mat_pham_chat) / total) * 100)
+            : 0,
+        color: "#ef4444",
+      },
+      {
+        name: "Hỏng",
+        value:
+          total > 0 ? Math.round((parseFloat(data.sl_hong) / total) * 100) : 0,
+        color: "#6b7280",
+      },
+    ];
+
+    sendResponse(res, 200, true, "Lấy thống kê phẩm chất thành công", pieData);
+  } catch (error) {
+    console.error("Pham chat stats error:", error);
+    sendResponse(res, 500, false, "Lỗi server", { error: error.message });
+  }
+};
+
 module.exports = {
   getDashboardStats,
   getTonKhoReport,
@@ -2666,4 +3075,6 @@ module.exports = {
   exportLuanChuyenExcel,
   getLuanChuyenReport,
   getPhongBanForReport,
+  getChartData,
+  getPhamChatStats,
 };

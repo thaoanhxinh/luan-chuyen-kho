@@ -1,5 +1,6 @@
 // services/api.js - Cấu hình API với debug chi tiết
 import axios from "axios";
+import toast from "react-hot-toast";
 
 // Tạo axios instance với cấu hình chi tiết
 const api = axios.create({
@@ -118,6 +119,31 @@ api.interceptors.response.use(
       console.error("🔗 URL:", error.config?.url);
       console.error("🔗 Method:", error.config?.method?.toUpperCase());
       console.error("📦 Response Data:", data);
+
+      // Hiển thị thông báo lỗi rõ ràng ra UI
+      let message =
+        data?.message ||
+        data?.error ||
+        (Array.isArray(data?.errors) && data.errors.join("\n")) ||
+        (typeof data === "string" ? data : "Có lỗi xảy ra. Vui lòng thử lại.");
+
+      // Một số mapping thông dụng
+      if (status === 400 && /invalid|sai|không đúng/i.test(message)) {
+        message = message;
+      }
+      if (status === 409 && /exists|đã tồn tại|duplicate/i.test(message)) {
+        message = message;
+      }
+      if (status === 422 && data?.errors && typeof data.errors === "object") {
+        // Gom validation errors dạng object { field: [messages] }
+        message = Object.entries(data.errors)
+          .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+          .join("\n");
+      }
+
+      try {
+        toast.error(message);
+      } catch (_) {}
 
       // Enhanced error handling với specific cases
       switch (status) {

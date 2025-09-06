@@ -163,14 +163,10 @@ const createUser = async (req, res, body, user) => {
 
     const hashedPassword = await hashPassword(password);
 
-    // Map role to enum values in current schema
-    const roleMapping = {
-      admin: "admin",
-      manager: "user", // Since schema only has admin/user
-      employee: "user",
-    };
-
-    const dbRole = roleMapping[userRole] || "user";
+    // Accept roles as provided, normalize 'employee' -> 'user'
+    const roleMapping = { employee: "user" };
+    const rawRole = (userRole || "user").toLowerCase();
+    const dbRole = roleMapping[rawRole] || rawRole;
 
     const insertQuery = `
       INSERT INTO users (username, ho_ten, email, password, phone, role, phong_ban_id, trang_thai, created_at)
@@ -212,14 +208,10 @@ const updateUser = async (req, res, params, body, user) => {
       is_active,
     } = body;
 
-    // Map role to enum values in current schema
-    const roleMapping = {
-      admin: "admin",
-      manager: "user",
-      employee: "user",
-    };
-
-    const dbRole = roleMapping[userRole] || "user";
+    // Accept roles as provided, normalize 'employee' -> 'user'
+    const roleMapping = { employee: "user" };
+    const rawRole = (userRole || "user").toLowerCase();
+    const dbRole = roleMapping[rawRole] || rawRole;
 
     // Determine status from either boolean is_active or trang_thai string
     let statusValue;
@@ -426,7 +418,7 @@ const updateUserRole = async (req, res, params, body, user) => {
     const { id } = params;
     const { role: userRole } = body;
 
-    if (!["admin", "manager", "employee"].includes(userRole)) {
+    if (!["admin", "manager", "employee", "user"].includes(userRole)) {
       return sendResponse(res, 400, false, "Role không hợp lệ");
     }
 
@@ -440,14 +432,10 @@ const updateUserRole = async (req, res, params, body, user) => {
       );
     }
 
-    // Map role to enum values in current schema
-    const roleMapping = {
-      admin: "admin",
-      manager: "user",
-      employee: "user",
-    };
-
-    const dbRole = roleMapping[userRole] || "user";
+    // Accept roles as provided, normalize 'employee' -> 'user'
+    const roleMapping = { employee: "user" };
+    const rawRole = (userRole || "user").toLowerCase();
+    const dbRole = roleMapping[rawRole] || rawRole;
 
     const updateQuery = `
       UPDATE users 

@@ -4,20 +4,32 @@ import { Search, ChevronDown, X } from "lucide-react";
 const AutoComplete = ({
   searchFunction,
   onSelect,
+  onChange,
+  value,
   placeholder = "Nhập để tìm kiếm...",
   displayField = "name",
+  searchField = "name",
   renderItem,
   className = "",
   disabled = false,
   required = false,
   initialValue = null,
   debounceMs = 300,
+  allowCreateOption = false,
+  showCreateOption = false,
+  createNewLabel = "Tạo mới",
+  noResultsText = "Không tìm thấy kết quả",
+  loadingText = "Đang tìm kiếm...",
+  minSearchLength = 0,
+  searchDelay = 300,
+  clearable = false,
+  clearText = "Xóa",
 }) => {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState(initialValue);
+  const [selectedItem, setSelectedItem] = useState(value || initialValue);
   const [focusedIndex, setFocusedIndex] = useState(-1);
 
   const inputRef = useRef(null);
@@ -58,13 +70,13 @@ const AutoComplete = ({
     }
 
     debounceRef.current = setTimeout(() => {
-      if (query.trim().length >= 2 && !selectedItem) {
+      if (query.trim().length >= minSearchLength && !selectedItem) {
         performSearch(query.trim());
-      } else if (query.trim().length < 2) {
+      } else if (query.trim().length < minSearchLength) {
         setResults([]);
         setIsOpen(false);
       }
-    }, debounceMs);
+    }, searchDelay);
 
     return () => {
       if (debounceRef.current) {
@@ -129,7 +141,32 @@ const AutoComplete = ({
     setIsOpen(false);
     setFocusedIndex(-1);
     onSelect?.(null);
+    onChange?.(null);
     inputRef.current?.focus();
+  };
+
+  const handleCreateNew = (newValue) => {
+    const newItem = {
+      id: `new_${Date.now()}`,
+      [displayField]: newValue,
+      isNewItem: true,
+    };
+
+    console.log("🔍 AutoComplete handleCreateNew:", {
+      newValue,
+      displayField,
+      newItem,
+    });
+
+    setSelectedItem(newItem);
+    setQuery(newValue);
+    setResults([]);
+    setIsOpen(false);
+    setFocusedIndex(-1);
+
+    console.log("🔍 AutoComplete calling onChange with:", newItem);
+    onSelect?.(newItem);
+    onChange?.(newItem);
   };
 
   const handleKeyDown = (e) => {
@@ -289,18 +326,33 @@ const AutoComplete = ({
                 </li>
               ))}
             </ul>
-          ) : query.trim().length >= 2 ? (
+          ) : query.trim().length >= minSearchLength ? (
             <div className="p-3 text-center text-gray-500 text-sm">
-              Không tìm thấy kết quả nào
-              {query.trim().length >= 3 && (
-                <div className="text-xs text-blue-600 mt-1">
-                  💡 Có thể tạo mới "{query.trim()}"
-                </div>
+              {noResultsText}
+              {allowCreateOption && query.trim().length >= 2 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    console.log("🔍 Create button clicked for:", query.trim());
+                    handleCreateNew(query.trim());
+                  }}
+                  className="block w-full mt-2 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded border border-blue-200 hover:border-blue-300 transition-colors"
+                >
+                  {createNewLabel}: "{query.trim()}"
+                </button>
+              )}
+              {console.log(
+                "🔍 AutoComplete render - allowCreateOption:",
+                allowCreateOption,
+                "query length:",
+                query.trim().length,
+                "minSearchLength:",
+                minSearchLength
               )}
             </div>
           ) : (
             <div className="p-3 text-center text-gray-500 text-sm">
-              Nhập ít nhất 2 ký tự để tìm kiếm
+              Nhập ít nhất {minSearchLength} ký tự để tìm kiếm
             </div>
           )}
         </div>

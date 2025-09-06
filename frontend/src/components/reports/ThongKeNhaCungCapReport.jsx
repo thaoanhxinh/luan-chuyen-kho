@@ -241,33 +241,17 @@ const ThongKeNhaCungCapReport = ({ user }) => {
 
   return (
     <div className="space-y-6">
-      {/* Header Card */}
-      <div className="bg-gradient-to-r from-orange-600 to-red-600 rounded-lg shadow-lg text-white">
-        <div className="p-6">
+      {/* Header */}
+      <div className="bg-white rounded-lg border border-gray-200">
+        <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold mb-2">Thống kê nhà cung cấp</h2>
-              <p className="text-orange-100 mb-4">
-                Phân tích hoạt động cung ứng của các nhà cung cấp
-              </p>
-              <div className="flex items-center space-x-4 text-sm">
-                <div className="flex items-center">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  {formatDate(filters.tu_ngay)} - {formatDate(filters.den_ngay)}
-                </div>
-                <div className="flex items-center">
-                  <Truck className="h-4 w-4 mr-2" />
-                  {stats.totalNhaCungCap} nhà cung cấp
-                </div>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-3xl font-bold">
-                {formatCurrency(stats.totalGiaTri)}
-              </div>
-              <div className="text-sm text-orange-100">
-                Tổng giá trị cung ứng
-              </div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Thống kê nhà cung cấp
+            </h2>
+            <div className="text-sm text-gray-600">
+              <Calendar className="h-4 w-4 inline mr-2" />
+              {formatDate(filters.tu_ngay)} - {formatDate(filters.den_ngay)} •{" "}
+              {stats.totalNhaCungCap} nhà cung cấp
             </div>
           </div>
         </div>

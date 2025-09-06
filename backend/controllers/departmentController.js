@@ -22,7 +22,7 @@ const getDepartments = async (req, res, query, user) => {
       paramIndex++;
     }
 
-    // Query departments without truong_phong_id (since it doesn't exist in current schema)
+    // Query departments with direct user count (không cộng dồn cấp dưới)
     const departmentsQuery = `
       SELECT 
         pb.id,
@@ -33,11 +33,14 @@ const getDepartments = async (req, res, query, user) => {
         pb.phong_ban_cha_id,
         pb.trang_thai::text as is_active,
         pb.created_at,
-        COUNT(u.id) as so_nhan_vien
+        (
+          SELECT COUNT(*)
+          FROM users u
+          WHERE u.trang_thai = 'active'
+            AND u.phong_ban_id = pb.id
+        ) AS so_nhan_vien
       FROM phong_ban pb
-      LEFT JOIN users u ON pb.id = u.phong_ban_id AND u.trang_thai = 'active'
       ${whereClause}
-      GROUP BY pb.id, pb.ma_phong_ban, pb.ten_phong_ban, pb.mo_ta, pb.cap_bac, pb.phong_ban_cha_id, pb.trang_thai, pb.created_at
       ORDER BY pb.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;

@@ -35,9 +35,19 @@ router.put(
 // Routes mới cho search và auto-create
 router.get("/search/suggestions", auth, hangHoaSearchController.searchHangHoa);
 router.post("/auto-create", auth, hangHoaSearchController.createHangHoaAuto);
-// Trong file routes/hangHoa.js hoặc tương tự
-router.get("/:id", authenticateToken, (req, res) => {
-  hangHoaController.getDetail(req, res, req.params, req.user);
+// Route để lấy chi tiết hàng hóa theo ID
+router.get("/:id", auth, (req, res) => {
+  hangHoaController.getById(req, res, req.params, req.user);
+});
+
+// Route để lấy chi tiết hàng hóa theo ID và phòng ban
+router.get("/:id/phong-ban/:phongBanId", auth, (req, res) => {
+  hangHoaController.getDetailByPhongBan(req, res, req.params, req.user);
+});
+
+// Route để lấy danh sách phòng ban cho filter
+router.get("/departments/list", auth, (req, res) => {
+  hangHoaController.getPhongBanForFilter(req, res, req.user);
 });
 
 module.exports = router;

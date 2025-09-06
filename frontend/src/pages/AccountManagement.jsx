@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { userService } from "../services/userService";
+import PageHeader from "../components/common/PageHeader";
 import toast from "react-hot-toast";
 
 const AccountManagement = () => {
@@ -62,60 +63,82 @@ const AccountManagement = () => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Quản lý tài khoản</h1>
-        <p className="text-gray-600">Đổi tên đăng nhập và mật khẩu của bạn</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader title="Quản lý tài khoản" />
 
-      <form
-        onSubmit={handleChangeUsername}
-        className="bg-white p-4 rounded shadow space-y-3"
-      >
-        <div className="font-semibold">Đổi tên đăng nhập</div>
-        <input
-          className="border rounded px-3 py-2 w-full"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
-        <div className="text-right">
-          <button
-            disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white rounded"
-          >
-            Lưu
-          </button>
+      <div className="max-w-2xl mx-auto space-y-6">
+        {/* Change Username */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Đổi tên đăng nhập
+          </h3>
+          <form onSubmit={handleChangeUsername} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Tên đăng nhập mới
+              </label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Nhập tên đăng nhập mới"
+              />
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                {loading ? "Đang lưu..." : "Lưu thay đổi"}
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
 
-      <form
-        onSubmit={handleChangePassword}
-        className="bg-white p-4 rounded shadow space-y-3"
-      >
-        <div className="font-semibold">Đổi mật khẩu</div>
-        <input
-          type="password"
-          placeholder="Mật khẩu hiện tại"
-          className="border rounded px-3 py-2 w-full"
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-        />
-        <input
-          type="password"
-          placeholder="Mật khẩu mới"
-          className="border rounded px-3 py-2 w-full"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-        />
-        <div className="text-right">
-          <button
-            disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white rounded"
-          >
+        {/* Change Password */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
             Đổi mật khẩu
-          </button>
+          </h3>
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Mật khẩu hiện tại
+              </label>
+              <input
+                type="password"
+                placeholder="Nhập mật khẩu hiện tại"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Mật khẩu mới
+              </label>
+              <input
+                type="password"
+                placeholder="Nhập mật khẩu mới"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                {loading ? "Đang đổi..." : "Đổi mật khẩu"}
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
+      </div>
     </div>
   );
 };

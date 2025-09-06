@@ -152,7 +152,12 @@ const ActionDropdown = ({ phieu, onAction, user }) => {
 
   // LOGIC ĐÚNG: Quyền approve - admin/manager với phiếu confirmed/pending_approval/pending_level3_approval
   const canApprove =
-    (isAdmin || isManager) &&
+    (isAdmin ||
+      (isManager &&
+        phieu.loai_phieu !== "dieu_chuyen" && // ✅ SỬA: Manager không duyệt dieu_chuyen
+        ["confirmed", "pending_approval", "pending_level3_approval"].includes(
+          phieu.trang_thai
+        ))) &&
     ["confirmed", "pending_approval", "pending_level3_approval"].includes(
       phieu.trang_thai
     );
@@ -176,8 +181,8 @@ const ActionDropdown = ({ phieu, onAction, user }) => {
     user.role === "user" &&
     user.phong_ban?.cap_bac === 3 &&
     phieu.trang_thai === "pending_level3_approval" &&
-    phieu.workflow_type === "cap3_dieu_chuyen" &&
-    phieu.phong_ban_cung_cap_id === user.phong_ban_id;
+    phieu.loai_phieu === "dieu_chuyen" &&
+    phieu.phong_ban_id === user.phong_ban_id;
 
   // FIX 1: Upload quyết định - CHỦ SỞ HỮU CŨNG CÓ THỂ UPLOAD
   const canUpload =
@@ -817,7 +822,8 @@ const NhapKho = () => {
     }
   };
 
-  const shouldShowPhongBanFilter = user?.role === "admin";
+  const shouldShowPhongBanFilter =
+    user?.role === "admin" || user?.role === "manager";
   const canCreatePhieu = user?.role === "user";
 
   return (
@@ -999,46 +1005,46 @@ const NhapKho = () => {
           ) : (
             <>
               {/* Desktop Table */}
-              <div className="hidden lg:block">
-                <table className="w-full table-fixed">
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full min-w-[1200px]">
                   <thead className="bg-gray-50">
                     <tr>
                       <th
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-[14%]"
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 min-w-[140px]"
                         onClick={() => handleSort("so_phieu")}
                       >
                         Số phiếu {getSortIcon("so_phieu")}
                       </th>
                       <th
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-[14%]"
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 min-w-[120px]"
                         onClick={() => handleSort("ngay_nhap")}
                       >
                         Ngày nhập {getSortIcon("ngay_nhap")}
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[12%]">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                         Loại phiếu
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[24%]">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">
                         Nhà cung cấp
                       </th>
                       {shouldShowPhongBanFilter && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[16%]">
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
                           Phòng ban
                         </th>
                       )}
                       <th
-                        className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-[12%]"
+                        className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 min-w-[120px]"
                         onClick={() => handleSort("tong_tien")}
                       >
                         Tổng tiền {getSortIcon("tong_tien")}
                       </th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[10%]">
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                         Trạng thái
                       </th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[8%]">
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px]">
                         QĐ
                       </th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[10%]">
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                         Thao tác
                       </th>
                     </tr>
@@ -1057,8 +1063,8 @@ const NhapKho = () => {
                               : ""
                           }`}
                         >
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900 flex items-center space-x-2 truncate">
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900 flex items-center space-x-2">
                               <span className="truncate">{phieu.so_phieu}</span>
                               {isHighlighted && (
                                 <span className="animate-pulse bg-yellow-200 text-yellow-800 text-xs px-2 py-1 rounded-full">
@@ -1075,7 +1081,7 @@ const NhapKho = () => {
                               </div>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">
                               {formatDate(phieu.ngay_nhap)}
                             </div>
@@ -1086,12 +1092,12 @@ const NhapKho = () => {
                               </div>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap">
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                               {LOAI_PHIEU_NHAP[phieu.loai_phieu]}
                             </span>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-4 py-4">
                             <div className="text-sm text-gray-900 truncate">
                               {phieu.nha_cung_cap?.ten_ncc || "Chưa có"}
                             </div>
@@ -1105,7 +1111,7 @@ const NhapKho = () => {
                             )}
                           </td>
                           {shouldShowPhongBanFilter && (
-                            <td className="px-6 py-4">
+                            <td className="px-4 py-4">
                               <div className="text-sm text-gray-900 flex items-center truncate">
                                 <Building
                                   size={14}
@@ -1117,7 +1123,7 @@ const NhapKho = () => {
                               </div>
                             </td>
                           )}
-                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <td className="px-4 py-4 whitespace-nowrap text-right">
                             <div className="text-sm font-medium text-green-600">
                               {formatCurrency(phieu.tong_tien)}
                             </div>
@@ -1127,7 +1133,7 @@ const NhapKho = () => {
                               </div>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <td className="px-4 py-4 whitespace-nowrap text-center">
                             <span
                               className={getTrangThaiColor(phieu.trang_thai)}
                             >
@@ -1143,7 +1149,7 @@ const NhapKho = () => {
                                 </div>
                               )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <td className="px-4 py-4 whitespace-nowrap text-center">
                             {phieu.decision_pdf_url ? (
                               <button
                                 onClick={() => handleDownloadDecision(phieu.id)}
@@ -1156,7 +1162,7 @@ const NhapKho = () => {
                               <span className="text-xs text-gray-400">-</span>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <td className="px-4 py-4 whitespace-nowrap text-center">
                             <ActionDropdown
                               phieu={phieu}
                               user={user}

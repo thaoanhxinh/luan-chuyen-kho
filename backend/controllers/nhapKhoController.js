@@ -51,10 +51,42 @@ const nhapKhoController = {
 
       const phieuData = phieuResult.rows[0];
 
-      if (
-        user.role !== "admin" &&
-        phieuData.phong_ban_id !== user.phong_ban_id
-      ) {
+      // ✅ FIX: Logic permission phức tạp hơn theo role
+      let hasPermission = false;
+
+      if (user.role === "admin") {
+        hasPermission = true;
+      } else if (user.role === "user" && user.phong_ban?.cap_bac === 3) {
+        // User cấp 3 chỉ xem được phiếu của phòng ban mình
+        hasPermission = phieuData.phong_ban_id === user.phong_ban_id;
+      } else if (user.role === "manager") {
+        // Manager xem được phiếu của các phòng ban cấp 3 thuộc quyền
+        // Kiểm tra xem phòng ban của phiếu có thuộc quyền manager không
+        const managerPermissionQuery = `
+          SELECT COUNT(*) as count
+          FROM phong_ban pb
+          WHERE pb.id = $1 
+          AND (pb.phong_ban_cha_id = $2 OR pb.id = $2)
+          AND pb.cap_bac = 3
+        `;
+        const managerResult = await pool.query(managerPermissionQuery, [
+          phieuData.phong_ban_id,
+          user.phong_ban_id,
+        ]);
+        hasPermission = parseInt(managerResult.rows[0].count) > 0;
+      }
+
+      if (!hasPermission) {
+        console.log("❌ Permission denied:", {
+          user: {
+            role: user.role,
+            phong_ban_id: user.phong_ban_id,
+            cap_bac: user.phong_ban?.cap_bac,
+          },
+          phieu: {
+            phong_ban_id: phieuData.phong_ban_id,
+          },
+        });
         return sendResponse(
           res,
           403,
@@ -82,18 +114,26 @@ const nhapKhoController = {
               ten_phong_ban: phieuData.ten_phong_ban_cung_cap,
             }
           : null,
-        user_tao: phieuData.nguoi_tao_id
+        nguoi_tao_info: phieuData.nguoi_tao_id
           ? {
               id: phieuData.nguoi_tao_id,
               ho_ten: phieuData.nguoi_tao_ten,
             }
           : null,
-        user_duyet: phieuData.nguoi_duyet_cap1_id
+        nguoi_tao_ten: phieuData.nguoi_tao_ten, // ✅ FIX: Thêm field này để frontend có thể dùng
+        nguoi_duyet_info: phieuData.nguoi_duyet_cap1_id
           ? {
               id: phieuData.nguoi_duyet_cap1_id,
               ho_ten: phieuData.nguoi_duyet_cap1_ten,
             }
           : null,
+        phong_ban: phieuData.phong_ban_id
+          ? {
+              id: phieuData.phong_ban_id,
+              ten_phong_ban: phieuData.ten_phong_ban,
+            }
+          : null,
+        ten_phong_ban: phieuData.ten_phong_ban, // ✅ FIX: Thêm field này để frontend có thể dùng
         chi_tiet: chiTietResult.rows.map((item) => ({
           ...item,
           hang_hoa: {
@@ -221,9 +261,19 @@ const nhapKhoController = {
       console.log("- NCC ID:", nha_cung_cap_id);
       console.log("- Phong ban cung cap ID:", phong_ban_cung_cap_id);
 
-      if (!ngay_nhap || !chi_tiet.length) {
+      if (!ngay_nhap) {
         await client.query("ROLLBACK");
-        return sendResponse(res, 400, false, "Thiếu thông tin bắt buộc");
+        return sendResponse(res, 400, false, "Vui lòng chọn ngày nhập");
+      }
+
+      if (!chi_tiet || chi_tiet.length === 0) {
+        await client.query("ROLLBACK");
+        return sendResponse(
+          res,
+          400,
+          false,
+          "Vui lòng thêm ít nhất một hàng hóa"
+        );
       }
 
       // ✅ FIXED: Validation logic đúng theo business rules
@@ -244,6 +294,10 @@ const nhapKhoController = {
             "Vui lòng chọn phòng ban cung cấp"
           );
         }
+      } else {
+        // Loại phiếu không hợp lệ
+        await client.query("ROLLBACK");
+        return sendResponse(res, 400, false, "Loại phiếu không hợp lệ");
       }
 
       // Tạo số phiếu tự động
@@ -262,14 +316,40 @@ const nhapKhoController = {
 
       // ✅ FIX: Validate và tính tổng tiền từ chi tiết
       let tongTien = 0;
-      for (const item of chi_tiet) {
-        if (
-          !item.hang_hoa_id ||
-          (!item.so_luong_ke_hoach && !item.so_luong) ||
-          item.don_gia === undefined
-        ) {
+      for (let i = 0; i < chi_tiet.length; i++) {
+        const item = chi_tiet[i];
+
+        // Kiểm tra hàng hóa
+        if (!item.hang_hoa_id) {
           await client.query("ROLLBACK");
-          return sendResponse(res, 400, false, "Chi tiết nhập không hợp lệ");
+          return sendResponse(
+            res,
+            400,
+            false,
+            `Dòng ${i + 1}: Chưa chọn hàng hóa`
+          );
+        }
+
+        // Kiểm tra số lượng
+        if (!item.so_luong_ke_hoach && !item.so_luong) {
+          await client.query("ROLLBACK");
+          return sendResponse(
+            res,
+            400,
+            false,
+            `Dòng ${i + 1}: Chưa nhập số lượng`
+          );
+        }
+
+        // Kiểm tra đơn giá
+        if (item.don_gia === undefined || item.don_gia === null) {
+          await client.query("ROLLBACK");
+          return sendResponse(
+            res,
+            400,
+            false,
+            `Dòng ${i + 1}: Chưa nhập đơn giá`
+          );
         }
 
         // Kiểm tra hàng hóa tồn tại
@@ -716,21 +796,21 @@ const nhapKhoController = {
         );
       }
 
-      // ✅ QUY TRÌNH MỚI: Xác định trạng thái tiếp theo
+      // ✅ QUY TRÌNH PHÂN BIỆT THEO LOẠI PHIẾU: Xác định trạng thái tiếp theo
       let trangThaiMoi;
       let message;
 
       if (phieu.loai_phieu === "dieu_chuyen") {
-        // 🔥 ĐIỀU CHUYỂN CẤP 3: Gửi đến cấp 3B bên kia duyệt
-        trangThaiMoi = "pending_level3_approval";
-        message = "Đã gửi cho cấp 3 bên kia duyệt điều chuyển";
+        // 🔥 ĐIỀU CHUYỂN: Gửi đến Admin/Cấp 2 duyệt trước (workflow 2 bước)
+        trangThaiMoi = "confirmed";
+        message = "Đã gửi cho Admin/Cấp 2 duyệt điều chuyển";
       } else if (
         phieu.loai_phieu === "tu_mua" ||
         phieu.loai_phieu === "tren_cap"
       ) {
-        // 🔥 TỰ MUA/TRÊN CẤP: Gửi confirmed để cấp 2 HOẶC cấp 1 duyệt (1 lần là xong)
+        // 🔥 TỰ MUA/TRÊN CẤP: Gửi confirmed để Admin/Cấp 2 duyệt 1 lần là xong (không có bên cấp 3 nào)
         trangThaiMoi = "confirmed";
-        message = "Đã gửi cho cấp quản lý duyệt (cấp 2 hoặc cấp 1)";
+        message = "Đã gửi cho Admin/Cấp 2 duyệt (1 lần là xong)";
       } else {
         // Fallback
         trangThaiMoi = "confirmed";
@@ -880,6 +960,22 @@ const nhapKhoController = {
     }
   },
 
+  // ✅ Manager approve function - tương tự approve nhưng chỉ dành cho manager
+  async managerApprove(req, res, params, user) {
+    // Gọi method approve với validation role manager
+    if (user.role !== "manager") {
+      return sendResponse(
+        res,
+        403,
+        false,
+        "Chỉ manager mới có quyền duyệt phiếu"
+      );
+    }
+
+    // Gọi method approve chính
+    return await this.approve(req, res, params, user);
+  },
+
   // ✅ FIX: Approve function với notification đúng
   async approve(req, res, params, user) {
     const client = await pool.connect();
@@ -923,16 +1019,36 @@ const nhapKhoController = {
         );
       }
 
-      // ✅ 1 LẦN DUYỆT: Chuyển thẳng sang approved
-      await client.query(
-        `UPDATE phieu_nhap
-         SET trang_thai = 'approved',
-             nguoi_duyet_cap1 = $1,
-             ngay_duyet_cap1 = CURRENT_TIMESTAMP,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $2`,
-        [user.id, id]
-      );
+      // ✅ WORKFLOW PHÂN BIỆT THEO LOẠI PHIẾU: Xử lý theo loại phiếu
+      if (phieu.loai_phieu === "dieu_chuyen") {
+        // 🔥 ĐIỀU CHUYỂN: Admin/Cấp 2 duyệt → Tạo phiếu xuất tự động cho bên kia (workflow 2 bước)
+        await this.handleDieuChuyenApproval(client, phieu, user);
+      } else if (
+        phieu.loai_phieu === "tu_mua" ||
+        phieu.loai_phieu === "tren_cap"
+      ) {
+        // 🔥 TỰ MUA/TRÊN CẤP: Admin/Cấp 2 duyệt 1 lần là xong (không có bên cấp 3 nào)
+        await client.query(
+          `UPDATE phieu_nhap
+           SET trang_thai = 'approved',
+               nguoi_duyet_cap1 = $1,
+               ngay_duyet_cap1 = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $2`,
+          [user.id, id]
+        );
+      } else {
+        // Các loại khác: Duyệt bình thường
+        await client.query(
+          `UPDATE phieu_nhap
+           SET trang_thai = 'approved',
+               nguoi_duyet_cap1 = $1,
+               ngay_duyet_cap1 = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $2`,
+          [user.id, id]
+        );
+      }
 
       // 🔗 Đồng bộ phiếu xuất liên kết (nếu có): khi nhập được duyệt, đảm bảo phiếu xuất ở trạng thái 'approved'
       const linkRes = await client.query(
@@ -996,6 +1112,155 @@ const nhapKhoController = {
     }
   },
 
+  // ✅ Xử lý duyệt phiếu điều chuyển
+  async handleDieuChuyenApproval(client, phieu, user) {
+    try {
+      console.log("🔄 Handling dieu chuyen approval for phieu:", phieu.id);
+
+      // 1. Cập nhật phiếu nhập sang trạng thái chờ cấp 3 duyệt
+      await client.query(
+        `UPDATE phieu_nhap
+         SET trang_thai = 'pending_level3_approval',
+             nguoi_duyet_cap1 = $1,
+             ngay_duyet_cap1 = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [user.id, phieu.id]
+      );
+
+      // 2. Tạo phiếu xuất tự động cho bên kia
+      const phieuXuatId = await this.createAutoPhieuXuat(client, phieu);
+
+      // 3. Liên kết 2 phiếu với nhau
+      await client.query(
+        `UPDATE phieu_nhap 
+         SET phieu_xuat_lien_ket_id = $1 
+         WHERE id = $2`,
+        [phieuXuatId, phieu.id]
+      );
+
+      // 4. Gửi thông báo cho cấp 3 bên kia
+      await this.notifyLevel3ForDieuChuyen(client, phieu, phieuXuatId);
+
+      console.log("✅ Dieu chuyen approval completed");
+    } catch (error) {
+      console.error("❌ Handle dieu chuyen approval error:", error);
+      throw error;
+    }
+  },
+
+  // ✅ Tạo phiếu xuất tự động cho điều chuyển
+  async createAutoPhieuXuat(client, phieuNhap) {
+    try {
+      // Lấy chi tiết phiếu nhập
+      const chiTietResult = await client.query(
+        `SELECT * FROM chi_tiet_nhap WHERE phieu_nhap_id = $1`,
+        [phieuNhap.id]
+      );
+
+      // Tìm user thuộc phòng ban cung cấp để làm nguoi_tao (tránh trigger permission)
+      const userCungCapResult = await client.query(
+        `SELECT id FROM users WHERE phong_ban_id = $1 AND trang_thai = 'active' LIMIT 1`,
+        [phieuNhap.phong_ban_cung_cap_id]
+      );
+      const nguoiTaoPhieuXuat =
+        userCungCapResult.rows[0]?.id || phieuNhap.nguoi_tao;
+
+      // Tạo phiếu xuất
+      console.log("🔍 Debug tạo phiếu xuất tự động:", {
+        phong_ban_cung_cap_id: phieuNhap.phong_ban_cung_cap_id,
+        phong_ban_id: phieuNhap.phong_ban_id,
+        nguoi_tao_original: phieuNhap.nguoi_tao,
+        nguoi_tao_phieu_xuat: nguoiTaoPhieuXuat,
+        nguoi_duyet_cap1: phieuNhap.nguoi_duyet_cap1,
+      });
+
+      const phieuXuatResult = await client.query(
+        `INSERT INTO phieu_xuat (
+          so_phieu, ngay_xuat, loai_xuat, phong_ban_id, phong_ban_nhan_id,
+          nguoi_tao, nguoi_duyet_cap1, ngay_duyet_cap1,
+          trang_thai, ghi_chu, created_at, updated_at
+        ) VALUES (
+          $1, CURRENT_DATE, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP,
+          'pending_level3_approval', $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        ) RETURNING id`,
+        [
+          `PX-${Date.now()}`, // Số phiếu xuất
+          "don_vi_nhan", // Loại phiếu xuất cho đơn vị nhận
+          phieuNhap.phong_ban_cung_cap_id, // Phòng ban xuất (bên cung cấp)
+          phieuNhap.phong_ban_id, // Phòng ban nhận (bên tạo phiếu nhập)
+          nguoiTaoPhieuXuat, // Người tạo phiếu xuất (thuộc phòng ban cung cấp)
+          phieuNhap.nguoi_duyet_cap1, // Người duyệt cấp 1
+          `Phiếu xuất tự động từ phiếu nhập ${phieuNhap.so_phieu}`, // Ghi chú
+        ]
+      );
+
+      const phieuXuatId = phieuXuatResult.rows[0].id;
+
+      // Tạo chi tiết phiếu xuất
+      for (const chiTiet of chiTietResult.rows) {
+        await client.query(
+          `INSERT INTO chi_tiet_xuat (
+            phieu_xuat_id, hang_hoa_id, so_luong, don_gia, thanh_tien,
+            created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+          [
+            phieuXuatId,
+            chiTiet.hang_hoa_id,
+            chiTiet.so_luong,
+            chiTiet.don_gia,
+            chiTiet.thanh_tien,
+          ]
+        );
+      }
+
+      console.log("✅ Created auto phieu xuat:", phieuXuatId);
+      return phieuXuatId;
+    } catch (error) {
+      console.error("❌ Create auto phieu xuat error:", error);
+      throw error;
+    }
+  },
+
+  // ✅ Thông báo cho cấp 3 bên kia về phiếu xuất
+  async notifyLevel3ForDieuChuyen(client, phieuNhap, phieuXuatId) {
+    try {
+      // Lấy danh sách user cấp 3 của phòng ban cung cấp
+      const usersResult = await client.query(
+        `SELECT u.id, u.ho_ten
+         FROM users u
+         JOIN phong_ban pb ON u.phong_ban_id = pb.id
+         WHERE pb.id = $1 AND u.trang_thai = 'active'`,
+        [phieuNhap.phong_ban_cung_cap_id]
+      );
+
+      if (usersResult.rows.length > 0) {
+        const recipients = usersResult.rows.map((u) => u.id);
+
+        await notificationService.notifyPhieuXuatCanDuyet(
+          {
+            id: phieuXuatId,
+            so_phieu: `PX-${Date.now()}`,
+            loai_phieu: "don_vi_nhan",
+            nguoi_tao: phieuNhap.nguoi_tao_ten,
+            phong_ban: phieuNhap.ten_phong_ban,
+            workflow_type: "dieu_chuyen",
+            is_tu_dong: true,
+          },
+          recipients
+        );
+
+        console.log(
+          "✅ Notified level3 users for dieu chuyen:",
+          recipients.length
+        );
+      }
+    } catch (error) {
+      console.error("❌ Notify level3 for dieu chuyen error:", error);
+      // Không throw error để không làm crash main process
+    }
+  },
+
   //   // ✅ Level3 approve cho điều chuyển
   async level3Approve(req, res, params, user) {
     const client = await pool.connect();
@@ -1054,16 +1319,8 @@ const nhapKhoController = {
         );
       }
 
-      // ✅ CẤP 3 DUYỆT ĐIỀU CHUYỂN XONG - CHUYỂN THÀNH APPROVED LUÔN
-      await client.query(
-        `UPDATE phieu_nhap
-         SET trang_thai = 'approved',
-             nguoi_duyet_cap1_cap1 = $1,
-             ngay_duyet_cap1 = CURRENT_TIMESTAMP,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $2`,
-        [user.id, id]
-      );
+      // ✅ CẤP 3 DUYỆT ĐIỀU CHUYỂN - ĐỒNG BỘ CẢ 2 PHIẾU
+      await this.handleLevel3DieuChuyenApproval(client, phieu, user);
 
       // Thông báo cho người tạo
       const nguoiTaoId = parseInt(phieu.nguoi_tao);
@@ -1091,6 +1348,66 @@ const nhapKhoController = {
       sendResponse(res, 500, false, "Lỗi server");
     } finally {
       client.release();
+    }
+  },
+
+  // ✅ Xử lý duyệt cấp 3 cho điều chuyển - đồng bộ cả 2 phiếu
+  async handleLevel3DieuChuyenApproval(client, phieu, user) {
+    try {
+      console.log(
+        "🔄 Handling level3 dieu chuyen approval for phieu:",
+        phieu.id
+      );
+
+      // 1. Cập nhật phiếu nhập sang approved
+      await client.query(
+        `UPDATE phieu_nhap
+         SET trang_thai = 'approved',
+             nguoi_duyet_cap1_cap1 = $1,
+             ngay_duyet_cap1 = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [user.id, phieu.id]
+      );
+
+      // 2. Cập nhật phiếu xuất liên kết sang approved
+      if (phieu.phieu_xuat_lien_ket_id) {
+        await client.query(
+          `UPDATE phieu_xuat
+           SET trang_thai = 'approved',
+               nguoi_duyet_cap1_cap1 = $1,
+               ngay_duyet_cap1 = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $2`,
+          [user.id, phieu.phieu_xuat_lien_ket_id]
+        );
+
+        // Thông báo cho người tạo phiếu xuất
+        const ownerResult = await client.query(
+          `SELECT nguoi_tao, so_phieu FROM phieu_xuat WHERE id = $1`,
+          [phieu.phieu_xuat_lien_ket_id]
+        );
+
+        if (ownerResult.rows.length > 0) {
+          await client.query(
+            `INSERT INTO notifications (nguoi_nhan, loai_thong_bao, tieu_de, noi_dung, phieu_id, url_redirect, trang_thai)
+             VALUES ($1, 'phieu_xuat_duyet', $2, $3, $4, '/xuat-kho?tab=da_duyet', 'unread')`,
+            [
+              ownerResult.rows[0].nguoi_tao,
+              "Phiếu xuất đã được duyệt",
+              `Phiếu xuất ${ownerResult.rows[0].so_phieu} đã được duyệt đồng bộ với phiếu nhập`,
+              phieu.phieu_xuat_lien_ket_id,
+            ]
+          );
+        }
+      }
+
+      console.log(
+        "✅ Level3 dieu chuyen approval completed - both phieus approved"
+      );
+    } catch (error) {
+      console.error("❌ Handle level3 dieu chuyen approval error:", error);
+      throw error;
     }
   },
 
@@ -1155,41 +1472,27 @@ const nhapKhoController = {
         );
       }
 
-      // Cập nhật trạng thái
-      await client.query(
-        `UPDATE phieu_nhap
-         SET trang_thai = 'revision_required',
-             ghi_chu_phan_hoi = $1,
-             nguoi_phan_hoi = $2,
-             ngay_phan_hoi = CURRENT_TIMESTAMP,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $3`,
-        [ghi_chu_phan_hoi.trim(), user.id, id]
-      );
-
-      // 🔗 Đồng bộ phiếu xuất liên kết (nếu có): khi nhập yêu cầu sửa, báo cho chủ phiếu xuất
-      const linkRes = await client.query(
-        `SELECT phieu_xuat_lien_ket_id FROM phieu_nhap WHERE id = $1`,
-        [id]
-      );
-      const linkedXuatId = linkRes.rows[0]?.phieu_xuat_lien_ket_id;
-      if (linkedXuatId) {
-        const owner = await client.query(
-          `SELECT nguoi_tao, so_phieu FROM phieu_xuat WHERE id = $1`,
-          [linkedXuatId]
+      // ✅ WORKFLOW PHÂN BIỆT THEO LOẠI PHIẾU: Xử lý yêu cầu sửa
+      if (phieu.loai_phieu === "dieu_chuyen") {
+        // 🔥 ĐIỀU CHUYỂN: Đồng bộ cả 2 phiếu khi yêu cầu sửa
+        await this.handleDieuChuyenRevision(
+          client,
+          phieu,
+          user,
+          ghi_chu_phan_hoi.trim()
         );
-        if (owner.rows.length) {
-          await client.query(
-            `INSERT INTO notifications (nguoi_nhan, loai_thong_bao, tieu_de, noi_dung, phieu_id, url_redirect, trang_thai)
-             VALUES ($1, 'phieu_xuat_can_sua', $2, $3, $4, '/xuat-kho?tab=can_sua', 'unread')`,
-            [
-              owner.rows[0].nguoi_tao,
-              "Phiếu xuất cần chỉnh sửa",
-              `Phiếu xuất ${owner.rows[0].so_phieu} cần chỉnh sửa theo yêu cầu từ bên nhận`,
-              linkedXuatId,
-            ]
-          );
-        }
+      } else {
+        // 🔥 TỰ MUA/TRÊN CẤP: Chỉ cập nhật phiếu nhập (không có phiếu liên kết)
+        await client.query(
+          `UPDATE phieu_nhap
+           SET trang_thai = 'revision_required',
+               ghi_chu_phan_hoi = $1,
+               nguoi_phan_hoi = $2,
+               ngay_phan_hoi = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $3`,
+          [ghi_chu_phan_hoi.trim(), user.id, phieu.id]
+        );
       }
 
       const nguoiTaoId = parseInt(phieu.nguoi_tao);
@@ -1219,6 +1522,65 @@ const nhapKhoController = {
       sendResponse(res, 500, false, "Lỗi server");
     } finally {
       client.release();
+    }
+  },
+
+  // ✅ Xử lý yêu cầu sửa cho điều chuyển - đồng bộ cả 2 phiếu
+  async handleDieuChuyenRevision(client, phieu, user, ghiChu) {
+    try {
+      console.log("🔄 Handling dieu chuyen revision for phieu:", phieu.id);
+
+      // 1. Cập nhật phiếu nhập sang revision_required
+      await client.query(
+        `UPDATE phieu_nhap
+         SET trang_thai = 'revision_required',
+             ghi_chu_phan_hoi = $1,
+             nguoi_phan_hoi = $2,
+             ngay_phan_hoi = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $3`,
+        [ghiChu, user.id, phieu.id]
+      );
+
+      // 2. Cập nhật phiếu xuất liên kết sang revision_required
+      if (phieu.phieu_xuat_lien_ket_id) {
+        await client.query(
+          `UPDATE phieu_xuat
+           SET trang_thai = 'revision_required',
+               ghi_chu_phan_hoi = $1,
+               nguoi_phan_hoi = $2,
+               ngay_phan_hoi = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $3`,
+          [ghiChu, user.id, phieu.phieu_xuat_lien_ket_id]
+        );
+
+        // Thông báo cho người tạo phiếu xuất
+        const ownerResult = await client.query(
+          `SELECT nguoi_tao, so_phieu FROM phieu_xuat WHERE id = $1`,
+          [phieu.phieu_xuat_lien_ket_id]
+        );
+
+        if (ownerResult.rows.length > 0) {
+          await client.query(
+            `INSERT INTO notifications (nguoi_nhan, loai_thong_bao, tieu_de, noi_dung, phieu_id, url_redirect, trang_thai)
+             VALUES ($1, 'phieu_xuat_can_sua', $2, $3, $4, '/xuat-kho?tab=can_sua', 'unread')`,
+            [
+              ownerResult.rows[0].nguoi_tao,
+              "Phiếu xuất cần chỉnh sửa",
+              `Phiếu xuất ${ownerResult.rows[0].so_phieu} cần chỉnh sửa theo yêu cầu từ bên nhận: ${ghiChu}`,
+              phieu.phieu_xuat_lien_ket_id,
+            ]
+          );
+        }
+      }
+
+      console.log(
+        "✅ Dieu chuyen revision completed - both phieus marked for revision"
+      );
+    } catch (error) {
+      console.error("❌ Handle dieu chuyen revision error:", error);
+      throw error;
     }
   },
 
@@ -1324,6 +1686,16 @@ const nhapKhoController = {
       // ✅ FIX: LUÔN LUÔN áp dụng role-based filter TRƯỚC, bất kể có filter trạng thái hay không
       if (user.role === "user" && user.phong_ban?.cap_bac === 3) {
         // User cấp 3 chỉ thấy phiếu của phòng ban mình
+        console.log("🔍 User cấp 3 filter - phong_ban_id:", user.phong_ban_id);
+        if (!user.phong_ban_id) {
+          console.error("❌ User cấp 3 không có phong_ban_id!");
+          return sendResponse(
+            res,
+            400,
+            false,
+            "Thông tin phòng ban không hợp lệ"
+          );
+        }
         whereConditions.push(`pn.phong_ban_id = $${paramIndex++}`);
         queryParams.push(user.phong_ban_id);
       } else if (user.role === "manager") {
@@ -1331,7 +1703,11 @@ const nhapKhoController = {
         whereConditions.push(`pn.trang_thai != 'draft'`);
 
         // Áp dụng filter phòng ban cho manager
-        if (phong_ban_filter && phong_ban_filter !== "all") {
+        if (
+          phong_ban_filter &&
+          phong_ban_filter !== "all" &&
+          phong_ban_filter !== "own"
+        ) {
           const phongBanId = parseInt(phong_ban_filter);
           if (!isNaN(phongBanId)) {
             whereConditions.push(`pn.phong_ban_id = $${paramIndex++}`);
@@ -1339,6 +1715,25 @@ const nhapKhoController = {
           }
         } else {
           // Manager chỉ thấy phiếu của các phòng ban cấp 3 thuộc quyền
+          console.log(
+            "🔍 Manager filter - phong_ban_id:",
+            user.phong_ban_id,
+            "cap_bac:",
+            user.phong_ban?.cap_bac
+          );
+
+          // Debug: Kiểm tra cấu trúc phòng ban
+          const debugQuery = `
+            SELECT pb.id, pb.ten_phong_ban, pb.cap_bac, pb.phong_ban_cha_id
+            FROM phong_ban pb
+            WHERE pb.phong_ban_cha_id = $1 AND pb.cap_bac = 3
+          `;
+          const debugResult = await pool.query(debugQuery, [user.phong_ban_id]);
+          console.log(
+            "🔍 Manager's subordinate departments:",
+            debugResult.rows
+          );
+
           whereConditions.push(`
           pn.phong_ban_id IN (
             SELECT pb.id FROM phong_ban pb
@@ -1422,6 +1817,16 @@ const nhapKhoController = {
         whereConditions.length > 0
           ? `WHERE ${whereConditions.join(" AND ")}`
           : "";
+
+      console.log("🔍 Final query conditions:", {
+        whereConditions,
+        queryParams,
+        user: {
+          role: user.role,
+          phong_ban_id: user.phong_ban_id,
+          cap_bac: user.phong_ban?.cap_bac,
+        },
+      });
 
       const validSortColumns = {
         so_phieu: "pn.so_phieu",
@@ -1508,6 +1913,7 @@ const nhapKhoController = {
               cap_bac: row.cap_bac,
             }
           : null,
+        ten_phong_ban: row.ten_phong_ban, // ✅ FIX: Thêm field này để frontend có thể dùng
 
         nha_cung_cap:
           row.nha_cung_cap_id || row.phong_ban_cung_cap_id
@@ -1520,10 +1926,11 @@ const nhapKhoController = {
               }
             : null,
 
-        user_tao: {
+        nguoi_tao_info: {
           id: row.nguoi_tao,
           ho_ten: row.nguoi_tao_ten,
         },
+        nguoi_tao_ten: row.nguoi_tao_ten, // ✅ FIX: Thêm field này để frontend có thể dùng
       }));
 
       sendResponse(res, 200, true, "Lấy danh sách thành công", {

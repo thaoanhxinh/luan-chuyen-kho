@@ -101,11 +101,17 @@ export const hangHoaService = {
 
   // SỬA: Method getDetail với phongBanId
   async getDetail(id, phongBanId) {
-    if (!id || !phongBanId) {
-      throw new Error("Thiếu hangHoaId hoặc phongBanId");
+    if (!id) {
+      throw new Error("Thiếu hangHoaId");
     }
-    const response = await api.get(`/hang-hoa/${id}/phong-ban/${phongBanId}`);
-    return response.data;
+    if (phongBanId) {
+      const response = await api.get(`/hang-hoa/${id}/phong-ban/${phongBanId}`);
+      return response.data;
+    } else {
+      // Nếu không có phongBanId, lấy chi tiết tổng hợp
+      const response = await api.get(`/hang-hoa/${id}`);
+      return response.data;
+    }
   },
 
   async getSuggestions(search = "", limit = 10) {

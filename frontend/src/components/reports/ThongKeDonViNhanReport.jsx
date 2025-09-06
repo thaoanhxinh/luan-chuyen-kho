@@ -241,31 +241,17 @@ const ThongKeDonViNhanReport = ({ user }) => {
 
   return (
     <div className="space-y-6">
-      {/* Header Card */}
-      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg shadow-lg text-white">
-        <div className="p-6">
+      {/* Header */}
+      <div className="bg-white rounded-lg border border-gray-200">
+        <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold mb-2">Thống kê đơn vị nhận</h2>
-              <p className="text-purple-100 mb-4">
-                Phân tích hoạt động nhận hàng của các đơn vị
-              </p>
-              <div className="flex items-center space-x-4 text-sm">
-                <div className="flex items-center">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  {formatDate(filters.tu_ngay)} - {formatDate(filters.den_ngay)}
-                </div>
-                <div className="flex items-center">
-                  <Building2 className="h-4 w-4 mr-2" />
-                  {stats.totalDonVi} đơn vị
-                </div>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-3xl font-bold">
-                {formatCurrency(stats.totalGiaTri)}
-              </div>
-              <div className="text-sm text-purple-100">Tổng giá trị nhận</div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Thống kê đơn vị nhận
+            </h2>
+            <div className="text-sm text-gray-600">
+              <Calendar className="h-4 w-4 inline mr-2" />
+              {formatDate(filters.tu_ngay)} - {formatDate(filters.den_ngay)} •{" "}
+              {stats.totalDonVi} đơn vị
             </div>
           </div>
         </div>

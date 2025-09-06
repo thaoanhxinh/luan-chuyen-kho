@@ -23,6 +23,7 @@ const searchNhaCungCap = async (req, res) => {
         email
       FROM nha_cung_cap 
       WHERE 
+        trang_thai = 'active' AND
         (
           ten_ncc ILIKE $1 OR
           ma_ncc ILIKE $1
@@ -201,7 +202,12 @@ const createNhaCungCapAuto = async (req, res, body) => {
 
 const searchNhaCungCapByType = async (req, res, query, user) => {
   try {
+    console.log("🔍 NCC SearchByType - Request URL:", req.url);
+    console.log("🔍 NCC SearchByType - Query params:", query);
+    console.log("🔍 NCC SearchByType - User:", user);
+
     const { search = "", loai_phieu = "tu_mua" } = query;
+    console.log("🔍 NCC SearchByType - Parsed params:", { search, loai_phieu });
 
     let whereConditions = ["ncc.trang_thai = 'active'"];
     const params = [];

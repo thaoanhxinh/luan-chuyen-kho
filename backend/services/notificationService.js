@@ -380,7 +380,7 @@ const generateNotificationURL = (
         phieuData.workflow_type === "cap3_tu_cap_tren" &&
         recipientRole === "admin"
       ) {
-        tab = "can-duyet-cuoi"; // Admin duyệt cuối cho cấp 3 từ cấp trên
+        tab = "can_duyet"; // Admin duyệt cuối cho cấp 3 từ cấp trên
       } else if (phieuData.workflow_type === "cap3_dieu_chuyen") {
         if (recipientRole === "manager") {
           tab = "can-toi-duyet"; // Manager duyệt trước cho điều chuyển
@@ -391,7 +391,7 @@ const generateNotificationURL = (
           tab = "dieu-chuyen-can-duyet"; // Cấp 3 đích duyệt xuất
         }
       } else if (recipientRole === "admin") {
-        tab = "can-duyet-cuoi"; // Admin duyệt các trường hợp khác
+        tab = "can_duyet"; // Admin duyệt các trường hợp khác
       }
       break;
 
@@ -408,9 +408,9 @@ const generateNotificationURL = (
     case "phieu_xuat_can_duyet":
       // Phiếu xuất cần duyệt
       if (recipientRole === "manager") {
-        tab = "can-toi-duyet";
+        tab = "can_duyet";
       } else if (recipientRole === "admin") {
-        tab = "can-duyet-cuoi";
+        tab = "can_duyet";
       }
       break;
 

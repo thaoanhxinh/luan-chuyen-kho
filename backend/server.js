@@ -2476,6 +2476,18 @@ const router = async (req, res) => {
       return await baoCaoController.getDashboardStats(req, res, query, user);
     }
 
+    if (pathname === "/api/bao-cao/dashboard-stats" && method === "GET") {
+      return await baoCaoController.getDashboardStats(req, res, query, user);
+    }
+
+    if (pathname === "/api/bao-cao/chart-data" && method === "GET") {
+      return await baoCaoController.getChartData(req, res, query, user);
+    }
+
+    if (pathname === "/api/bao-cao/pham-chat-stats" && method === "GET") {
+      return await baoCaoController.getPhamChatStats(req, res, query, user);
+    }
+
     if (pathname === "/api/bao-cao/luan-chuyen" && method === "GET") {
       console.log(`🔍 HIT: Báo cáo luân chuyển endpoint (FIX)`);
       return await baoCaoController.getLuanChuyenReport(req, res, query, user);

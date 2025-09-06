@@ -12,15 +12,29 @@ const createPhieuNhapValidation = [
   body("chi_tiet")
     .isArray({ min: 1 })
     .withMessage("Chi tiết nhập không được trống"),
-  body("chi_tiet.*.hang_hoa_id")
-    .isInt()
-    .withMessage("ID hàng hóa không hợp lệ"),
-  body("chi_tiet.*.so_luong")
-    .isFloat({ gt: 0 })
-    .withMessage("Số lượng phải lớn hơn 0"),
-  body("chi_tiet.*.don_gia")
-    .isFloat({ gte: 0 })
-    .withMessage("Đơn giá không hợp lệ"),
+  body("chi_tiet.*.hang_hoa_id").custom((value) => {
+    if (!value) {
+      throw new Error("Chưa chọn hàng hóa");
+    }
+    if (!Number.isInteger(Number(value))) {
+      throw new Error("ID hàng hóa không hợp lệ");
+    }
+    return true;
+  }),
+  body("chi_tiet.*.so_luong").custom((value) => {
+    const num = Number(value);
+    if (isNaN(num) || num <= 0) {
+      throw new Error("Số lượng phải lớn hơn 0");
+    }
+    return true;
+  }),
+  body("chi_tiet.*.don_gia").custom((value) => {
+    const num = Number(value);
+    if (isNaN(num) || num < 0) {
+      throw new Error("Đơn giá không hợp lệ");
+    }
+    return true;
+  }),
 ];
 
 // Routes

@@ -11,6 +11,7 @@ import {
   BarChart3,
   TrendingUp,
 } from "lucide-react";
+import PageHeader from "../components/common/PageHeader";
 
 // Tab Components
 import LuanChuyenReport from "../components/reports/LuanChuyenReport";
@@ -63,35 +64,13 @@ const ReportManagement = ({ user }) => {
   const ActiveComponent = tabs.find((tab) => tab.id === activeTab)?.component;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-3">
-              <BarChart3 className="h-8 w-8 text-blue-600" />
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">
-                  Hệ thống báo cáo
-                </h1>
-                <p className="text-sm text-gray-600">
-                  Quản lý và xuất báo cáo toàn diện
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-3">
-              <div className="text-sm text-gray-600">
-                <Calendar className="h-4 w-4 inline mr-1" />
-                {new Date().toLocaleDateString("vi-VN")}
-              </div>
-              <div className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-                {user?.role === "admin" ? "Quản trị viên" : "Người dùng"}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Hệ thống báo cáo"
+        subtitle="Quản lý và xuất báo cáo toàn diện"
+        Icon={BarChart3}
+      />
 
       {/* Tab Navigation */}
       <div className="bg-white border-b border-gray-200">

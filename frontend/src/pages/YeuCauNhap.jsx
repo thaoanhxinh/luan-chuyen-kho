@@ -637,4 +637,6 @@ const YeuCauNhap = () => {
   );
 };
 
-export default YeuCauNhap;
+export default function RemovedYeuCauNhap() {
+  return null;
+}

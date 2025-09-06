@@ -1500,7 +1500,7 @@ const getList = async (req, res, query, user) => {
 
     // ✅ FIX: WHERE clause có filter rõ ràng theo quyền
     let whereClause =
-      "WHERE h.trang_thai = 'active' AND tk.so_luong_ton IS NOT NULL AND tk.so_luong_ton > 0";
+      "WHERE h.trang_thai = 'active' AND tk.so_luong_ton IS NOT NULL";
     let params = [];
     let paramCount = 0;
 
@@ -1544,11 +1544,14 @@ const getList = async (req, res, query, user) => {
         )`;
         params.push(user.phong_ban_id);
       }
-    } else {
-      // User cấp 3: chỉ xem phòng ban của mình
+    } else if (user.role === "user") {
+      // User: chỉ xem phòng ban của mình (bất kể cấp nào)
       paramCount++;
       whereClause += ` AND pb.id = $${paramCount}`;
       params.push(user.phong_ban_id);
+    } else {
+      // Các trường hợp khác: không có quyền
+      whereClause += ` AND 1 = 0`; // Không trả về kết quả nào
     }
 
     // 2. Lọc theo từ khóa tìm kiếm
@@ -1592,6 +1595,17 @@ const getList = async (req, res, query, user) => {
 
     const countParams = [...params];
     const dataParams = [...params, limit, offset];
+
+    // Debug: Kiểm tra có hàng hóa nào trong phòng ban không
+    const debugQuery = `
+      SELECT h.id, h.ten_hang_hoa, tk.so_luong_ton, pb.ten_phong_ban
+      FROM hang_hoa h
+      LEFT JOIN ton_kho tk ON h.id = tk.hang_hoa_id
+      LEFT JOIN phong_ban pb ON tk.phong_ban_id = pb.id
+      WHERE h.trang_thai = 'active' AND tk.phong_ban_id = $1
+    `;
+    const debugResult = await pool.query(debugQuery, [user.phong_ban_id]);
+    console.log("🔍 Debug - Hàng hóa trong phòng ban:", debugResult.rows);
 
     const [countResult, dataResult] = await Promise.all([
       pool.query(countQuery, countParams),
@@ -1650,9 +1664,121 @@ const getList = async (req, res, query, user) => {
     sendResponse(res, 500, false, "Lỗi server", { error: error.message });
   }
 };
+// Method getById để lấy chi tiết hàng hóa theo ID (không cần phongBanId)
+const getById = async (req, res, params, user) => {
+  try {
+    const { id } = params;
+    const hangHoaId = parseInt(id);
+
+    if (!hangHoaId || isNaN(hangHoaId)) {
+      return sendResponse(res, 400, false, "hangHoaId không hợp lệ");
+    }
+
+    // Query lấy thông tin cơ bản của hàng hóa
+    const hangHoaQuery = `
+      SELECT h.*, lh.ten_loai
+      FROM hang_hoa h
+      LEFT JOIN loai_hang_hoa lh ON h.loai_hang_hoa_id = lh.id
+      WHERE h.id = $1 AND h.trang_thai = 'active'
+    `;
+
+    const hangHoaResult = await pool.query(hangHoaQuery, [hangHoaId]);
+
+    if (hangHoaResult.rows.length === 0) {
+      return sendResponse(res, 404, false, "Không tìm thấy hàng hóa");
+    }
+
+    const hangHoa = hangHoaResult.rows[0];
+
+    // Kiểm tra quyền xem
+    if (user.role !== "admin" && hangHoa.phong_ban_id !== user.phong_ban_id) {
+      return sendResponse(
+        res,
+        403,
+        false,
+        "Bạn không có quyền xem hàng hóa này"
+      );
+    }
+
+    // Query lấy tổng hợp tồn kho từ tất cả phòng ban (nếu admin) hoặc phòng ban của user
+    let tonKhoQuery = "";
+    let tonKhoParams = [hangHoaId];
+
+    if (user.role === "admin") {
+      tonKhoQuery = `
+        SELECT 
+          SUM(tk.so_luong_ton) as tong_so_luong_ton,
+          SUM(tk.gia_tri_ton) as tong_gia_tri_ton,
+          CASE 
+            WHEN SUM(tk.so_luong_ton) > 0 
+            THEN SUM(tk.gia_tri_ton) / SUM(tk.so_luong_ton)
+            ELSE 0 
+          END as don_gia_binh_quan,
+          COUNT(DISTINCT tk.phong_ban_id) as so_phong_ban_co_ton
+        FROM ton_kho tk
+        WHERE tk.hang_hoa_id = $1 AND tk.so_luong_ton > 0
+      `;
+    } else {
+      tonKhoQuery = `
+        SELECT 
+          tk.so_luong_ton as tong_so_luong_ton,
+          tk.gia_tri_ton as tong_gia_tri_ton,
+          tk.don_gia_binh_quan,
+          1 as so_phong_ban_co_ton
+        FROM ton_kho tk
+        WHERE tk.hang_hoa_id = $1 AND tk.phong_ban_id = $2 AND tk.so_luong_ton > 0
+      `;
+      tonKhoParams.push(user.phong_ban_id);
+    }
+
+    const tonKhoResult = await pool.query(tonKhoQuery, tonKhoParams);
+    const tonKho = tonKhoResult.rows[0] || {
+      tong_so_luong_ton: 0,
+      tong_gia_tri_ton: 0,
+      don_gia_binh_quan: 0,
+      so_phong_ban_co_ton: 0,
+    };
+
+    // Query lấy danh sách phòng ban có tồn kho (chỉ cho admin)
+    let phongBanList = [];
+    if (user.role === "admin") {
+      const phongBanQuery = `
+        SELECT 
+          pb.id as phong_ban_id,
+          pb.ten_phong_ban,
+          pb.cap_bac,
+          tk.so_luong_ton,
+          tk.gia_tri_ton,
+          tk.don_gia_binh_quan
+        FROM ton_kho tk
+        JOIN phong_ban pb ON tk.phong_ban_id = pb.id
+        WHERE tk.hang_hoa_id = $1 AND tk.so_luong_ton > 0
+        ORDER BY pb.ten_phong_ban
+      `;
+      const phongBanResult = await pool.query(phongBanQuery, [hangHoaId]);
+      phongBanList = phongBanResult.rows;
+    }
+
+    const result = {
+      ...hangHoa,
+      tong_so_luong_ton: parseFloat(tonKho.tong_so_luong_ton || 0),
+      tong_gia_tri_ton: parseFloat(tonKho.tong_gia_tri_ton || 0),
+      don_gia_binh_quan: parseFloat(tonKho.don_gia_binh_quan || 0),
+      so_phong_ban_co_ton: parseInt(tonKho.so_phong_ban_co_ton || 0),
+      phong_ban_list: phongBanList,
+    };
+
+    sendResponse(res, 200, true, "Lấy chi tiết hàng hóa thành công", result);
+  } catch (error) {
+    console.error("Get hang hoa by id error:", error);
+    sendResponse(res, 500, false, "Lỗi server");
+  }
+};
+
 module.exports = {
   getList,
   getDetail,
+  getById, // Thêm method mới
   getSuggestions,
   create,
   update,

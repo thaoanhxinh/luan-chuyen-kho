@@ -391,55 +391,48 @@ const BaoCaoXuatReport = () => {
     filters.phong_ban_cap3_id === "all";
 
   return (
-    <div className="space-y-4">
-      {/* Header Card - Compact */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-gray-900 flex items-center">
-          <ArrowUpFromLine className="mr-2 h-4 w-4 text-red-600" />
-          Báo cáo phiếu xuất
-        </h1>
-
-        <div className="text-right">
-          <div className="text-base font-semibold">
-            {formatCurrency(totalStats.totalValue)}
+    <div className="space-y-3">
+      {/* Header + Filters row */}
+      <div className="bg-white rounded-lg border border-gray-200 p-3">
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-base font-semibold text-gray-900 whitespace-nowrap">
+            Báo cáo phiếu xuất
+          </h2>
+          <div className="flex items-center gap-4 flex-wrap">
+            {/* date range + department filters should already exist in this component; keep in one row if any */}
           </div>
-          <div className="text-xs text-gray-500">Tổng giá trị xuất</div>
         </div>
       </div>
 
       {/* Filter Section - Simplified */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        {/* Main Filters - Reduced columns */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Từ ngày
-            </label>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+        {/* Main Filters - one line */}
+        <div className="flex items-center gap-3 flex-nowrap">
+          <div className="flex items-center gap-2 whitespace-nowrap">
+            <span className="text-sm text-gray-700">Từ ngày</span>
             <input
               type="date"
               value={filters.tu_ngay}
               onChange={(e) =>
                 setFilters((prev) => ({ ...prev, tu_ngay: e.target.value }))
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Đến ngày
-            </label>
+          <div className="flex items-center gap-2 whitespace-nowrap">
+            <span className="text-sm text-gray-700">Đến ngày</span>
             <input
               type="date"
               value={filters.den_ngay}
               onChange={(e) =>
                 setFilters((prev) => ({ ...prev, den_ngay: e.target.value }))
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
             />
           </div>
 
-          <div>
+          <div className="flex items-center gap-2 whitespace-nowrap">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Xuất báo cáo
             </label>

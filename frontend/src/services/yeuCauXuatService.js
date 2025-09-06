@@ -1,6 +1,7 @@
 // services/yeuCauXuatService.js
 import api from "./api";
 
+// Deprecated: yêu cầu đã loại bỏ
 export const yeuCauXuatService = {
   // Lấy danh sách yêu cầu xuất kho
   getList: async (params = {}) => {

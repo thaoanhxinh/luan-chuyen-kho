@@ -1,6 +1,7 @@
 // services/yeuCauNhapService.js
-import  api  from "./api";
+import api from "./api";
 
+// Deprecated: yêu cầu đã loại bỏ
 export const yeuCauNhapService = {
   // Lấy danh sách yêu cầu nhập kho
   getList: async (params = {}) => {

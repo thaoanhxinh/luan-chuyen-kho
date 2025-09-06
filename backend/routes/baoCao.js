@@ -6,6 +6,13 @@ const router = express.Router();
 
 // Dashboard stats
 router.get("/dashboard-stats", auth, baoCaoController.getDashboardStats);
+router.get("/chart-data", auth, baoCaoController.getChartData);
+router.get("/pham-chat-stats", auth, baoCaoController.getPhamChatStats);
+router.get(
+  "/phong-ban-for-report",
+  auth,
+  baoCaoController.getPhongBanForReport
+);
 
 // Báo cáo tồn kho
 router.get("/ton-kho", auth, baoCaoController.getTonKhoReport);

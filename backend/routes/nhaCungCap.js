@@ -10,6 +10,11 @@ router.get(
   auth,
   nhaCungCapSearchController.searchNhaCungCap
 );
+router.get(
+  "/search/searchNhaCungCapByType",
+  auth,
+  nhaCungCapSearchController.searchNhaCungCapByType
+);
 router.post(
   "/auto-create",
   auth,

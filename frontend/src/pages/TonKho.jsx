@@ -21,8 +21,10 @@ import Pagination from "../components/common/Pagination";
 import Loading from "../components/common/Loading";
 import PageHeader from "../components/common/PageHeader";
 import toast from "react-hot-toast";
+import { useAuth } from "../context/AuthContext";
 
 const TonKho = () => {
+  const { user } = useAuth();
   const [tonKhoData, setTonKhoData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -44,10 +46,52 @@ const TonKho = () => {
     expiring_items: 0,
   });
 
+  // Department filters cho admin/manager
+  const [departmentFilters, setDepartmentFilters] = useState({
+    cap2List: [],
+    cap3List: [],
+    selectedCap2: "",
+    selectedCap3: "",
+  });
+
+  // Load department filters cho admin/manager
+  useEffect(() => {
+    const loadDepartmentFilters = async () => {
+      try {
+        if (user?.role === "manager" || user?.role === "admin") {
+          const response = await baoCaoService.getPhongBanForTonKho();
+          const departments = response.data;
+
+          const cap2List = departments.filter((d) => d.cap_bac === 2);
+          const cap3List = departments.filter((d) => d.cap_bac === 3);
+
+          setDepartmentFilters({
+            cap2List,
+            cap3List,
+            selectedCap2: "",
+            selectedCap3: "",
+          });
+        }
+      } catch (error) {
+        console.error("Error loading department filters:", error);
+      }
+    };
+
+    if (user?.role) {
+      loadDepartmentFilters();
+    }
+  }, [user?.role]);
+
   // Load data
   useEffect(() => {
     loadTonKhoData();
-  }, [currentPage, search, filters]);
+  }, [
+    currentPage,
+    search,
+    filters,
+    departmentFilters.selectedCap2,
+    departmentFilters.selectedCap3,
+  ]);
 
   const loadTonKhoData = async () => {
     try {
@@ -58,6 +102,18 @@ const TonKho = () => {
         search: search.trim(),
         ...filters,
       };
+
+      // Thêm department filters
+      if (user?.role === "manager" && departmentFilters.selectedCap3) {
+        params.cap3_id = departmentFilters.selectedCap3;
+      } else if (user?.role === "admin") {
+        if (departmentFilters.selectedCap2) {
+          params.cap2_id = departmentFilters.selectedCap2;
+        }
+        if (departmentFilters.selectedCap3) {
+          params.cap3_id = departmentFilters.selectedCap3;
+        }
+      }
 
       const response = await baoCaoService.getTonKhoReport(params);
 
@@ -100,7 +156,30 @@ const TonKho = () => {
       sort_by: "ten_vat_tu",
       sort_direction: "asc",
     });
+    setDepartmentFilters({
+      ...departmentFilters,
+      selectedCap2: "",
+      selectedCap3: "",
+    });
     setCurrentPage(1);
+  };
+
+  // Handlers cho department filters
+  const handleCap2Change = (cap2Id) => {
+    setDepartmentFilters((prev) => ({
+      ...prev,
+      selectedCap2: cap2Id,
+      selectedCap3: "", // Reset cấp 3 khi thay đổi cấp 2
+    }));
+    setCurrentPage(1); // Reset về trang 1
+  };
+
+  const handleCap3Change = (cap3Id) => {
+    setDepartmentFilters((prev) => ({
+      ...prev,
+      selectedCap3: cap3Id,
+    }));
+    setCurrentPage(1); // Reset về trang 1
   };
 
   const handleExport = async () => {
@@ -132,41 +211,15 @@ const TonKho = () => {
   };
 
   const getStockStatusColor = (item) => {
-    if (item.so_luong_con_lai <= 0) return "text-red-600 bg-red-50";
-    if (item.so_luong_con_lai <= item.so_luong_an_toan)
-      return "text-yellow-600 bg-yellow-50";
+    if (item.so_luong_ton <= 0) return "text-red-600 bg-red-50";
+    if (item.so_luong_ton <= 5) return "text-yellow-600 bg-yellow-50";
     return "text-green-600 bg-green-50";
   };
 
   const getStockStatusText = (item) => {
-    if (item.so_luong_con_lai <= 0) return "Hết hàng";
-    if (item.so_luong_con_lai <= item.so_luong_an_toan)
-      return "Dưới mức an toàn";
+    if (item.so_luong_ton <= 0) return "Hết hàng";
+    if (item.so_luong_ton <= 5) return "Dưới mức an toàn";
     return "Đủ hàng";
-  };
-
-  const formatExpiryDate = (date) => {
-    if (!date) return "Không có";
-    const expiryDate = new Date(date);
-    const today = new Date();
-    const diffTime = expiryDate - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) return "Đã hết hạn";
-    if (diffDays <= 30) return `${diffDays} ngày nữa`;
-    return formatDate(date);
-  };
-
-  const getExpiryColor = (date) => {
-    if (!date) return "";
-    const expiryDate = new Date(date);
-    const today = new Date();
-    const diffTime = expiryDate - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) return "text-red-600";
-    if (diffDays <= 30) return "text-orange-600";
-    return "";
   };
 
   return (
@@ -268,71 +321,148 @@ const TonKho = () => {
       {/* Filters */}
       {showFilters && (
         <div className="bg-white p-4 rounded-lg shadow">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Sắp xếp theo
-              </label>
-              <select
-                value={filters.sort_by}
-                onChange={(e) => handleFilterChange("sort_by", e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
-              >
-                <option value="ten_vat_tu">Tên vật tư</option>
-                <option value="ma_vat_tu">Mã vật tư</option>
-                <option value="so_luong_con_lai">Số lượng tồn</option>
-                <option value="gia_tri_ton_kho">Giá trị tồn kho</option>
-                <option value="han_su_dung">Hạn sử dụng</option>
-              </select>
-            </div>
+          <div className="space-y-4">
+            {/* Department filters cho admin/manager */}
+            {(user?.role === "manager" || user?.role === "admin") && (
+              <div className="border-t pt-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Filter size={16} className="text-gray-500" />
+                  <span className="text-sm font-medium text-gray-700">
+                    Lọc theo phòng ban
+                  </span>
+                </div>
+                <div className="flex gap-4">
+                  {/* Filter cho Admin - Cấp 2 */}
+                  {user?.role === "admin" && (
+                    <div className="min-w-0 flex-1">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Phòng ban cấp 2
+                      </label>
+                      <select
+                        value={departmentFilters.selectedCap2}
+                        onChange={(e) => handleCap2Change(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm"
+                      >
+                        <option value="">-- Tất cả cấp 2 --</option>
+                        {departmentFilters.cap2List.map((dept) => (
+                          <option key={dept.id} value={dept.id}>
+                            {dept.ten_phong_ban}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Thứ tự
-              </label>
-              <select
-                value={filters.sort_direction}
-                onChange={(e) =>
-                  handleFilterChange("sort_direction", e.target.value)
-                }
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
-              >
-                <option value="asc">Tăng dần</option>
-                <option value="desc">Giảm dần</option>
-              </select>
-            </div>
+                  {/* Filter cho Manager và Admin - Cấp 3 */}
+                  {(user?.role === "manager" || user?.role === "admin") && (
+                    <div className="min-w-0 flex-1">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Phòng ban cấp 3
+                      </label>
+                      <select
+                        value={departmentFilters.selectedCap3}
+                        onChange={(e) => handleCap3Change(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm"
+                      >
+                        <option value="">-- Tất cả cấp 3 --</option>
+                        {departmentFilters.cap3List
+                          .filter((dept) => {
+                            // Nếu admin và đã chọn cấp 2, chỉ hiển thị cấp 3 thuộc cấp 2 đó
+                            if (
+                              user?.role === "admin" &&
+                              departmentFilters.selectedCap2
+                            ) {
+                              return (
+                                dept.phong_ban_cha_id ===
+                                parseInt(departmentFilters.selectedCap2)
+                              );
+                            }
+                            // Nếu manager, chỉ hiển thị cấp 3 thuộc quyền (sẽ do backend filter)
+                            return true;
+                          })
+                          .map((dept) => (
+                            <option key={dept.id} value={dept.id}>
+                              {dept.ten_phong_ban}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
-            <div className="flex items-center space-x-4">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={filters.ton_kho_duoi_muc_an_toan}
+            {/* Other filters */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Sắp xếp theo
+                </label>
+                <select
+                  value={filters.sort_by}
                   onChange={(e) =>
-                    handleFilterChange(
-                      "ton_kho_duoi_muc_an_toan",
-                      e.target.checked
-                    )
+                    handleFilterChange("sort_by", e.target.value)
                   }
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="ml-2 text-sm text-gray-700">
-                  Dưới mức an toàn
-                </span>
-              </label>
-            </div>
+                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                >
+                  <option value="ten_vat_tu">Tên vật tư</option>
+                  <option value="ma_vat_tu">Mã vật tư</option>
+                  <option value="so_luong_con_lai">Số lượng tồn</option>
+                  <option value="gia_tri_ton_kho">Giá trị tồn kho</option>
+                  <option value="han_su_dung">Hạn sử dụng</option>
+                </select>
+              </div>
 
-            <div className="flex items-center space-x-4">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={filters.sap_het_han}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Thứ tự
+                </label>
+                <select
+                  value={filters.sort_direction}
                   onChange={(e) =>
-                    handleFilterChange("sap_het_han", e.target.checked)
+                    handleFilterChange("sort_direction", e.target.value)
                   }
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="ml-2 text-sm text-gray-700">Sắp hết hạn</span>
-              </label>
+                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                >
+                  <option value="asc">Tăng dần</option>
+                  <option value="desc">Giảm dần</option>
+                </select>
+              </div>
+
+              <div className="flex items-center space-x-4">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={filters.ton_kho_duoi_muc_an_toan}
+                    onChange={(e) =>
+                      handleFilterChange(
+                        "ton_kho_duoi_muc_an_toan",
+                        e.target.checked
+                      )
+                    }
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">
+                    Dưới mức an toàn
+                  </span>
+                </label>
+              </div>
+
+              <div className="flex items-center space-x-4">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={filters.sap_het_han}
+                    onChange={(e) =>
+                      handleFilterChange("sap_het_han", e.target.checked)
+                    }
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">
+                    Sắp hết hạn
+                  </span>
+                </label>
+              </div>
             </div>
           </div>
 
@@ -385,9 +515,6 @@ const TonKho = () => {
                       Trạng thái
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Hạn sử dụng
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Giá trị tồn
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -400,18 +527,18 @@ const TonKho = () => {
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
                         <div>
-                          <div className="text-sm font-medium text-gray-900 truncate">
-                            {item.ten_vat_tu}
+                          <div className="text-sm font-medium text-gray-900">
+                            {item.ten_hang_hoa}
                           </div>
-                          <div className="text-sm text-gray-500 truncate">
-                            {item.ma_vat_tu}
+                          <div className="text-sm text-gray-500">
+                            {item.ma_hang_hoa}
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <span className="text-sm font-medium text-gray-900">
-                            {item.so_luong_con_lai?.toLocaleString() || 0}
+                            {item.so_luong_ton?.toLocaleString() || 0}
                           </span>
                           <span className="ml-1 text-xs text-gray-500">
                             {item.don_vi_tinh}
@@ -419,8 +546,7 @@ const TonKho = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.so_luong_an_toan?.toLocaleString() || 0}{" "}
-                        {item.don_vi_tinh}
+                        5 {item.don_vi_tinh}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
@@ -431,19 +557,12 @@ const TonKho = () => {
                           {getStockStatusText(item)}
                         </span>
                       </td>
-                      <td
-                        className={`px-6 py-4 whitespace-nowrap text-sm ${getExpiryColor(
-                          item.han_su_dung
-                        )}`}
-                      >
-                        {formatExpiryDate(item.han_su_dung)}
-                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatCurrency(item.gia_tri_ton_kho || 0)}
+                        {formatCurrency(item.gia_tri_ton || 0)}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
-                        <span className="truncate">
-                          {item.vi_tri_kho || "Chưa xác định"}
+                        <span className="whitespace-nowrap">
+                          {item.ten_phong_ban || "Chưa xác định"}
                         </span>
                       </td>
                     </tr>
