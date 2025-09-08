@@ -1620,15 +1620,288 @@ const generatePhieuKiemKeExcel = async (req, res, params, body, user) => {
 
 // Hàm tạo báo cáo luân chuyển kho theo quý
 
+// const generateLuanChuyenKhoReport = async (req, res, query, user) => {
+//   try {
+//     const { tu_ngay, den_ngay, phong_ban_id } = query;
+
+//     if (!tu_ngay || !den_ngay) {
+//       return sendResponse(res, 400, false, "Vui lòng chọn khoảng thời gian");
+//     }
+
+//     console.log(`📊 Generating report from ${tu_ngay} to ${den_ngay}`);
+
+//     // Xác định phòng ban dựa trên role
+//     let phongBanFilter = "";
+//     let queryParams = [];
+//     let paramIndex = 1;
+
+//     if (user.role === "user") {
+//       // Cấp 3: Chỉ xem được phòng ban của mình
+//       phongBanFilter = `AND pb.id = $${paramIndex}`;
+//       queryParams.push(user.phong_ban_id);
+//       paramIndex++;
+//     } else if (user.role === "manager") {
+//       // Cấp 2: Xem được phòng ban của mình và các phòng ban cấp 3 dưới quyền
+//       if (phong_ban_id && phong_ban_id !== "all") {
+//         phongBanFilter = `AND pb.id = $${paramIndex}`;
+//         queryParams.push(phong_ban_id);
+//         paramIndex++;
+//       } else {
+//         // Nếu chọn "all", chỉ xem được phòng ban của mình và các phòng ban cấp 3 dưới quyền
+//         phongBanFilter = `AND (pb.id = $${paramIndex} OR pb.id IN (
+//           SELECT id FROM phong_ban WHERE phong_ban_cha_id = $${paramIndex} AND cap_bac = 3
+//         ))`;
+//         queryParams.push(user.phong_ban_id);
+//         paramIndex++;
+//       }
+//     } else if (user.role === "admin") {
+//       // Cấp 1: Xem được tất cả
+//       if (phong_ban_id && phong_ban_id !== "all") {
+//         phongBanFilter = `AND pb.id = $${paramIndex}`;
+//         queryParams.push(phong_ban_id);
+//         paramIndex++;
+//       }
+//     }
+
+//     queryParams.push(tu_ngay, den_ngay);
+
+//     // Query chính lấy dữ liệu luân chuyển
+//     const mainQuery = `
+//       WITH phong_ban_list AS (
+//         SELECT DISTINCT id AS phong_ban_id
+//         FROM phong_ban pb
+//         WHERE 1=1 ${phongBanFilter}
+//       ),
+//       phieu_nhap_completed AS (
+//         SELECT
+//           pn.phong_ban_id,
+//           pn.ngay_nhap,
+//           pn.tong_tien,
+//           pn.loai_phieu
+//         FROM phieu_nhap pn
+//         JOIN phong_ban pb ON pn.phong_ban_id = pb.id
+//         WHERE pn.trang_thai = 'completed'
+//         ${phongBanFilter}
+//       ),
+//       phieu_xuat_completed AS (
+//         SELECT
+//           px.phong_ban_id,
+//           px.ngay_xuat,
+//           px.id AS phieu_xuat_id,
+//           px.ly_do_xuat,
+//           px.loai_xuat
+//         FROM phieu_xuat px
+//         JOIN phong_ban pb ON px.phong_ban_id = pb.id
+//         WHERE px.trang_thai = 'completed'
+//         ${phongBanFilter}
+//       ),
+//       ton_dau_ky AS (
+//         SELECT
+//           pbl.phong_ban_id,
+//           (COALESCE((
+//             SELECT SUM(pn.tong_tien)
+//             FROM phieu_nhap_completed pn
+//             WHERE pn.phong_ban_id = pbl.phong_ban_id
+//               AND pn.ngay_nhap < $${paramIndex}
+//           ), 0) -
+//           COALESCE((
+//             SELECT SUM(ctx.so_luong_thuc_xuat * ctx.don_gia)
+//             FROM chi_tiet_xuat ctx
+//             JOIN phieu_xuat_completed px ON ctx.phieu_xuat_id = px.phieu_xuat_id
+//             WHERE px.phong_ban_id = pbl.phong_ban_id
+//               AND px.ngay_xuat < $${paramIndex}
+//           ), 0)) AS ton_dau
+//         FROM phong_ban_list pbl
+//       ),
+//       nhap_trong_ky AS (
+//         SELECT
+//           phong_ban_id,
+//           SUM(CASE WHEN loai_phieu = 'tren_cap' THEN tong_tien ELSE 0 END) AS nhap_chuyen_cap,
+//           SUM(CASE WHEN loai_phieu = 'tu_mua' THEN tong_tien ELSE 0 END) AS nhap_mua_sam,
+//           SUM(CASE WHEN loai_phieu NOT IN ('tren_cap', 'tu_mua') THEN tong_tien ELSE 0 END) AS nhap_khac
+//         FROM phieu_nhap_completed
+//         WHERE ngay_nhap BETWEEN $${paramIndex} AND $${paramIndex + 1}
+//         GROUP BY phong_ban_id
+//       ),
+//       xuat_trong_ky AS (
+//         SELECT
+//           px.phong_ban_id,
+//           SUM(CASE WHEN ctx.loai_phieu_nhap = 'tren_cap' THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_tren_cap,
+//           SUM(CASE WHEN ctx.loai_phieu_nhap = 'tu_mua' THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_tu_mua,
+//           SUM(CASE WHEN ctx.loai_phieu_nhap NOT IN ('tren_cap', 'tu_mua') OR ctx.loai_phieu_nhap IS NULL
+//                THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_khac,
+//           SUM(CASE WHEN px.loai_xuat = 'don_vi_su_dung' AND ctx.loai_phieu_nhap = 'tren_cap' THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_su_dung_tren_cap,
+//           SUM(CASE WHEN px.loai_xuat = 'don_vi_nhan' AND ctx.loai_phieu_nhap = 'tren_cap' THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_cap_cho_tren_cap,
+//           SUM(CASE WHEN px.ly_do_xuat LIKE '%thanh lý%' AND ctx.loai_phieu_nhap = 'tren_cap' THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_thanh_ly_tren_cap,
+//           SUM(CASE WHEN px.loai_xuat = 'don_vi_su_dung' AND ctx.loai_phieu_nhap = 'tu_mua' THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_su_dung_tu_mua,
+//           SUM(CASE WHEN px.loai_xuat = 'don_vi_nhan' AND ctx.loai_phieu_nhap = 'tu_mua' THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_cap_cho_tu_mua,
+//           SUM(CASE WHEN px.ly_do_xuat LIKE '%thanh lý%' AND ctx.loai_phieu_nhap = 'tu_mua' THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_thanh_ly_tu_mua,
+//           SUM(CASE WHEN px.loai_xuat = 'don_vi_su_dung' AND (ctx.loai_phieu_nhap NOT IN ('tren_cap', 'tu_mua') OR ctx.loai_phieu_nhap IS NULL)
+//                THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_su_dung_khac,
+//           SUM(CASE WHEN px.loai_xuat = 'don_vi_nhan' AND (ctx.loai_phieu_nhap NOT IN ('tren_cap', 'tu_mua') OR ctx.loai_phieu_nhap IS NULL)
+//                THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_cap_cho_khac,
+//           SUM(CASE WHEN px.ly_do_xuat LIKE '%thanh lý%' AND (ctx.loai_phieu_nhap NOT IN ('tren_cap', 'tu_mua') OR ctx.loai_phieu_nhap IS NULL)
+//                THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_thanh_ly_khac,
+//           SUM(ctx.so_luong_thuc_xuat * ctx.don_gia) AS tong_xuat
+//         FROM phieu_xuat_completed px
+//         JOIN chi_tiet_xuat ctx ON px.phieu_xuat_id = ctx.phieu_xuat_id
+//         WHERE px.ngay_xuat BETWEEN $${paramIndex} AND $${paramIndex + 1}
+//         GROUP BY px.phong_ban_id
+//       )
+//       SELECT
+//         pb.id,
+//         pb.ten_phong_ban,
+//         pb.ma_phong_ban,
+//         COALESCE(tdq.ton_dau, 0) AS ton_dau_quy,
+//         COALESCE(ntq.nhap_chuyen_cap, 0) AS nhap_chuyen_cap,
+//         COALESCE(ntq.nhap_mua_sam, 0) AS nhap_mua_sam,
+//         COALESCE(ntq.nhap_khac, 0) AS nhap_khac,
+//         (COALESCE(ntq.nhap_chuyen_cap, 0) + COALESCE(ntq.nhap_mua_sam, 0) + COALESCE(ntq.nhap_khac, 0)) AS cong_nhap,
+//         COALESCE(xtq.xuat_su_dung_tren_cap, 0) AS xuat_su_dung_tren_cap,
+//         COALESCE(xtq.xuat_cap_cho_tren_cap, 0) AS xuat_cap_cho_tren_cap,
+//         COALESCE(xtq.xuat_thanh_ly_tren_cap, 0) AS xuat_thanh_ly_tren_cap,
+//         COALESCE(xtq.xuat_tren_cap, 0) AS xuat_tren_cap,
+//         COALESCE(xtq.xuat_su_dung_tu_mua, 0) AS xuat_su_dung_tu_mua,
+//         COALESCE(xtq.xuat_cap_cho_tu_mua, 0) AS xuat_cap_cho_tu_mua,
+//         COALESCE(xtq.xuat_thanh_ly_tu_mua, 0) AS xuat_thanh_ly_tu_mua,
+//         COALESCE(xtq.xuat_tu_mua, 0) AS xuat_tu_mua,
+//         COALESCE(xtq.xuat_su_dung_khac, 0) AS xuat_su_dung_khac,
+//         COALESCE(xtq.xuat_cap_cho_khac, 0) AS xuat_cap_cho_khac,
+//         COALESCE(xtq.xuat_thanh_ly_khac, 0) AS xuat_thanh_ly_khac,
+//         COALESCE(xtq.xuat_khac, 0) AS xuat_khac,
+//         COALESCE(xtq.tong_xuat, 0) AS cong_xuat,
+//         (COALESCE(tdq.ton_dau, 0) +
+//          COALESCE(ntq.nhap_chuyen_cap, 0) + COALESCE(ntq.nhap_mua_sam, 0) + COALESCE(ntq.nhap_khac, 0) -
+//          COALESCE(xtq.tong_xuat, 0)) AS ton_cuoi_quy
+//       FROM phong_ban pb
+//       LEFT JOIN ton_dau_ky tdq ON pb.id = tdq.phong_ban_id
+//       LEFT JOIN nhap_trong_ky ntq ON pb.id = ntq.phong_ban_id
+//       LEFT JOIN xuat_trong_ky xtq ON pb.id = xtq.phong_ban_id
+//       WHERE 1=1 ${phongBanFilter}
+//       ORDER BY pb.ma_phong_ban
+//     `;
+
+//     console.log("🔍 Executing query with params:", queryParams);
+//     const result = await pool.query(mainQuery, queryParams);
+//     const data = result.rows || [];
+
+//     console.log(`📊 Found ${data.length} records`);
+
+//     // Đảm bảo có dữ liệu mặc định nếu không có kết quả
+//     if (data.length === 0) {
+//       console.log("⚠️ No data found, creating default entry");
+//       data.push({
+//         id: 1,
+//         ten_phong_ban: "Không có dữ liệu",
+//         ma_phong_ban: "000",
+//         ton_dau_quy: 0,
+//         nhap_chuyen_cap: 0,
+//         nhap_mua_sam: 0,
+//         nhap_khac: 0,
+//         cong_nhap: 0,
+//         xuat_su_dung_tren_cap: 0,
+//         xuat_cap_cho_tren_cap: 0,
+//         xuat_thanh_ly_tren_cap: 0,
+//         xuat_tren_cap: 0,
+//         xuat_su_dung_tu_mua: 0,
+//         xuat_cap_cho_tu_mua: 0,
+//         xuat_thanh_ly_tu_mua: 0,
+//         xuat_tu_mua: 0,
+//         xuat_su_dung_khac: 0,
+//         xuat_cap_cho_khac: 0,
+//         xuat_thanh_ly_khac: 0,
+//         xuat_khac: 0,
+//         cong_xuat: 0,
+//         ton_cuoi_quy: 0,
+//       });
+//     }
+
+//     // Tạo workbook Excel
+//     const workbook = new ExcelJS.Workbook();
+
+//     // Tạo sheet chính
+//     const mainSheet = workbook.addWorksheet("Tổng hợp luân chuyển kho");
+//     await createMainSheet(mainSheet, data, tu_ngay, den_ngay);
+
+//     // Tạo 3 sheet phụ
+//     await createSubSheet(
+//       workbook,
+//       "Trên cấp",
+//       data,
+//       tu_ngay,
+//       den_ngay,
+//       "nhap_chuyen_cap",
+//       "xuat_tren_cap"
+//     );
+//     await createSubSheet(
+//       workbook,
+//       "Tự mua sắm",
+//       data,
+//       tu_ngay,
+//       den_ngay,
+//       "nhap_mua_sam",
+//       "xuat_tu_mua"
+//     );
+//     await createSubSheet(
+//       workbook,
+//       "Khác",
+//       data,
+//       tu_ngay,
+//       den_ngay,
+//       "nhap_khac",
+//       "xuat_khac"
+//     );
+
+//     console.log("📝 Workbook created successfully");
+
+//     // Tạo buffer từ workbook
+//     const buffer = await workbook.xlsx.writeBuffer();
+
+//     console.log(`✅ Excel buffer created, size: ${buffer.length} bytes`);
+
+//     // Đảm bảo buffer không rỗng
+//     if (buffer.length === 0) {
+//       throw new Error("Generated Excel buffer is empty");
+//     }
+
+//     // SỬA: Tên file đúng format
+//     const fileName = `bao-cao-luan-chuyen-kho-${tu_ngay}-${den_ngay}.xlsx`;
+
+//     // Thiết lập header và gửi file
+//     res.writeHead(200, {
+//       "Content-Type":
+//         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+//       "Content-Disposition": `attachment; filename="${fileName}"`,
+//       "Content-Length": buffer.length,
+//       "Cache-Control": "no-cache, no-store, must-revalidate",
+//       Pragma: "no-cache",
+//       Expires: "0",
+//     });
+
+//     res.end(buffer);
+
+//     console.log("✅ File sent successfully");
+//   } catch (error) {
+//     console.error("❌ Generate Excel error:", error);
+//     console.error("❌ Error stack:", error.stack);
+
+//     if (!res.headersSent) {
+//       return sendResponse(res, 500, false, "Lỗi tạo báo cáo Excel", {
+//         error: error.message,
+//       });
+//     }
+//   }
+// };
+
 const generateLuanChuyenKhoReport = async (req, res, query, user) => {
   try {
-    const { tu_ngay, den_ngay, phong_ban_id } = query;
+    const { tu_ngay, den_ngay, phong_ban_id, signatures = {} } = query;
 
     if (!tu_ngay || !den_ngay) {
       return sendResponse(res, 400, false, "Vui lòng chọn khoảng thời gian");
     }
 
-    console.log(`📊 Generating report from ${tu_ngay} to ${den_ngay}`);
+    console.log(`📊 Generating enhanced report from ${tu_ngay} to ${den_ngay}`);
 
     // Xác định phòng ban dựa trên role
     let phongBanFilter = "";
@@ -1647,7 +1920,6 @@ const generateLuanChuyenKhoReport = async (req, res, query, user) => {
         queryParams.push(phong_ban_id);
         paramIndex++;
       } else {
-        // Nếu chọn "all", chỉ xem được phòng ban của mình và các phòng ban cấp 3 dưới quyền
         phongBanFilter = `AND (pb.id = $${paramIndex} OR pb.id IN (
           SELECT id FROM phong_ban WHERE phong_ban_cha_id = $${paramIndex} AND cap_bac = 3
         ))`;
@@ -1665,7 +1937,23 @@ const generateLuanChuyenKhoReport = async (req, res, query, user) => {
 
     queryParams.push(tu_ngay, den_ngay);
 
-    // Query chính lấy dữ liệu luân chuyển
+    // Query lấy thông tin phòng ban để hiển thị trong báo cáo
+    let phongBanInfo = null;
+    if (phong_ban_id && phong_ban_id !== "all") {
+      const pbQuery = await pool.query(
+        "SELECT id, ten_phong_ban, ma_phong_ban, cap_bac FROM phong_ban WHERE id = $1",
+        [phong_ban_id]
+      );
+      phongBanInfo = pbQuery.rows[0];
+    } else {
+      phongBanInfo = {
+        ten_phong_ban: "Tất cả đơn vị",
+        ma_phong_ban: "ALL",
+        cap_bac: 0,
+      };
+    }
+
+    // Query chính lấy dữ liệu luân chuyển (cải tiến để lấy đủ thông tin)
     const mainQuery = `
       WITH phong_ban_list AS (
         SELECT DISTINCT id AS phong_ban_id
@@ -1726,10 +2014,7 @@ const generateLuanChuyenKhoReport = async (req, res, query, user) => {
       xuat_trong_ky AS (
         SELECT 
           px.phong_ban_id,
-          SUM(CASE WHEN ctx.loai_phieu_nhap = 'tren_cap' THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_tren_cap,
-          SUM(CASE WHEN ctx.loai_phieu_nhap = 'tu_mua' THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_tu_mua,
-          SUM(CASE WHEN ctx.loai_phieu_nhap NOT IN ('tren_cap', 'tu_mua') OR ctx.loai_phieu_nhap IS NULL 
-               THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_khac,
+          -- Xuất chi tiết theo loại và nguồn
           SUM(CASE WHEN px.loai_xuat = 'don_vi_su_dung' AND ctx.loai_phieu_nhap = 'tren_cap' THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_su_dung_tren_cap,
           SUM(CASE WHEN px.loai_xuat = 'don_vi_nhan' AND ctx.loai_phieu_nhap = 'tren_cap' THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_cap_cho_tren_cap,
           SUM(CASE WHEN px.ly_do_xuat LIKE '%thanh lý%' AND ctx.loai_phieu_nhap = 'tren_cap' THEN ctx.so_luong_thuc_xuat * ctx.don_gia ELSE 0 END) AS xuat_thanh_ly_tren_cap,
@@ -1745,31 +2030,39 @@ const generateLuanChuyenKhoReport = async (req, res, query, user) => {
           SUM(ctx.so_luong_thuc_xuat * ctx.don_gia) AS tong_xuat
         FROM phieu_xuat_completed px
         JOIN chi_tiet_xuat ctx ON px.phieu_xuat_id = ctx.phieu_xuat_id
-        WHERE px.ngay_xuat BETWEEN $${paramIndex} AND $${paramIndex + 1}
+        WHERE px.ngay_xuat BETWEEN ${paramIndex} AND ${paramIndex + 1}
         GROUP BY px.phong_ban_id
       )
       SELECT 
         pb.id,
         pb.ten_phong_ban,
         pb.ma_phong_ban,
+        pb.cap_bac,
+        pb.phong_ban_cha_id,
         COALESCE(tdq.ton_dau, 0) AS ton_dau_quy,
         COALESCE(ntq.nhap_chuyen_cap, 0) AS nhap_chuyen_cap,
         COALESCE(ntq.nhap_mua_sam, 0) AS nhap_mua_sam,
         COALESCE(ntq.nhap_khac, 0) AS nhap_khac,
         (COALESCE(ntq.nhap_chuyen_cap, 0) + COALESCE(ntq.nhap_mua_sam, 0) + COALESCE(ntq.nhap_khac, 0)) AS cong_nhap,
+        -- Xuất sử dụng tổng hợp
+        (COALESCE(xtq.xuat_su_dung_tren_cap, 0) + COALESCE(xtq.xuat_su_dung_tu_mua, 0) + COALESCE(xtq.xuat_su_dung_khac, 0)) AS xuat_su_dung,
+        -- Cấp cho đơn vị tổng hợp
+        (COALESCE(xtq.xuat_cap_cho_tren_cap, 0) + COALESCE(xtq.xuat_cap_cho_tu_mua, 0) + COALESCE(xtq.xuat_cap_cho_khac, 0)) AS xuat_cap_cho,
+        -- Thanh lý tổng hợp
+        (COALESCE(xtq.xuat_thanh_ly_tren_cap, 0) + COALESCE(xtq.xuat_thanh_ly_tu_mua, 0) + COALESCE(xtq.xuat_thanh_ly_khac, 0)) AS xuat_thanh_ly,
+        -- Xuất khác = 0 cho báo cáo tổng hợp (vì đã phân loại rõ)
+        0 AS xuat_khac,
+        COALESCE(xtq.tong_xuat, 0) AS cong_xuat,
+        -- Chi tiết theo từng loại cho các sheet con
         COALESCE(xtq.xuat_su_dung_tren_cap, 0) AS xuat_su_dung_tren_cap,
         COALESCE(xtq.xuat_cap_cho_tren_cap, 0) AS xuat_cap_cho_tren_cap,
         COALESCE(xtq.xuat_thanh_ly_tren_cap, 0) AS xuat_thanh_ly_tren_cap,
-        COALESCE(xtq.xuat_tren_cap, 0) AS xuat_tren_cap,
         COALESCE(xtq.xuat_su_dung_tu_mua, 0) AS xuat_su_dung_tu_mua,
         COALESCE(xtq.xuat_cap_cho_tu_mua, 0) AS xuat_cap_cho_tu_mua,
         COALESCE(xtq.xuat_thanh_ly_tu_mua, 0) AS xuat_thanh_ly_tu_mua,
-        COALESCE(xtq.xuat_tu_mua, 0) AS xuat_tu_mua,
         COALESCE(xtq.xuat_su_dung_khac, 0) AS xuat_su_dung_khac,
         COALESCE(xtq.xuat_cap_cho_khac, 0) AS xuat_cap_cho_khac,
         COALESCE(xtq.xuat_thanh_ly_khac, 0) AS xuat_thanh_ly_khac,
-        COALESCE(xtq.xuat_khac, 0) AS xuat_khac,
-        COALESCE(xtq.tong_xuat, 0) AS cong_xuat,
         (COALESCE(tdq.ton_dau, 0) + 
          COALESCE(ntq.nhap_chuyen_cap, 0) + COALESCE(ntq.nhap_mua_sam, 0) + COALESCE(ntq.nhap_khac, 0) - 
          COALESCE(xtq.tong_xuat, 0)) AS ton_cuoi_quy
@@ -1778,94 +2071,126 @@ const generateLuanChuyenKhoReport = async (req, res, query, user) => {
       LEFT JOIN nhap_trong_ky ntq ON pb.id = ntq.phong_ban_id
       LEFT JOIN xuat_trong_ky xtq ON pb.id = xtq.phong_ban_id
       WHERE 1=1 ${phongBanFilter}
-      ORDER BY pb.ma_phong_ban
+      ORDER BY pb.cap_bac, pb.ma_phong_ban
     `;
 
-    console.log("🔍 Executing query with params:", queryParams);
+    console.log("🔍 Executing enhanced query with params:", queryParams);
     const result = await pool.query(mainQuery, queryParams);
     const data = result.rows || [];
 
-    console.log(`📊 Found ${data.length} records`);
+    console.log(`📊 Found ${data.length} records for enhanced report`);
 
     // Đảm bảo có dữ liệu mặc định nếu không có kết quả
     if (data.length === 0) {
       console.log("⚠️ No data found, creating default entry");
       data.push({
-        id: 1,
-        ten_phong_ban: "Không có dữ liệu",
-        ma_phong_ban: "000",
+        id: phongBanInfo?.id || 1,
+        ten_phong_ban: phongBanInfo?.ten_phong_ban || "Không có dữ liệu",
+        ma_phong_ban: phongBanInfo?.ma_phong_ban || "000",
+        cap_bac: phongBanInfo?.cap_bac || 3,
+        phong_ban_cha_id: null,
         ton_dau_quy: 0,
         nhap_chuyen_cap: 0,
         nhap_mua_sam: 0,
         nhap_khac: 0,
         cong_nhap: 0,
-        xuat_su_dung_tren_cap: 0,
-        xuat_cap_cho_tren_cap: 0,
-        xuat_thanh_ly_tren_cap: 0,
-        xuat_tren_cap: 0,
-        xuat_su_dung_tu_mua: 0,
-        xuat_cap_cho_tu_mua: 0,
-        xuat_thanh_ly_tu_mua: 0,
-        xuat_tu_mua: 0,
-        xuat_su_dung_khac: 0,
-        xuat_cap_cho_khac: 0,
-        xuat_thanh_ly_khac: 0,
+        xuat_su_dung: 0,
+        xuat_cap_cho: 0,
+        xuat_thanh_ly: 0,
         xuat_khac: 0,
         cong_xuat: 0,
         ton_cuoi_quy: 0,
+        // Chi tiết cho sheet con
+        xuat_su_dung_tren_cap: 0,
+        xuat_cap_cho_tren_cap: 0,
+        xuat_thanh_ly_tren_cap: 0,
+        xuat_su_dung_tu_mua: 0,
+        xuat_cap_cho_tu_mua: 0,
+        xuat_thanh_ly_tu_mua: 0,
+        xuat_su_dung_khac: 0,
+        xuat_cap_cho_khac: 0,
+        xuat_thanh_ly_khac: 0,
       });
     }
 
-    // Tạo workbook Excel
+    // Tạo workbook Excel với format nâng cao
     const workbook = new ExcelJS.Workbook();
 
-    // Tạo sheet chính
-    const mainSheet = workbook.addWorksheet("Tổng hợp luân chuyển kho");
-    await createMainSheet(mainSheet, data, tu_ngay, den_ngay);
+    // Metadata cho workbook
+    workbook.creator = signatures.nguoi_lap || "System";
+    workbook.created = new Date();
+    workbook.modified = new Date();
+    workbook.lastModifiedBy = signatures.nguoi_lap || "System";
 
-    // Tạo 3 sheet phụ
-    await createSubSheet(
+    // Tạo sheet chính với format nâng cao
+    const mainSheet = workbook.addWorksheet("Tổng hợp luân chuyển kho");
+    await createMainSheetEnhanced(
+      mainSheet,
+      data,
+      tu_ngay,
+      den_ngay,
+      phongBanInfo,
+      signatures
+    );
+
+    // Tạo 3 sheet phụ với format nâng cao
+    await createSubSheetEnhanced(
       workbook,
       "Trên cấp",
       data,
       tu_ngay,
       den_ngay,
       "nhap_chuyen_cap",
-      "xuat_tren_cap"
+      [
+        "xuat_su_dung_tren_cap",
+        "xuat_cap_cho_tren_cap",
+        "xuat_thanh_ly_tren_cap",
+      ],
+      phongBanInfo,
+      signatures
     );
-    await createSubSheet(
+
+    await createSubSheetEnhanced(
       workbook,
       "Tự mua sắm",
       data,
       tu_ngay,
       den_ngay,
       "nhap_mua_sam",
-      "xuat_tu_mua"
+      ["xuat_su_dung_tu_mua", "xuat_cap_cho_tu_mua", "xuat_thanh_ly_tu_mua"],
+      phongBanInfo,
+      signatures
     );
-    await createSubSheet(
+
+    await createSubSheetEnhanced(
       workbook,
       "Khác",
       data,
       tu_ngay,
       den_ngay,
       "nhap_khac",
-      "xuat_khac"
+      ["xuat_su_dung_khac", "xuat_cap_cho_khac", "xuat_thanh_ly_khac"],
+      phongBanInfo,
+      signatures
     );
 
-    console.log("📝 Workbook created successfully");
+    console.log("📝 Enhanced workbook created successfully");
 
     // Tạo buffer từ workbook
     const buffer = await workbook.xlsx.writeBuffer();
 
-    console.log(`✅ Excel buffer created, size: ${buffer.length} bytes`);
+    console.log(
+      `✅ Enhanced Excel buffer created, size: ${buffer.length} bytes`
+    );
 
     // Đảm bảo buffer không rỗng
     if (buffer.length === 0) {
       throw new Error("Generated Excel buffer is empty");
     }
 
-    // SỬA: Tên file đúng format
-    const fileName = `bao-cao-luan-chuyen-kho-${tu_ngay}-${den_ngay}.xlsx`;
+    // Tạo tên file với thông tin phòng ban
+    const phongBanCode = phongBanInfo?.ma_phong_ban || "ALL";
+    const fileName = `bao-cao-luan-chuyen-kho-${phongBanCode}-${tu_ngay}-${den_ngay}.xlsx`;
 
     // Thiết lập header và gửi file
     res.writeHead(200, {
@@ -1880,537 +2205,1693 @@ const generateLuanChuyenKhoReport = async (req, res, query, user) => {
 
     res.end(buffer);
 
-    console.log("✅ File sent successfully");
+    console.log("✅ Enhanced file sent successfully");
   } catch (error) {
-    console.error("❌ Generate Excel error:", error);
+    console.error("❌ Generate Enhanced Excel error:", error);
     console.error("❌ Error stack:", error.stack);
 
     if (!res.headersSent) {
-      return sendResponse(res, 500, false, "Lỗi tạo báo cáo Excel", {
+      return sendResponse(res, 500, false, "Lỗi tạo báo cáo Excel nâng cao", {
         error: error.message,
       });
     }
   }
 };
 
-// const createMainSheet = async (worksheet, data, quy, nam) => {
-// Sửa lại hàm createMainSheet để hiển thị đầy đủ dữ liệu
-
-const createMainSheet = async (worksheet, data, tu_ngay, den_ngay) => {
-  // Hàm helper để format ngày
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
-    return `${String(date.getDate()).padStart(2, "0")}/${String(
-      date.getMonth() + 1
-    ).padStart(2, "0")}/${date.getFullYear()}`;
-  };
-
-  // Đảm bảo data không undefined và là array
-  if (!data || !Array.isArray(data)) {
-    console.log("⚠️ Invalid data provided to createMainSheet:", data);
-    data = []; // Tạo mảng rỗng nếu không có dữ liệu
-  }
-
-  console.log("📊 Data for main sheet:", data.length, "records");
-
-  // Thiết lập độ rộng cột
-  worksheet.columns = [
-    { width: 20 }, // A - Nội dung
-    { width: 15 }, // B - Tồn kho đầu kỳ
-    { width: 15 }, // C - Trên cấp
-    { width: 15 }, // D - Tự mua sắm
-    { width: 15 }, // E - Khác
-    { width: 15 }, // F - Cộng nhập
-    { width: 15 }, // G - Xuất sử dụng
-    { width: 15 }, // H - Cấp cho đơn vị
-    { width: 15 }, // I - Thanh lý, nhượng bán
-    { width: 15 }, // J - Khác
-    { width: 15 }, // K - Cộng xuất
-    { width: 15 }, // L - Tồn kho cuối kỳ
-  ];
-
-  let currentRow = 1;
-
-  // Header - Dòng 1
-  worksheet.mergeCells(`A${currentRow}:F${currentRow}`);
-  const headerLeft = worksheet.getCell(`A${currentRow}`);
-  headerLeft.value = "CẢNH SÁT BIỂN VIỆT NAM\nBỘ TƯ LỆNH\nVÙNG CẢNH SÁT BIỂN 1";
-  headerLeft.font = {
-    name: "Times New Roman",
-    size: 12,
-    bold: true,
-    color: { argb: "0000FF" },
-  };
-  headerLeft.alignment = {
-    horizontal: "center",
-    vertical: "middle",
-    wrapText: true,
-  };
-
-  worksheet.mergeCells(`G${currentRow}:L${currentRow}`);
-  const headerRight = worksheet.getCell(`G${currentRow}`);
-  headerRight.value = `Mẫu biểu số: 07/BCQT`;
-  headerRight.font = { name: "Times New Roman", size: 11 };
-  headerRight.alignment = { horizontal: "right", vertical: "middle" };
-
-  currentRow += 3;
-
-  // Tiêu đề chính hiển thị khoảng thời gian thực tế
-  worksheet.mergeCells(`A${currentRow}:L${currentRow}`);
-  const title = worksheet.getCell(`A${currentRow}`);
-  title.value = `TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA LUÂN CHUYỂN QUA KHO`;
-  title.font = { name: "Times New Roman", size: 16, bold: true };
-  title.alignment = { horizontal: "center", vertical: "middle" };
-
-  currentRow++;
-
-  // Thêm dòng hiển thị khoảng thời gian
-  worksheet.mergeCells(`A${currentRow}:L${currentRow}`);
-  const timeRange = worksheet.getCell(`A${currentRow}`);
-  timeRange.value = `Từ ngày ${formatDate(tu_ngay)} đến ngày ${formatDate(
-    den_ngay
-  )}`;
-  timeRange.font = {
-    name: "Times New Roman",
-    size: 14,
-    bold: true,
-    color: { argb: "FF0000" },
-  };
-  timeRange.alignment = { horizontal: "center", vertical: "middle" };
-
-  currentRow++;
-
-  // Đơn vị
-  worksheet.mergeCells(`A${currentRow}:L${currentRow}`);
-  const donVi = worksheet.getCell(`A${currentRow}`);
-  donVi.value = "Đơn vị: Phòng Hậu cần - Kỹ thuật";
-  donVi.font = {
-    name: "Times New Roman",
-    size: 12,
-    bold: true,
-    color: { argb: "FF0000" },
-  };
-  donVi.alignment = { horizontal: "center", vertical: "middle" };
-
-  currentRow++;
-
-  // Đơn vị tính
-  worksheet.mergeCells(`A${currentRow}:L${currentRow}`);
-  const donViTinh = worksheet.getCell(`A${currentRow}`);
-  donViTinh.value = "Đơn vị tính: Đồng";
-  donViTinh.font = { name: "Times New Roman", size: 11, italic: true };
-  donViTinh.alignment = { horizontal: "right", vertical: "middle" };
-
-  currentRow += 2;
-
-  // Tạo header table
-  const headers = [
-    "Nội dung",
-    "Tồn kho\nđầu kỳ",
-    "Nhập kho trong kỳ\nTrên cấp",
-    "Tự mua sắm",
-    "Khác",
-    "Cộng nhập\n5=2+3+4",
-    "Xuất kho trong kỳ\nXuất sử dụng",
-    "Cấp cho\nđơn vị",
-    "Thanh lý,\nnhượng bán",
-    "Khác",
-    "Cộng xuất\n10=6+7+8+9",
-    "Tồn kho\ncuối kỳ\n11=1+5-10",
-  ];
-
-  const headerCodes = [
-    "A",
-    "1",
-    "2",
-    "3",
-    "4",
-    "5=2+3+4",
-    "6",
-    "7",
-    "8",
-    "9",
-    "10=6+7+8+9",
-    "11=1+5-10",
-  ];
-
-  // Dòng header chính
-  headers.forEach((header, index) => {
-    const cell = worksheet.getCell(currentRow, index + 1);
-    cell.value = header;
-    cell.font = { name: "Times New Roman", size: 10, bold: true };
-    cell.alignment = {
-      horizontal: "center",
-      vertical: "middle",
-      wrapText: true,
-    };
-    cell.border = {
-      top: { style: "thin" },
-      left: { style: "thin" },
-      bottom: { style: "thin" },
-      right: { style: "thin" },
-    };
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FFB0E0E6" },
-    };
-  });
-
-  currentRow++;
-
-  // Dòng mã số
-  headerCodes.forEach((code, index) => {
-    const cell = worksheet.getCell(currentRow, index + 1);
-    cell.value = code;
-    cell.font = { name: "Times New Roman", size: 10, bold: true };
-    cell.alignment = {
-      horizontal: "center",
-      vertical: "middle",
-    };
-    cell.border = {
-      top: { style: "thin" },
-      left: { style: "thin" },
-      bottom: { style: "thin" },
-      right: { style: "thin" },
-    };
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FFB0E0E6" },
-    };
-  });
-
-  currentRow++;
-
-  // ======= PHẦN NÀY QUAN TRỌNG: THÊM DỮ LIỆU VÀO BẢNG =======
-  console.log("📝 Adding data rows to main sheet...");
-
-  if (data && data.length > 0) {
-    let tongTonDauKy = 0;
-    let tongNhapTrenCap = 0;
-    let tongNhapTuMua = 0;
-    let tongNhapKhac = 0;
-    let tongCongNhap = 0;
-    let tongXuatSuDung = 0;
-    let tongXuatCapCho = 0;
-    let tongXuatThanhLy = 0;
-    let tongXuatKhac = 0;
-    let tongCongXuat = 0;
-    let tongTonCuoiKy = 0;
-
-    data.forEach((row, index) => {
-      console.log(
-        `Adding row ${index + 1}:`,
-        row.ten_phong_ban || row.ma_phong_ban
-      );
-
-      const rowData = [
-        row.ten_phong_ban || row.ma_phong_ban || `Phòng ban ${index + 1}`,
-        parseFloat(row.ton_dau_quy) || 0,
-        parseFloat(row.nhap_chuyen_cap) || 0,
-        parseFloat(row.nhap_mua_sam) || 0,
-        parseFloat(row.nhap_khac) || 0,
-        parseFloat(row.cong_nhap) || 0,
-        parseFloat(
-          row.xuat_su_dung_tren_cap +
-            row.xuat_su_dung_tu_mua +
-            row.xuat_su_dung_khac
-        ) || 0,
-        parseFloat(
-          row.xuat_cap_cho_tren_cap +
-            row.xuat_cap_cho_tu_mua +
-            row.xuat_cap_cho_khac
-        ) || 0,
-        parseFloat(
-          row.xuat_thanh_ly_tren_cap +
-            row.xuat_thanh_ly_tu_mua +
-            row.xuat_thanh_ly_khac
-        ) || 0,
-        parseFloat(row.xuat_khac) || 0,
-        parseFloat(row.cong_xuat) || 0,
-        parseFloat(row.ton_cuoi_quy) || 0,
-      ];
-
-      // Cộng vào tổng
-      tongTonDauKy += rowData[1];
-      tongNhapTrenCap += rowData[2];
-      tongNhapTuMua += rowData[3];
-      tongNhapKhac += rowData[4];
-      tongCongNhap += rowData[5];
-      tongXuatSuDung += rowData[6];
-      tongXuatCapCho += rowData[7];
-      tongXuatThanhLy += rowData[8];
-      tongXuatKhac += rowData[9];
-      tongCongXuat += rowData[10];
-      tongTonCuoiKy += rowData[11];
-
-      rowData.forEach((value, colIndex) => {
-        const cell = worksheet.getCell(currentRow, colIndex + 1);
-        cell.value = value;
-
-        if (colIndex === 0) {
-          // Cột tên phòng ban
-          cell.alignment = { horizontal: "left", vertical: "middle" };
-        } else {
-          // Các cột số
-          cell.numFmt = "#,##0";
-          cell.alignment = { horizontal: "right", vertical: "middle" };
-        }
-
-        cell.font = { name: "Times New Roman", size: 10 };
-        cell.border = {
-          top: { style: "thin" },
-          left: { style: "thin" },
-          bottom: { style: "thin" },
-          right: { style: "thin" },
-        };
-      });
-
-      currentRow++;
-    });
-
-    // Dòng tổng cộng
-    const tongCongData = [
-      "TỔNG CỘNG",
-      tongTonDauKy,
-      tongNhapTrenCap,
-      tongNhapTuMua,
-      tongNhapKhac,
-      tongCongNhap,
-      tongXuatSuDung,
-      tongXuatCapCho,
-      tongXuatThanhLy,
-      tongXuatKhac,
-      tongCongXuat,
-      tongTonCuoiKy,
-    ];
-
-    tongCongData.forEach((value, colIndex) => {
-      const cell = worksheet.getCell(currentRow, colIndex + 1);
-      cell.value = value;
-
-      if (colIndex === 0) {
-        cell.alignment = { horizontal: "center", vertical: "middle" };
-      } else {
-        cell.numFmt = "#,##0";
-        cell.alignment = { horizontal: "right", vertical: "middle" };
-      }
-
-      cell.font = { name: "Times New Roman", size: 11, bold: true };
-      cell.border = {
-        top: { style: "thick" },
-        left: { style: "thin" },
-        bottom: { style: "thick" },
-        right: { style: "thin" },
-      };
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFFFCC" },
-      };
-    });
-
-    currentRow += 2;
-
-    console.log(`✅ Added ${data.length} data rows to main sheet`);
-  } else {
-    // Nếu không có dữ liệu, thêm dòng thông báo
-    worksheet.mergeCells(`A${currentRow}:L${currentRow}`);
-    const noDataCell = worksheet.getCell(`A${currentRow}`);
-    noDataCell.value = "Không có dữ liệu trong khoảng thời gian này";
-    noDataCell.font = { name: "Times New Roman", size: 12, italic: true };
-    noDataCell.alignment = { horizontal: "center", vertical: "middle" };
-    currentRow += 2;
-
-    console.log("⚠️ No data available for main sheet");
-  }
-
-  // Chữ ký
-  const ngayHienTai = new Date();
-  worksheet.mergeCells(`A${currentRow}:L${currentRow}`);
-  const ngayKy = worksheet.getCell(`A${currentRow}`);
-  ngayKy.value = `Ngày ${String(ngayHienTai.getDate()).padStart(
-    2,
-    "0"
-  )} tháng ${String(ngayHienTai.getMonth() + 1).padStart(
-    2,
-    "0"
-  )} năm ${ngayHienTai.getFullYear()}`;
-  ngayKy.font = { name: "Times New Roman", size: 11, italic: true };
-  ngayKy.alignment = { horizontal: "right", vertical: "middle" };
-
-  currentRow += 2;
-
-  // Vị trí chữ ký
-  const positions = [
-    "NGƯỜI LẬP BIỂU",
-    "TRƯỞNG BAN VẬT TƯ",
-    "CHỦ NHIỆM HẬU CẦN - KỸ THUẬT",
-  ];
-  const cols = ["A", "E", "I"];
-
-  positions.forEach((position, index) => {
-    worksheet.mergeCells(
-      `${cols[index]}${currentRow}:${String.fromCharCode(
-        cols[index].charCodeAt(0) + 2
-      )}${currentRow}`
-    );
-    const positionCell = worksheet.getCell(`${cols[index]}${currentRow}`);
-    positionCell.value = position;
-    positionCell.font = { name: "Times New Roman", size: 11, bold: true };
-    positionCell.alignment = { horizontal: "center", vertical: "middle" };
-  });
-
-  // Đặt chiều cao cho các dòng header
-  const headerRowStart = currentRow - data.length - 10; // Tính ngược lại
-  if (headerRowStart > 0) {
-    worksheet.getRow(headerRowStart).height = 40;
-    worksheet.getRow(headerRowStart + 1).height = 25;
-  }
-
-  console.log("✅ Main sheet created successfully");
-};
-
-// Hàm tạo sheet phụ
-const createSubSheet = async (
-  workbook,
-  sheetName,
+// Hàm tạo sheet chính với format nâng cao
+const createMainSheetEnhanced = async (
+  sheet,
   data,
-  tu_ngay, // SỬA: thay đổi từ quy
-  den_ngay, // SỬA: thay đổi từ nam
-  nhapField,
-  xuatField
+  tu_ngay,
+  den_ngay,
+  phongBanInfo,
+  signatures
 ) => {
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
-    return `${String(date.getDate()).padStart(2, "0")}/${String(
-      date.getMonth() + 1
-    ).padStart(2, "0")}/${date.getFullYear()}`;
-  };
-
-  const worksheet = workbook.addWorksheet(sheetName);
-
-  // Setup tương tự như main sheet nhưng focus vào loại cụ thể
-  worksheet.columns = [
-    { width: 25 }, // A - Nội dung
-    { width: 15 }, // B - Tồn kho đầu quý
-    { width: 15 }, // C - Nhập kho trong quý
-    { width: 20 }, // D - Xuất kho trong quý (chi tiết)
-    { width: 15 }, // E - Tồn cuối quý
+  // Thiết lập độ rộng cột
+  sheet.columns = [
+    { width: 35 }, // Nội dung
+    { width: 15 }, // Tồn kho đầu quý
+    { width: 15 }, // Nhập kho trong quý
+    { width: 15 }, // Xuất sử dụng
+    { width: 15 }, // Cấp cho đơn vị
+    { width: 15 }, // Thanh lý, nhượng bán
+    { width: 15 }, // Khác
+    { width: 15 }, // Cộng xuất
+    { width: 15 }, // Tồn cuối quý
   ];
 
-  let currentRow = 1;
+  // Format ngày tháng cho tiêu đề
+  const startDate = new Date(tu_ngay);
+  const endDate = new Date(den_ngay);
+  const startQuarter = Math.ceil((startDate.getMonth() + 1) / 3);
+  const startYear = startDate.getFullYear();
 
-  // SỬA: Header với khoảng thời gian thay vì quý/năm
-  worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
-  const header = worksheet.getCell(`A${currentRow}`);
-  header.value = `TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA ${sheetName.toUpperCase()} LUÂN CHUYỂN QUA KHO`;
-  header.font = { name: "Times New Roman", size: 14, bold: true };
-  header.alignment = {
-    horizontal: "center",
-    vertical: "middle",
-    wrapText: true,
-  };
-
-  currentRow++;
-
-  // SỬA: Thêm dòng hiển thị khoảng thời gian
-  worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
-  const timeRange = worksheet.getCell(`A${currentRow}`);
-  timeRange.value = `Từ ngày ${formatDate(tu_ngay)} đến ngày ${formatDate(
-    den_ngay
-  )}`;
-  timeRange.font = {
-    name: "Times New Roman",
-    size: 12,
-    bold: true,
-    color: { argb: "FF0000" },
-  };
-  timeRange.alignment = { horizontal: "center", vertical: "middle" };
-
-  currentRow++;
-
-  // Đơn vị
-  worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
-  const donVi = worksheet.getCell(`A${currentRow}`);
-  donVi.value = "Đơn vị: Phòng Hậu cần - Kỹ thuật";
-  donVi.font = {
-    name: "Times New Roman",
-    size: 12,
-    bold: true,
-    color: { argb: "FF0000" },
-  };
-  donVi.alignment = { horizontal: "center", vertical: "middle" };
-
-  currentRow += 2;
-
-  // Table headers cho sheet phụ
-  const subHeaders = [
-    "Nội dung",
-    "Tồn kho\nđầu kỳ", // SỬA: đổi từ "đầu quý" thành "đầu kỳ"
-    "Nhập kho\ntrong kỳ", // SỬA: đổi từ "trong quý" thành "trong kỳ"
-    "Xuất kho trong kỳ", // SỬA: đổi từ "trong quý" thành "trong kỳ"
-    "Tồn cuối kỳ", // SỬA: đổi từ "cuối quý" thành "cuối kỳ"
+  // Header chính của báo cáo
+  const headerRows = [
+    // Row 1: CẢNH SÁT BIỂN VIỆT NAM - TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA - Phụ biểu số
+    {
+      values: [
+        "CẢNH SÁT BIỂN VIỆT NAM",
+        "",
+        "",
+        `TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA TRÊN CẤP LUÂN CHUYỂN QUA KHO QUÝ ${startQuarter}/${startYear}`,
+        "",
+        "",
+        "",
+        "Phụ biểu số: 07.1/BCQT",
+      ],
+      merges: [
+        { range: "A1:C1", value: "CẢNH SÁT BIỂN VIỆT NAM" },
+        {
+          range: "D1:G1",
+          value: `TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA TRÊN CẤP LUÂN CHUYỂN QUA KHO QUÝ ${startQuarter}/${startYear}`,
+        },
+      ],
+    },
+    // Row 2: BỘ TƯ LỆNH - Đơn vị - Đơn vị tính
+    {
+      values: [
+        "BỘ TƯ LỆNH",
+        "",
+        "",
+        `Đơn vị: ${phongBanInfo?.ten_phong_ban || "Phòng Hậu cần - Kỹ thuật"}`,
+        "",
+        "",
+        "",
+        "Đơn vị tính: Đồng",
+      ],
+      merges: [
+        { range: "A2:C2", value: "BỘ TƯ LỆNH" },
+        {
+          range: "D2:G2",
+          value: `Đơn vị: ${
+            phongBanInfo?.ten_phong_ban || "Phòng Hậu cần - Kỹ thuật"
+          }`,
+        },
+      ],
+    },
+    // Row 3: VÙNG CẢNH SÁT BIỂN 1
+    {
+      values: ["VÙNG CẢNH SÁT BIỂN 1", "", "", "", "", "", "", ""],
+      merges: [{ range: "A3:I3", value: "VÙNG CẢNH SÁT BIỂN 1" }],
+    },
+    // Row 4: Khoảng trống
+    {
+      values: ["", "", "", "", "", "", "", "", ""],
+    },
   ];
 
-  subHeaders.forEach((header, index) => {
-    const cell = worksheet.getCell(currentRow, index + 1);
-    cell.value = header;
-    cell.font = { name: "Times New Roman", size: 11, bold: true };
-    cell.alignment = {
-      horizontal: "center",
-      vertical: "middle",
-      wrapText: true,
-    };
-    cell.border = {
-      top: { style: "thin" },
-      left: { style: "thin" },
-      bottom: { style: "thin" },
-      right: { style: "thin" },
-    };
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FFE6E6E6" },
-    };
+  // Thêm các header rows
+  headerRows.forEach((row, index) => {
+    const excelRow = sheet.addRow(row.values);
+
+    // Apply merges
+    if (row.merges) {
+      row.merges.forEach((merge) => {
+        sheet.mergeCells(merge.range);
+        if (merge.value) {
+          sheet.getCell(merge.range.split(":")[0]).value = merge.value;
+        }
+      });
+    }
+
+    // Apply styles cho header
+    excelRow.eachCell((cell) => {
+      cell.font = { bold: true, size: 11 };
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+    });
   });
 
-  currentRow++;
+  // Header bảng dữ liệu chính
+  const tableHeader1 = sheet.addRow([
+    "Nội dung",
+    "Tồn kho đầu quý",
+    "Nhập kho trong quý",
+    "",
+    "",
+    "",
+    "",
+    "Xuất kho trong quý",
+    "Tồn cuối quý",
+  ]);
 
-  // Data cho sheet phụ
-  data.forEach((row) => {
-    const rowData = [
-      row.ten_phong_ban,
-      row.ton_dau_quy,
-      row[nhapField],
-      row[xuatField],
-      row.ton_dau_quy + row[nhapField] - row[xuatField], // Tính tồn cuối kỳ
-    ];
+  const tableHeader2 = sheet.addRow([
+    "",
+    "",
+    "",
+    "Xuất sử dụng",
+    "Cấp cho đơn vị",
+    "Thanh lý, nhượng bán",
+    "Khác",
+    "Cộng xuất",
+    "",
+  ]);
 
-    rowData.forEach((value, index) => {
-      const cell = worksheet.getCell(currentRow, index + 1);
-      if (index === 0) {
-        cell.value = value;
-        cell.alignment = { horizontal: "left", vertical: "middle" };
-      } else {
-        cell.value = parseFloat(value) || 0;
-        if (isNaN(cell.value)) cell.value = 0;
-        cell.numFmt = "#,##0";
-        cell.alignment = { horizontal: "right", vertical: "middle" };
-      }
-      cell.font = { name: "Times New Roman", size: 10 };
+  // Style cho header bảng
+  [tableHeader1, tableHeader2].forEach((row) => {
+    row.eachCell((cell) => {
+      cell.font = { bold: true, size: 10 };
+      cell.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+        wrapText: true,
+      };
       cell.border = {
         top: { style: "thin" },
         left: { style: "thin" },
         bottom: { style: "thin" },
         right: { style: "thin" },
       };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFE6E6FA" },
+      };
     });
+  });
 
-    currentRow++;
+  // Merge cells cho header bảng
+  sheet.mergeCells(`A${tableHeader1.number}:A${tableHeader2.number}`); // Nội dung
+  sheet.mergeCells(`B${tableHeader1.number}:B${tableHeader2.number}`); // Tồn đầu
+  sheet.mergeCells(`C${tableHeader1.number}:G${tableHeader1.number}`); // Nhập trong quý
+  sheet.mergeCells(`H${tableHeader1.number}:H${tableHeader2.number}`); // Xuất kho (title)
+  sheet.mergeCells(`I${tableHeader1.number}:I${tableHeader2.number}`); // Tồn cuối
+
+  // Render dữ liệu với phân cấp
+  await renderDataWithHierarchy(sheet, data, tableHeader2.number + 1);
+
+  // Footer với thông tin ngày tháng và chữ ký
+  await addFooterWithSignatures(sheet, signatures);
+};
+
+// Hàm render dữ liệu với phân cấp
+const renderDataWithHierarchy = async (sheet, data, startRow) => {
+  let currentRow = startRow;
+
+  // Nhóm dữ liệu theo cấp
+  const cap1Items = data.filter((item) => item.cap_bac === 1) || [];
+  const cap2Items = data.filter((item) => item.cap_bac === 2) || [];
+  const cap3Items = data.filter((item) => item.cap_bac === 3) || [];
+
+  // Render cấp 1
+  cap1Items.forEach((item) => {
+    const row = sheet.addRow([
+      item.ten_phong_ban,
+      parseFloat(item.ton_dau_quy || 0),
+      parseFloat(item.cong_nhap || 0),
+      parseFloat(item.xuat_su_dung || 0),
+      parseFloat(item.xuat_cap_cho || 0),
+      parseFloat(item.xuat_thanh_ly || 0),
+      parseFloat(item.xuat_khac || 0),
+      parseFloat(item.cong_xuat || 0),
+      parseFloat(item.ton_cuoi_quy || 0),
+    ]);
+
+    // Style cho cấp 1 (màu xanh đậm)
+    applyCap1Style(row);
+  });
+
+  // Render cấp 2 và cấp 3 con
+  cap2Items.forEach((cap2Item) => {
+    // Thêm dòng cấp 2
+    const cap2Row = sheet.addRow([
+      `  ${cap2Item.ten_phong_ban}`,
+      parseFloat(cap2Item.ton_dau_quy || 0),
+      parseFloat(cap2Item.cong_nhap || 0),
+      parseFloat(cap2Item.xuat_su_dung || 0),
+      parseFloat(cap2Item.xuat_cap_cho || 0),
+      parseFloat(cap2Item.xuat_thanh_ly || 0),
+      parseFloat(cap2Item.xuat_khac || 0),
+      parseFloat(cap2Item.cong_xuat || 0),
+      parseFloat(cap2Item.ton_cuoi_quy || 0),
+    ]);
+
+    // Style cho cấp 2
+    applyCap2Style(cap2Row);
+
+    // Thêm các cấp 3 thuộc cấp 2 này
+    const cap3ForThisCap2 = cap3Items.filter(
+      (cap3) => cap3.phong_ban_cha_id === cap2Item.id
+    );
+    cap3ForThisCap2.forEach((cap3Item) => {
+      const cap3Row = sheet.addRow([
+        `    - ${cap3Item.ten_phong_ban}`,
+        parseFloat(cap3Item.ton_dau_quy || 0),
+        parseFloat(cap3Item.cong_nhap || 0),
+        parseFloat(cap3Item.xuat_su_dung || 0),
+        parseFloat(cap3Item.xuat_cap_cho || 0),
+        parseFloat(cap3Item.xuat_thanh_ly || 0),
+        parseFloat(cap3Item.xuat_khac || 0),
+        parseFloat(cap3Item.cong_xuat || 0),
+        parseFloat(cap3Item.ton_cuoi_quy || 0),
+      ]);
+
+      // Style cho cấp 3
+      applyCap3Style(cap3Row);
+    });
+  });
+
+  // Orphan cấp 3 (cho user cấp 3)
+  const orphanCap3 = cap3Items.filter(
+    (cap3) => !cap2Items.find((cap2) => cap2.id === cap3.phong_ban_cha_id)
+  );
+
+  orphanCap3.forEach((cap3Item) => {
+    const row = sheet.addRow([
+      cap3Item.ten_phong_ban,
+      parseFloat(cap3Item.ton_dau_quy || 0),
+      parseFloat(cap3Item.cong_nhap || 0),
+      parseFloat(cap3Item.xuat_su_dung || 0),
+      parseFloat(cap3Item.xuat_cap_cho || 0),
+      parseFloat(cap3Item.xuat_thanh_ly || 0),
+      parseFloat(cap3Item.xuat_khac || 0),
+      parseFloat(cap3Item.cong_xuat || 0),
+      parseFloat(cap3Item.ton_cuoi_quy || 0),
+    ]);
+
+    // Style đặc biệt cho orphan cap3
+    applyOrphanCap3Style(row);
+  });
+
+  // Thêm dòng tổng cộng
+  const totalRow = sheet.addRow([
+    "Tổng cộng",
+    data.reduce((sum, item) => sum + (parseFloat(item.ton_dau_quy) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.cong_nhap) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.xuat_su_dung) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.xuat_cap_cho) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.xuat_thanh_ly) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.xuat_khac) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.cong_xuat) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.ton_cuoi_quy) || 0), 0),
+  ]);
+
+  // Style cho dòng tổng cộng
+  applyTotalRowStyle(totalRow);
+};
+
+// Hàm style cho các cấp
+const applyCap1Style = (row) => {
+  row.eachCell((cell, colNumber) => {
+    cell.border = getBorder();
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFB0E0E6" },
+    };
+    cell.font = { bold: true, size: 10 };
+    cell.alignment =
+      colNumber === 1
+        ? { horizontal: "left", vertical: "middle" }
+        : { horizontal: "right", vertical: "middle" };
+    if (colNumber > 1) cell.numFmt = "#,##0";
   });
 };
+
+const applyCap2Style = (row) => {
+  row.eachCell((cell, colNumber) => {
+    cell.border = getBorder();
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFFFFF99" },
+    };
+    cell.font = { bold: true, size: 9, italic: true };
+    cell.alignment =
+      colNumber === 1
+        ? { horizontal: "left", vertical: "middle" }
+        : { horizontal: "right", vertical: "middle" };
+    if (colNumber > 1) cell.numFmt = "#,##0";
+  });
+};
+
+const applyCap3Style = (row) => {
+  row.eachCell((cell, colNumber) => {
+    cell.border = getBorder();
+    cell.font = { size: 9 };
+    cell.alignment =
+      colNumber === 1
+        ? { horizontal: "left", vertical: "middle" }
+        : { horizontal: "right", vertical: "middle" };
+    if (colNumber > 1) cell.numFmt = "#,##0";
+  });
+};
+
+const applyOrphanCap3Style = (row) => {
+  row.eachCell((cell, colNumber) => {
+    cell.border = getBorder();
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE0F6FF" },
+    };
+    cell.font = { bold: true, size: 10 };
+    cell.alignment =
+      colNumber === 1
+        ? { horizontal: "left", vertical: "middle" }
+        : { horizontal: "right", vertical: "middle" };
+    if (colNumber > 1) cell.numFmt = "#,##0";
+  });
+};
+
+const applyTotalRowStyle = (row) => {
+  row.eachCell((cell, colNumber) => {
+    cell.font = { bold: true, size: 10 };
+    cell.border = {
+      top: { style: "thick" },
+      left: { style: "thin" },
+      bottom: { style: "thick" },
+      right: { style: "thin" },
+    };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFD3D3D3" },
+    };
+    cell.alignment =
+      colNumber === 1
+        ? { horizontal: "center", vertical: "middle" }
+        : { horizontal: "right", vertical: "middle" };
+    if (colNumber > 1) cell.numFmt = "#,##0";
+  });
+};
+
+const getBorder = () => ({
+  top: { style: "thin" },
+  left: { style: "thin" },
+  bottom: { style: "thin" },
+  right: { style: "thin" },
+});
+
+// Hàm thêm footer với chữ ký
+const addFooterWithSignatures = async (sheet, signatures) => {
+  const currentDate = new Date();
+  const dateStr = `Ngày ${currentDate
+    .getDate()
+    .toString()
+    .padStart(2, "0")} tháng ${(currentDate.getMonth() + 1)
+    .toString()
+    .padStart(2, "0")} năm ${currentDate.getFullYear()}`;
+
+  // Thêm khoảng trống
+  sheet.addRow([""]);
+  sheet.addRow([""]);
+
+  // Thêm ngày tháng
+  const dateRow = sheet.addRow(["", "", "", "", "", "", "", dateStr]);
+  dateRow.getCell(8).alignment = { horizontal: "center", vertical: "middle" };
+  dateRow.getCell(8).font = { italic: true, size: 10 };
+
+  // Thêm khoảng trống cho chữ ký
+  sheet.addRow([""]);
+
+  // Thêm header chữ ký
+  const signatureHeaderRow = sheet.addRow([
+    "NGƯỜI LẬP BIỂU",
+    "",
+    "TRƯỞNG BAN VẬT TƯ",
+    "",
+    "",
+    "TL. TƯ LỆNH",
+    "",
+    "CHỦ NHIỆM HẬU CẦN - KỸ THUẬT",
+  ]);
+
+  signatureHeaderRow.eachCell((cell) => {
+    cell.font = { bold: true, size: 10 };
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+  });
+
+  // Merge cells cho chữ ký
+  sheet.mergeCells(
+    `A${signatureHeaderRow.number}:B${signatureHeaderRow.number}`
+  );
+  sheet.mergeCells(
+    `C${signatureHeaderRow.number}:D${signatureHeaderRow.number}`
+  );
+  sheet.mergeCells(
+    `F${signatureHeaderRow.number}:G${signatureHeaderRow.number}`
+  );
+
+  // Thêm khoảng trống cho chữ ký
+  for (let i = 0; i < 3; i++) {
+    sheet.addRow([""]);
+  }
+
+  // Thêm tên người ký
+  const nameRow = sheet.addRow([
+    signatures.nguoi_lap || "",
+    "",
+    signatures.truong_ban || "",
+    "",
+    "",
+    "",
+    "",
+    signatures.chu_nhiem || "",
+  ]);
+
+  nameRow.eachCell((cell) => {
+    cell.font = { bold: true, size: 10 };
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+  });
+
+  // Merge cells cho tên
+  sheet.mergeCells(`A${nameRow.number}:B${nameRow.number}`);
+  sheet.mergeCells(`C${nameRow.number}:D${nameRow.number}`);
+};
+
+// Hàm tạo sheet phụ với format nâng cao
+const createSubSheetEnhanced = async (
+  workbook,
+  sheetName,
+  data,
+  tu_ngay,
+  den_ngay,
+  nhapField,
+  xuatFields,
+  phongBanInfo,
+  signatures
+) => {
+  const sheet = workbook.addWorksheet(sheetName);
+
+  // Set column widths
+  sheet.columns = [
+    { width: 35 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+  ];
+
+  // Tạo data cho sheet con dựa trên field tương ứng
+  const filteredData = data
+    .map((item) => {
+      const nhapValue = parseFloat(item[nhapField]) || 0;
+      const xuatSuDung = parseFloat(item[xuatFields[0]]) || 0;
+      const xuatCapCho = parseFloat(item[xuatFields[1]]) || 0;
+      const xuatThanhLy = parseFloat(item[xuatFields[2]]) || 0;
+      const tongXuat = xuatSuDung + xuatCapCho + xuatThanhLy;
+
+      return {
+        ...item,
+        cong_nhap: nhapValue,
+        xuat_su_dung: xuatSuDung,
+        xuat_cap_cho: xuatCapCho,
+        xuat_thanh_ly: xuatThanhLy,
+        xuat_khac: 0,
+        cong_xuat: tongXuat,
+        ton_cuoi_quy:
+          (parseFloat(item.ton_dau_quy) || 0) + nhapValue - tongXuat,
+      };
+    })
+    .filter(
+      (item) => item.cong_nhap > 0 || item.cong_xuat > 0 || item.ton_dau_quy > 0
+    );
+
+  // Thiết lập độ rộng cột giống main sheet
+  sheet.columns = [
+    { width: 35 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+  ];
+
+  // Format ngày tháng cho tiêu đề
+  const startDate = new Date(tu_ngay);
+  const startQuarter = Math.ceil((startDate.getMonth() + 1) / 3);
+  const startYear = startDate.getFullYear();
+
+  // Tiêu đề tương ứng với từng sheet
+  const titleMap = {
+    "Trên cấp": "TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA TRÊN CẤP LUÂN CHUYỂN QUA KHO",
+    "Tự mua sắm":
+      "TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA TỰ MUA SẮM LUÂN CHUYỂN QUA KHO",
+    Khác: "TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA KHÁC LUÂN CHUYỂN QUA KHO",
+  };
+
+  const phieuBieuMap = {
+    "Trên cấp": "07.1/BCQT",
+    "Tự mua sắm": "07.2/BCQT",
+    Khác: "07.3/BCQT",
+  };
+
+  // Header chính của báo cáo
+  const headerRows = [
+    // Row 1
+    {
+      values: [
+        "CẢNH SÁT BIỂN VIỆT NAM",
+        "",
+        "",
+        `${titleMap[sheetName]} QUÝ ${startQuarter}/${startYear}`,
+        "",
+        "",
+        "",
+        `Phụ biểu số: ${phieuBieuMap[sheetName]}`,
+      ],
+    },
+    // Row 2
+    {
+      values: [
+        "BỘ TƯ LỆNH",
+        "",
+        "",
+        `Đơn vị: ${phongBanInfo?.ten_phong_ban || "Phòng Hậu cần - Kỹ thuật"}`,
+        "",
+        "",
+        "",
+        "Đơn vị tính: Đồng",
+      ],
+    },
+    // Row 3
+    {
+      values: ["VÙNG CẢNH SÁT BIỂN 1", "", "", "", "", "", "", ""],
+    },
+    // Row 4: Khoảng trống
+    {
+      values: ["", "", "", "", "", "", "", "", ""],
+    },
+  ];
+
+  // Thêm các header rows
+  headerRows.forEach((row, index) => {
+    const excelRow = sheet.addRow(row.values);
+
+    // Apply merges
+    if (index === 0) {
+      sheet.mergeCells(`A${excelRow.number}:C${excelRow.number}`);
+      sheet.mergeCells(`D${excelRow.number}:G${excelRow.number}`);
+      sheet.getCell(`A${excelRow.number}`).value = "CẢNH SÁT BIỂN VIỆT NAM";
+      sheet.getCell(
+        `D${excelRow.number}`
+      ).value = `${titleMap[sheetName]} QUÝ ${startQuarter}/${startYear}`;
+    } else if (index === 1) {
+      sheet.mergeCells(`A${excelRow.number}:C${excelRow.number}`);
+      sheet.mergeCells(`D${excelRow.number}:G${excelRow.number}`);
+      sheet.getCell(`A${excelRow.number}`).value = "BỘ TƯ LỆNH";
+      sheet.getCell(`D${excelRow.number}`).value = `Đơn vị: ${
+        phongBanInfo?.ten_phong_ban || "Phòng Hậu cần - Kỹ thuật"
+      }`;
+    } else if (index === 2) {
+      sheet.mergeCells(`A${excelRow.number}:I${excelRow.number}`);
+      sheet.getCell(`A${excelRow.number}`).value = "VÙNG CẢNH SÁT BIỂN 1";
+    }
+
+    // Apply styles cho header
+    excelRow.eachCell((cell) => {
+      cell.font = { bold: true, size: 11 };
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+    });
+  });
+
+  // Header bảng dữ liệu chính
+  const tableHeader1 = sheet.addRow([
+    "Nội dung",
+    "Tồn kho đầu quý",
+    "Nhập kho trong quý",
+    "",
+    "",
+    "",
+    "",
+    "Xuất kho trong quý",
+    "Tồn cuối quý",
+  ]);
+
+  const tableHeader2 = sheet.addRow([
+    "",
+    "",
+    "",
+    "Xuất sử dụng",
+    "Cấp cho đơn vị",
+    "Thanh lý, nhượng bán",
+    "Khác",
+    "Cộng xuất",
+    "",
+  ]);
+
+  // Style cho header bảng
+  [tableHeader1, tableHeader2].forEach((row) => {
+    row.eachCell((cell) => {
+      cell.font = { bold: true, size: 10 };
+      cell.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+        wrapText: true,
+      };
+      cell.border = getBorder();
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFE6E6FA" },
+      };
+    });
+  });
+
+  // Merge cells cho header bảng
+  sheet.mergeCells(`A${tableHeader1.number}:A${tableHeader2.number}`);
+  sheet.mergeCells(`B${tableHeader1.number}:B${tableHeader2.number}`);
+  sheet.mergeCells(`C${tableHeader1.number}:G${tableHeader1.number}`);
+  sheet.mergeCells(`H${tableHeader1.number}:H${tableHeader2.number}`);
+  sheet.mergeCells(`I${tableHeader1.number}:I${tableHeader2.number}`);
+
+  // Render dữ liệu với phân cấp
+  await renderDataWithHierarchy(sheet, filteredData, tableHeader2.number + 1);
+
+  // Footer với thông tin ngày tháng và chữ ký
+  await addFooterWithSignatures(sheet, signatures);
+};
+
+// const createMainSheet = async (worksheet, data, tu_ngay, den_ngay) => {
+//   // Hàm helper để format ngày
+//   const formatDate = (dateStr) => {
+//     const date = new Date(dateStr);
+//     return `${String(date.getDate()).padStart(2, "0")}/${String(
+//       date.getMonth() + 1
+//     ).padStart(2, "0")}/${date.getFullYear()}`;
+//   };
+
+//   // Đảm bảo data không undefined và là array
+//   if (!data || !Array.isArray(data)) {
+//     console.log("⚠️ Invalid data provided to createMainSheet:", data);
+//     data = []; // Tạo mảng rỗng nếu không có dữ liệu
+//   }
+
+//   console.log("📊 Data for main sheet:", data.length, "records");
+
+//   // Thiết lập độ rộng cột
+//   worksheet.columns = [
+//     { width: 20 }, // A - Nội dung
+//     { width: 15 }, // B - Tồn kho đầu kỳ
+//     { width: 15 }, // C - Trên cấp
+//     { width: 15 }, // D - Tự mua sắm
+//     { width: 15 }, // E - Khác
+//     { width: 15 }, // F - Cộng nhập
+//     { width: 15 }, // G - Xuất sử dụng
+//     { width: 15 }, // H - Cấp cho đơn vị
+//     { width: 15 }, // I - Thanh lý, nhượng bán
+//     { width: 15 }, // J - Khác
+//     { width: 15 }, // K - Cộng xuất
+//     { width: 15 }, // L - Tồn kho cuối kỳ
+//   ];
+
+//   let currentRow = 1;
+
+//   // Header - Dòng 1
+//   worksheet.mergeCells(`A${currentRow}:F${currentRow}`);
+//   const headerLeft = worksheet.getCell(`A${currentRow}`);
+//   headerLeft.value = "CẢNH SÁT BIỂN VIỆT NAM\nBỘ TƯ LỆNH\nVÙNG CẢNH SÁT BIỂN 1";
+//   headerLeft.font = {
+//     name: "Times New Roman",
+//     size: 12,
+//     bold: true,
+//     color: { argb: "0000FF" },
+//   };
+//   headerLeft.alignment = {
+//     horizontal: "center",
+//     vertical: "middle",
+//     wrapText: true,
+//   };
+
+//   worksheet.mergeCells(`G${currentRow}:L${currentRow}`);
+//   const headerRight = worksheet.getCell(`G${currentRow}`);
+//   headerRight.value = `Mẫu biểu số: 07/BCQT`;
+//   headerRight.font = { name: "Times New Roman", size: 11 };
+//   headerRight.alignment = { horizontal: "right", vertical: "middle" };
+
+//   currentRow += 3;
+
+//   // Tiêu đề chính hiển thị khoảng thời gian thực tế
+//   worksheet.mergeCells(`A${currentRow}:L${currentRow}`);
+//   const title = worksheet.getCell(`A${currentRow}`);
+//   title.value = `TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA LUÂN CHUYỂN QUA KHO`;
+//   title.font = { name: "Times New Roman", size: 16, bold: true };
+//   title.alignment = { horizontal: "center", vertical: "middle" };
+
+//   currentRow++;
+
+//   // Thêm dòng hiển thị khoảng thời gian
+//   worksheet.mergeCells(`A${currentRow}:L${currentRow}`);
+//   const timeRange = worksheet.getCell(`A${currentRow}`);
+//   timeRange.value = `Từ ngày ${formatDate(tu_ngay)} đến ngày ${formatDate(
+//     den_ngay
+//   )}`;
+//   timeRange.font = {
+//     name: "Times New Roman",
+//     size: 14,
+//     bold: true,
+//     color: { argb: "FF0000" },
+//   };
+//   timeRange.alignment = { horizontal: "center", vertical: "middle" };
+
+//   currentRow++;
+
+//   // Đơn vị
+//   worksheet.mergeCells(`A${currentRow}:L${currentRow}`);
+//   const donVi = worksheet.getCell(`A${currentRow}`);
+//   donVi.value = "Đơn vị: Phòng Hậu cần - Kỹ thuật";
+//   donVi.font = {
+//     name: "Times New Roman",
+//     size: 12,
+//     bold: true,
+//     color: { argb: "FF0000" },
+//   };
+//   donVi.alignment = { horizontal: "center", vertical: "middle" };
+
+//   currentRow++;
+
+//   // Đơn vị tính
+//   worksheet.mergeCells(`A${currentRow}:L${currentRow}`);
+//   const donViTinh = worksheet.getCell(`A${currentRow}`);
+//   donViTinh.value = "Đơn vị tính: Đồng";
+//   donViTinh.font = { name: "Times New Roman", size: 11, italic: true };
+//   donViTinh.alignment = { horizontal: "right", vertical: "middle" };
+
+//   currentRow += 2;
+
+//   // Tạo header table
+//   const headers = [
+//     "Nội dung",
+//     "Tồn kho\nđầu kỳ",
+//     "Nhập kho trong kỳ\nTrên cấp",
+//     "Tự mua sắm",
+//     "Khác",
+//     "Cộng nhập\n5=2+3+4",
+//     "Xuất kho trong kỳ\nXuất sử dụng",
+//     "Cấp cho\nđơn vị",
+//     "Thanh lý,\nnhượng bán",
+//     "Khác",
+//     "Cộng xuất\n10=6+7+8+9",
+//     "Tồn kho\ncuối kỳ\n11=1+5-10",
+//   ];
+
+//   const headerCodes = [
+//     "A",
+//     "1",
+//     "2",
+//     "3",
+//     "4",
+//     "5=2+3+4",
+//     "6",
+//     "7",
+//     "8",
+//     "9",
+//     "10=6+7+8+9",
+//     "11=1+5-10",
+//   ];
+
+//   // Dòng header chính
+//   headers.forEach((header, index) => {
+//     const cell = worksheet.getCell(currentRow, index + 1);
+//     cell.value = header;
+//     cell.font = { name: "Times New Roman", size: 10, bold: true };
+//     cell.alignment = {
+//       horizontal: "center",
+//       vertical: "middle",
+//       wrapText: true,
+//     };
+//     cell.border = {
+//       top: { style: "thin" },
+//       left: { style: "thin" },
+//       bottom: { style: "thin" },
+//       right: { style: "thin" },
+//     };
+//     cell.fill = {
+//       type: "pattern",
+//       pattern: "solid",
+//       fgColor: { argb: "FFB0E0E6" },
+//     };
+//   });
+
+//   currentRow++;
+
+//   // Dòng mã số
+//   headerCodes.forEach((code, index) => {
+//     const cell = worksheet.getCell(currentRow, index + 1);
+//     cell.value = code;
+//     cell.font = { name: "Times New Roman", size: 10, bold: true };
+//     cell.alignment = {
+//       horizontal: "center",
+//       vertical: "middle",
+//     };
+//     cell.border = {
+//       top: { style: "thin" },
+//       left: { style: "thin" },
+//       bottom: { style: "thin" },
+//       right: { style: "thin" },
+//     };
+//     cell.fill = {
+//       type: "pattern",
+//       pattern: "solid",
+//       fgColor: { argb: "FFB0E0E6" },
+//     };
+//   });
+
+//   currentRow++;
+
+//   // ======= PHẦN NÀY QUAN TRỌNG: THÊM DỮ LIỆU VÀO BẢNG =======
+//   console.log("📝 Adding data rows to main sheet...");
+
+//   if (data && data.length > 0) {
+//     let tongTonDauKy = 0;
+//     let tongNhapTrenCap = 0;
+//     let tongNhapTuMua = 0;
+//     let tongNhapKhac = 0;
+//     let tongCongNhap = 0;
+//     let tongXuatSuDung = 0;
+//     let tongXuatCapCho = 0;
+//     let tongXuatThanhLy = 0;
+//     let tongXuatKhac = 0;
+//     let tongCongXuat = 0;
+//     let tongTonCuoiKy = 0;
+
+//     data.forEach((row, index) => {
+//       console.log(
+//         `Adding row ${index + 1}:`,
+//         row.ten_phong_ban || row.ma_phong_ban
+//       );
+
+//       const rowData = [
+//         row.ten_phong_ban || row.ma_phong_ban || `Phòng ban ${index + 1}`,
+//         parseFloat(row.ton_dau_quy) || 0,
+//         parseFloat(row.nhap_chuyen_cap) || 0,
+//         parseFloat(row.nhap_mua_sam) || 0,
+//         parseFloat(row.nhap_khac) || 0,
+//         parseFloat(row.cong_nhap) || 0,
+//         parseFloat(
+//           row.xuat_su_dung_tren_cap +
+//             row.xuat_su_dung_tu_mua +
+//             row.xuat_su_dung_khac
+//         ) || 0,
+//         parseFloat(
+//           row.xuat_cap_cho_tren_cap +
+//             row.xuat_cap_cho_tu_mua +
+//             row.xuat_cap_cho_khac
+//         ) || 0,
+//         parseFloat(
+//           row.xuat_thanh_ly_tren_cap +
+//             row.xuat_thanh_ly_tu_mua +
+//             row.xuat_thanh_ly_khac
+//         ) || 0,
+//         parseFloat(row.xuat_khac) || 0,
+//         parseFloat(row.cong_xuat) || 0,
+//         parseFloat(row.ton_cuoi_quy) || 0,
+//       ];
+
+//       // Cộng vào tổng
+//       tongTonDauKy += rowData[1];
+//       tongNhapTrenCap += rowData[2];
+//       tongNhapTuMua += rowData[3];
+//       tongNhapKhac += rowData[4];
+//       tongCongNhap += rowData[5];
+//       tongXuatSuDung += rowData[6];
+//       tongXuatCapCho += rowData[7];
+//       tongXuatThanhLy += rowData[8];
+//       tongXuatKhac += rowData[9];
+//       tongCongXuat += rowData[10];
+//       tongTonCuoiKy += rowData[11];
+
+//       rowData.forEach((value, colIndex) => {
+//         const cell = worksheet.getCell(currentRow, colIndex + 1);
+//         cell.value = value;
+
+//         if (colIndex === 0) {
+//           // Cột tên phòng ban
+//           cell.alignment = { horizontal: "left", vertical: "middle" };
+//         } else {
+//           // Các cột số
+//           cell.numFmt = "#,##0";
+//           cell.alignment = { horizontal: "right", vertical: "middle" };
+//         }
+
+//         cell.font = { name: "Times New Roman", size: 10 };
+//         cell.border = {
+//           top: { style: "thin" },
+//           left: { style: "thin" },
+//           bottom: { style: "thin" },
+//           right: { style: "thin" },
+//         };
+//       });
+
+//       currentRow++;
+//     });
+
+//     // Dòng tổng cộng
+//     const tongCongData = [
+//       "TỔNG CỘNG",
+//       tongTonDauKy,
+//       tongNhapTrenCap,
+//       tongNhapTuMua,
+//       tongNhapKhac,
+//       tongCongNhap,
+//       tongXuatSuDung,
+//       tongXuatCapCho,
+//       tongXuatThanhLy,
+//       tongXuatKhac,
+//       tongCongXuat,
+//       tongTonCuoiKy,
+//     ];
+
+//     tongCongData.forEach((value, colIndex) => {
+//       const cell = worksheet.getCell(currentRow, colIndex + 1);
+//       cell.value = value;
+
+//       if (colIndex === 0) {
+//         cell.alignment = { horizontal: "center", vertical: "middle" };
+//       } else {
+//         cell.numFmt = "#,##0";
+//         cell.alignment = { horizontal: "right", vertical: "middle" };
+//       }
+
+//       cell.font = { name: "Times New Roman", size: 11, bold: true };
+//       cell.border = {
+//         top: { style: "thick" },
+//         left: { style: "thin" },
+//         bottom: { style: "thick" },
+//         right: { style: "thin" },
+//       };
+//       cell.fill = {
+//         type: "pattern",
+//         pattern: "solid",
+//         fgColor: { argb: "FFFFCC" },
+//       };
+//     });
+
+//     currentRow += 2;
+
+//     console.log(`✅ Added ${data.length} data rows to main sheet`);
+//   } else {
+//     // Nếu không có dữ liệu, thêm dòng thông báo
+//     worksheet.mergeCells(`A${currentRow}:L${currentRow}`);
+//     const noDataCell = worksheet.getCell(`A${currentRow}`);
+//     noDataCell.value = "Không có dữ liệu trong khoảng thời gian này";
+//     noDataCell.font = { name: "Times New Roman", size: 12, italic: true };
+//     noDataCell.alignment = { horizontal: "center", vertical: "middle" };
+//     currentRow += 2;
+
+//     console.log("⚠️ No data available for main sheet");
+//   }
+
+//   // Chữ ký
+//   const ngayHienTai = new Date();
+//   worksheet.mergeCells(`A${currentRow}:L${currentRow}`);
+//   const ngayKy = worksheet.getCell(`A${currentRow}`);
+//   ngayKy.value = `Ngày ${String(ngayHienTai.getDate()).padStart(
+//     2,
+//     "0"
+//   )} tháng ${String(ngayHienTai.getMonth() + 1).padStart(
+//     2,
+//     "0"
+//   )} năm ${ngayHienTai.getFullYear()}`;
+//   ngayKy.font = { name: "Times New Roman", size: 11, italic: true };
+//   ngayKy.alignment = { horizontal: "right", vertical: "middle" };
+
+//   currentRow += 2;
+
+//   // Vị trí chữ ký
+//   const positions = [
+//     "NGƯỜI LẬP BIỂU",
+//     "TRƯỞNG BAN VẬT TƯ",
+//     "CHỦ NHIỆM HẬU CẦN - KỸ THUẬT",
+//   ];
+//   const cols = ["A", "E", "I"];
+
+//   positions.forEach((position, index) => {
+//     worksheet.mergeCells(
+//       `${cols[index]}${currentRow}:${String.fromCharCode(
+//         cols[index].charCodeAt(0) + 2
+//       )}${currentRow}`
+//     );
+//     const positionCell = worksheet.getCell(`${cols[index]}${currentRow}`);
+//     positionCell.value = position;
+//     positionCell.font = { name: "Times New Roman", size: 11, bold: true };
+//     positionCell.alignment = { horizontal: "center", vertical: "middle" };
+//   });
+
+//   // Đặt chiều cao cho các dòng header
+//   const headerRowStart = currentRow - data.length - 10; // Tính ngược lại
+//   if (headerRowStart > 0) {
+//     worksheet.getRow(headerRowStart).height = 40;
+//     worksheet.getRow(headerRowStart + 1).height = 25;
+//   }
+
+//   console.log("✅ Main sheet created successfully");
+// };
+
+// Hàm tạo sheet phụ
+
+// Cải tiến các hàm tạo Excel cho báo cáo luân chuyển kho
+
+const createMainSheet = async (
+  sheet,
+  data,
+  tu_ngay,
+  den_ngay,
+  phongBanInfo = null,
+  signatures = {}
+) => {
+  // Thiết lập độ rộng cột
+  sheet.columns = [
+    { width: 35 }, // Nội dung
+    { width: 15 }, // Tồn kho đầu quý
+    { width: 15 }, // Nhập kho trong quý
+    { width: 15 }, // Xuất sử dụng
+    { width: 15 }, // Cấp cho đơn vị
+    { width: 15 }, // Thanh lý, nhượng bán
+    { width: 15 }, // Khác
+    { width: 15 }, // Cộng xuất
+    { width: 15 }, // Tồn cuối quý
+  ];
+
+  // Header chính của báo cáo
+  const headerRows = [
+    // Row 1: CẢNH SÁT BIỂN VIỆT NAM - TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA - Phụ biểu số
+    {
+      values: [
+        "CẢNH SÁT BIỂN VIỆT NAM",
+        "",
+        "",
+        "TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA TRÊN CẤP LUÂN CHUYỂN QUA KHO QUÝ I/2025",
+        "",
+        "",
+        "",
+        "Phụ biểu số: 07.1/BCQT",
+      ],
+      styles: {
+        font: { bold: true, size: 11 },
+        alignment: { horizontal: "center", vertical: "middle" },
+      },
+    },
+    // Row 2: BỘ TƯ LỆNH - Đơn vị - Đơn vị tính
+    {
+      values: [
+        "BỘ TƯ LỆNH",
+        "",
+        "",
+        `Đơn vị: ${phongBanInfo?.ten_phong_ban || "Phòng Hậu cần - Kỹ thuật"}`,
+        "",
+        "",
+        "",
+        "Đơn vị tính: Đồng",
+      ],
+      styles: {
+        font: { bold: true, size: 11 },
+        alignment: { horizontal: "center", vertical: "middle" },
+      },
+    },
+    // Row 3: VÙNG CẢNH SÁT BIỂN 1 - (trống)
+    {
+      values: ["VÙNG CẢNH SÁT BIỂN 1", "", "", "", "", "", "", ""],
+      styles: {
+        font: { bold: true, size: 11 },
+        alignment: { horizontal: "center", vertical: "middle" },
+      },
+    },
+    // Row 4: Khoảng trống
+    { values: ["", "", "", "", "", "", "", ""] },
+  ];
+
+  // Thêm các header rows
+  headerRows.forEach((row, index) => {
+    const excelRow = sheet.addRow(row.values);
+
+    // Merge cells cho header chính
+    if (index === 0) {
+      sheet.mergeCells(`A${excelRow.number}:C${excelRow.number}`); // CẢNH SÁT BIỂN VIỆT NAM
+      sheet.mergeCells(`D${excelRow.number}:G${excelRow.number}`); // TỔNG HỢP...
+    } else if (index === 1) {
+      sheet.mergeCells(`A${excelRow.number}:C${excelRow.number}`); // BỘ TƯ LỆNH
+      sheet.mergeCells(`D${excelRow.number}:G${excelRow.number}`); // Đơn vị
+    } else if (index === 2) {
+      sheet.mergeCells(`A${excelRow.number}:H${excelRow.number}`); // VÙNG CẢNH SÁT BIỂN 1
+    }
+
+    // Apply styles
+    excelRow.eachCell((cell) => {
+      if (row.styles) {
+        Object.assign(cell, row.styles);
+      }
+    });
+  });
+
+  // Header bảng dữ liệu chính
+  const tableHeader1 = sheet.addRow([
+    "Nội dung",
+    "Tồn kho đầu quý",
+    "Nhập kho trong quý",
+    "",
+    "",
+    "",
+    "",
+    "Xuất kho trong quý",
+    "Tồn cuối quý",
+  ]);
+
+  const tableHeader2 = sheet.addRow([
+    "",
+    "",
+    "",
+    "Xuất sử dụng",
+    "Cấp cho đơn vị",
+    "Thanh lý, nhượng bán",
+    "Khác",
+    "Cộng xuất",
+    "",
+  ]);
+
+  // Style cho header bảng
+  [tableHeader1, tableHeader2].forEach((row) => {
+    row.eachCell((cell) => {
+      cell.font = { bold: true, size: 10 };
+      cell.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+        wrapText: true,
+      };
+      cell.border = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFE6E6FA" },
+      };
+    });
+  });
+
+  // Merge cells cho header
+  sheet.mergeCells(`A${tableHeader1.number}:A${tableHeader2.number}`); // Nội dung
+  sheet.mergeCells(`B${tableHeader1.number}:B${tableHeader2.number}`); // Tồn đầu
+  sheet.mergeCells(`C${tableHeader1.number}:G${tableHeader1.number}`); // Nhập trong quý
+  sheet.mergeCells(`H${tableHeader1.number}:H${tableHeader2.number}`); // Xuất kho
+  sheet.mergeCells(`I${tableHeader1.number}:I${tableHeader2.number}`); // Tồn cuối
+
+  // Thêm dữ liệu
+  let currentRow = tableHeader2.number + 1;
+
+  // Nhóm dữ liệu theo cấp
+  const cap1Items = data.filter((item) => item.cap_bac === 1) || [];
+  const cap2Items = data.filter((item) => item.cap_bac === 2) || [];
+  const cap3Items = data.filter((item) => item.cap_bac === 3) || [];
+
+  // Render cấp 1
+  cap1Items.forEach((item) => {
+    const row = sheet.addRow([
+      item.ten_phong_ban || item.noi_dung,
+      parseFloat(item.ton_dau_quy || 0),
+      parseFloat(item.nhap_chuyen_cap || item.nhap_tren_cap || 0),
+      parseFloat(item.xuat_su_dung || 0),
+      parseFloat(item.xuat_cap_cho || 0),
+      parseFloat(item.xuat_thanh_ly || 0),
+      parseFloat(item.xuat_khac || 0),
+      parseFloat(item.cong_xuat || 0),
+      parseFloat(item.ton_cuoi_quy || 0),
+    ]);
+
+    // Style cho cấp 1 (màu xanh đậm)
+    row.eachCell((cell, colNumber) => {
+      cell.border = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      };
+
+      if (colNumber === 1) {
+        cell.font = { bold: true, size: 10 };
+        cell.alignment = { horizontal: "left", vertical: "middle" };
+      } else {
+        cell.font = { bold: true, size: 10 };
+        cell.alignment = { horizontal: "right", vertical: "middle" };
+        cell.numFmt = "#,##0";
+      }
+
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFB0E0E6" },
+      };
+    });
+  });
+
+  // Render cấp 2 và cấp 3
+  cap2Items.forEach((cap2Item) => {
+    // Thêm dòng cấp 2
+    const cap2Row = sheet.addRow([
+      `  ${cap2Item.ten_phong_ban || cap2Item.noi_dung}`,
+      parseFloat(cap2Item.ton_dau_quy || 0),
+      parseFloat(cap2Item.nhap_chuyen_cap || cap2Item.nhap_tren_cap || 0),
+      parseFloat(cap2Item.xuat_su_dung || 0),
+      parseFloat(cap2Item.xuat_cap_cho || 0),
+      parseFloat(cap2Item.xuat_thanh_ly || 0),
+      parseFloat(cap2Item.xuat_khac || 0),
+      parseFloat(cap2Item.cong_xuat || 0),
+      parseFloat(cap2Item.ton_cuoi_quy || 0),
+    ]);
+
+    // Style cho cấp 2 (màu vàng nhạt)
+    cap2Row.eachCell((cell, colNumber) => {
+      cell.border = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      };
+
+      if (colNumber === 1) {
+        cell.font = { bold: true, size: 9, italic: true };
+        cell.alignment = { horizontal: "left", vertical: "middle" };
+      } else {
+        cell.font = { bold: true, size: 9 };
+        cell.alignment = { horizontal: "right", vertical: "middle" };
+        cell.numFmt = "#,##0";
+      }
+
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFFFFF99" },
+      };
+    });
+
+    // Thêm các cấp 3 thuộc cấp 2 này
+    const cap3ForThisCap2 = cap3Items.filter(
+      (cap3) => cap3.phong_ban_cha_id === cap2Item.id
+    );
+    cap3ForThisCap2.forEach((cap3Item) => {
+      const cap3Row = sheet.addRow([
+        `    - ${cap3Item.ten_phong_ban || cap3Item.noi_dung}`,
+        parseFloat(cap3Item.ton_dau_quy || 0),
+        parseFloat(cap3Item.nhap_chuyen_cap || cap3Item.nhap_tren_cap || 0),
+        parseFloat(cap3Item.xuat_su_dung || 0),
+        parseFloat(cap3Item.xuat_cap_cho || 0),
+        parseFloat(cap3Item.xuat_thanh_ly || 0),
+        parseFloat(cap3Item.xuat_khac || 0),
+        parseFloat(cap3Item.cong_xuat || 0),
+        parseFloat(cap3Item.ton_cuoi_quy || 0),
+      ]);
+
+      // Style cho cấp 3 (trắng)
+      cap3Row.eachCell((cell, colNumber) => {
+        cell.border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
+        };
+
+        if (colNumber === 1) {
+          cell.font = { size: 9 };
+          cell.alignment = { horizontal: "left", vertical: "middle" };
+        } else {
+          cell.font = { size: 9 };
+          cell.alignment = { horizontal: "right", vertical: "middle" };
+          cell.numFmt = "#,##0";
+        }
+      });
+    });
+  });
+
+  // Orphan cấp 3 (cho user cấp 3)
+  const orphanCap3 = cap3Items.filter(
+    (cap3) => !cap2Items.find((cap2) => cap2.id === cap3.phong_ban_cha_id)
+  );
+
+  orphanCap3.forEach((cap3Item) => {
+    const row = sheet.addRow([
+      cap3Item.ten_phong_ban || cap3Item.noi_dung,
+      parseFloat(cap3Item.ton_dau_quy || 0),
+      parseFloat(cap3Item.nhap_chuyen_cap || cap3Item.nhap_tren_cap || 0),
+      parseFloat(cap3Item.xuat_su_dung || 0),
+      parseFloat(cap3Item.xuat_cap_cho || 0),
+      parseFloat(cap3Item.xuat_thanh_ly || 0),
+      parseFloat(cap3Item.xuat_khac || 0),
+      parseFloat(cap3Item.cong_xuat || 0),
+      parseFloat(cap3Item.ton_cuoi_quy || 0),
+    ]);
+
+    // Style đặc biệt cho orphan cap3 (xanh nhạt)
+    row.eachCell((cell, colNumber) => {
+      cell.border = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      };
+
+      if (colNumber === 1) {
+        cell.font = { bold: true, size: 10 };
+        cell.alignment = { horizontal: "left", vertical: "middle" };
+      } else {
+        cell.font = { bold: true, size: 10 };
+        cell.alignment = { horizontal: "right", vertical: "middle" };
+        cell.numFmt = "#,##0";
+      }
+
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFE0F6FF" },
+      };
+    });
+  });
+
+  // Thêm dòng tổng cộng
+  const totalRow = sheet.addRow([
+    "Tổng cộng",
+    data.reduce((sum, item) => sum + (parseFloat(item.ton_dau_quy) || 0), 0),
+    data.reduce(
+      (sum, item) =>
+        sum + (parseFloat(item.nhap_chuyen_cap || item.nhap_tren_cap) || 0),
+      0
+    ),
+    data.reduce((sum, item) => sum + (parseFloat(item.xuat_su_dung) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.xuat_cap_cho) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.xuat_thanh_ly) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.xuat_khac) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.cong_xuat) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.ton_cuoi_quy) || 0), 0),
+  ]);
+
+  // Style cho dòng tổng cộng
+  totalRow.eachCell((cell, colNumber) => {
+    cell.font = { bold: true, size: 10 };
+    cell.border = {
+      top: { style: "thick" },
+      left: { style: "thin" },
+      bottom: { style: "thick" },
+      right: { style: "thin" },
+    };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFD3D3D3" },
+    };
+
+    if (colNumber === 1) {
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+    } else {
+      cell.alignment = { horizontal: "right", vertical: "middle" };
+      cell.numFmt = "#,##0";
+    }
+  });
+
+  // Footer với thông tin ngày tháng và chữ ký
+  const currentDate = new Date();
+  const dateStr = `Ngày ${currentDate
+    .getDate()
+    .toString()
+    .padStart(2, "0")} tháng ${(currentDate.getMonth() + 1)
+    .toString()
+    .padStart(2, "0")} năm ${currentDate.getFullYear()}`;
+
+  // Thêm khoảng trống
+  sheet.addRow([""]);
+  sheet.addRow([""]);
+
+  // Thêm ngày tháng
+  const dateRow = sheet.addRow(["", "", "", "", "", "", "", dateStr]);
+  dateRow.getCell(8).alignment = { horizontal: "center", vertical: "middle" };
+  dateRow.getCell(8).font = { italic: true, size: 10 };
+
+  // Thêm khoảng trống cho chữ ký
+  sheet.addRow([""]);
+
+  // Thêm header chữ ký
+  const signatureHeaderRow = sheet.addRow([
+    "NGƯỜI LẬP BIỂU",
+    "",
+    "TRƯỞNG BAN VẬT TƯ",
+    "",
+    "",
+    "TL. TƯ LỆNH",
+    "",
+    "CHỦ NHIỆM HẬU CẦN - KỸ THUẬT",
+  ]);
+
+  signatureHeaderRow.eachCell((cell) => {
+    cell.font = { bold: true, size: 10 };
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+  });
+
+  // Merge cells cho chữ ký
+  sheet.mergeCells(
+    `A${signatureHeaderRow.number}:B${signatureHeaderRow.number}`
+  );
+  sheet.mergeCells(
+    `C${signatureHeaderRow.number}:D${signatureHeaderRow.number}`
+  );
+  sheet.mergeCells(
+    `F${signatureHeaderRow.number}:G${signatureHeaderRow.number}`
+  );
+
+  // Thêm khoảng trống cho chữ ký
+  for (let i = 0; i < 3; i++) {
+    sheet.addRow([""]);
+  }
+
+  // Thêm tên người ký
+  const nameRow = sheet.addRow([
+    signatures.nguoi_lap || "",
+    "",
+    signatures.truong_ban || "",
+    "",
+    "",
+    "",
+    "",
+    signatures.chu_nhiem || "",
+  ]);
+
+  nameRow.eachCell((cell) => {
+    cell.font = { bold: true, size: 10 };
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+  });
+
+  // Merge cells cho tên
+  sheet.mergeCells(`A${nameRow.number}:B${nameRow.number}`);
+  sheet.mergeCells(`C${nameRow.number}:D${nameRow.number}`);
+  sheet.mergeCells(`H${nameRow.number}:H${nameRow.number}`);
+};
+
+// Tương tự cho createSubSheet với format giống như createMainSheet
+const createSubSheet = async (
+  workbook,
+  sheetName,
+  data,
+  tu_ngay,
+  den_ngay,
+  nhapField,
+  xuatField,
+  phongBanInfo = null,
+  signatures = {}
+) => {
+  const sheet = workbook.addWorksheet(sheetName);
+
+  // Set column widths
+  sheet.columns = [
+    { width: 35 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+  ];
+
+  // Tạo data cho sheet con dựa trên field tương ứng
+  const filteredData = data
+    .map((item) => ({
+      ...item,
+      nhap_tren_cap: parseFloat(item[nhapField]) || 0,
+      cong_nhap: parseFloat(item[nhapField]) || 0,
+      xuat_su_dung: 0, // Sẽ tính theo loại xuất
+      xuat_cap_cho: 0,
+      xuat_thanh_ly: 0,
+      xuat_khac: 0,
+      cong_xuat: parseFloat(item[xuatField]) || 0,
+      ton_cuoi_quy:
+        (parseFloat(item.ton_dau_quy) || 0) +
+        (parseFloat(item[nhapField]) || 0) -
+        (parseFloat(item[xuatField]) || 0),
+    }))
+    .filter(
+      (item) => item.cong_nhap > 0 || item.cong_xuat > 0 || item.ton_dau_quy > 0
+    );
+
+  // Sử dụng createMainSheet với data đã filter
+  await createMainSheet(
+    sheet,
+    filteredData,
+    tu_ngay,
+    den_ngay,
+    phongBanInfo,
+    signatures
+  );
+
+  // Cập nhật tiêu đề cho sheet con
+  const titleMap = {
+    "Trên cấp": "TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA TRÊN CẤP LUÂN CHUYỂN QUA KHO",
+    "Tự mua sắm":
+      "TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA TỰ MUA SẮM LUÂN CHUYỂN QUA KHO",
+    Khác: "TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA KHÁC LUÂN CHUYỂN QUA KHO",
+  };
+
+  if (titleMap[sheetName]) {
+    sheet.getCell("D1").value = `${titleMap[sheetName]} QUÝ I/2025`;
+  }
+};
+
+// const createSubSheet = async (
+//   workbook,
+//   sheetName,
+//   data,
+//   tu_ngay, // SỬA: thay đổi từ quy
+//   den_ngay, // SỬA: thay đổi từ nam
+//   nhapField,
+//   xuatField
+// ) => {
+//   const formatDate = (dateStr) => {
+//     const date = new Date(dateStr);
+//     return `${String(date.getDate()).padStart(2, "0")}/${String(
+//       date.getMonth() + 1
+//     ).padStart(2, "0")}/${date.getFullYear()}`;
+//   };
+
+//   const worksheet = workbook.addWorksheet(sheetName);
+
+//   // Setup tương tự như main sheet nhưng focus vào loại cụ thể
+//   worksheet.columns = [
+//     { width: 25 }, // A - Nội dung
+//     { width: 15 }, // B - Tồn kho đầu quý
+//     { width: 15 }, // C - Nhập kho trong quý
+//     { width: 20 }, // D - Xuất kho trong quý (chi tiết)
+//     { width: 15 }, // E - Tồn cuối quý
+//   ];
+
+//   let currentRow = 1;
+
+//   // SỬA: Header với khoảng thời gian thay vì quý/năm
+//   worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
+//   const header = worksheet.getCell(`A${currentRow}`);
+//   header.value = `TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA ${sheetName.toUpperCase()} LUÂN CHUYỂN QUA KHO`;
+//   header.font = { name: "Times New Roman", size: 14, bold: true };
+//   header.alignment = {
+//     horizontal: "center",
+//     vertical: "middle",
+//     wrapText: true,
+//   };
+
+//   currentRow++;
+
+//   // SỬA: Thêm dòng hiển thị khoảng thời gian
+//   worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
+//   const timeRange = worksheet.getCell(`A${currentRow}`);
+//   timeRange.value = `Từ ngày ${formatDate(tu_ngay)} đến ngày ${formatDate(
+//     den_ngay
+//   )}`;
+//   timeRange.font = {
+//     name: "Times New Roman",
+//     size: 12,
+//     bold: true,
+//     color: { argb: "FF0000" },
+//   };
+//   timeRange.alignment = { horizontal: "center", vertical: "middle" };
+
+//   currentRow++;
+
+//   // Đơn vị
+//   worksheet.mergeCells(`A${currentRow}:E${currentRow}`);
+//   const donVi = worksheet.getCell(`A${currentRow}`);
+//   donVi.value = "Đơn vị: Phòng Hậu cần - Kỹ thuật";
+//   donVi.font = {
+//     name: "Times New Roman",
+//     size: 12,
+//     bold: true,
+//     color: { argb: "FF0000" },
+//   };
+//   donVi.alignment = { horizontal: "center", vertical: "middle" };
+
+//   currentRow += 2;
+
+//   // Table headers cho sheet phụ
+//   const subHeaders = [
+//     "Nội dung",
+//     "Tồn kho\nđầu kỳ", // SỬA: đổi từ "đầu quý" thành "đầu kỳ"
+//     "Nhập kho\ntrong kỳ", // SỬA: đổi từ "trong quý" thành "trong kỳ"
+//     "Xuất kho trong kỳ", // SỬA: đổi từ "trong quý" thành "trong kỳ"
+//     "Tồn cuối kỳ", // SỬA: đổi từ "cuối quý" thành "cuối kỳ"
+//   ];
+
+//   subHeaders.forEach((header, index) => {
+//     const cell = worksheet.getCell(currentRow, index + 1);
+//     cell.value = header;
+//     cell.font = { name: "Times New Roman", size: 11, bold: true };
+//     cell.alignment = {
+//       horizontal: "center",
+//       vertical: "middle",
+//       wrapText: true,
+//     };
+//     cell.border = {
+//       top: { style: "thin" },
+//       left: { style: "thin" },
+//       bottom: { style: "thin" },
+//       right: { style: "thin" },
+//     };
+//     cell.fill = {
+//       type: "pattern",
+//       pattern: "solid",
+//       fgColor: { argb: "FFE6E6E6" },
+//     };
+//   });
+
+//   currentRow++;
+
+//   // Data cho sheet phụ
+//   data.forEach((row) => {
+//     const rowData = [
+//       row.ten_phong_ban,
+//       row.ton_dau_quy,
+//       row[nhapField],
+//       row[xuatField],
+//       row.ton_dau_quy + row[nhapField] - row[xuatField], // Tính tồn cuối kỳ
+//     ];
+
+//     rowData.forEach((value, index) => {
+//       const cell = worksheet.getCell(currentRow, index + 1);
+//       if (index === 0) {
+//         cell.value = value;
+//         cell.alignment = { horizontal: "left", vertical: "middle" };
+//       } else {
+//         cell.value = parseFloat(value) || 0;
+//         if (isNaN(cell.value)) cell.value = 0;
+//         cell.numFmt = "#,##0";
+//         cell.alignment = { horizontal: "right", vertical: "middle" };
+//       }
+//       cell.font = { name: "Times New Roman", size: 10 };
+//       cell.border = {
+//         top: { style: "thin" },
+//         left: { style: "thin" },
+//         bottom: { style: "thin" },
+//         right: { style: "thin" },
+//       };
+//     });
+
+//     currentRow++;
+//   });
+// };
 
 // Thêm vào printController.js
 
@@ -4127,4 +5608,6 @@ module.exports = {
   getXuatDataByTypeForExport,
   createNhapSheet,
   createXuatSheet,
+  createMainSheetEnhanced,
+  createSubSheetEnhanced,
 };

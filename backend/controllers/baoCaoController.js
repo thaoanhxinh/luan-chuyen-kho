@@ -1187,194 +1187,169 @@ const getNhapDataByType = async (req, res, query, user) => {
   }
 };
 
-const exportLuanChuyenExcel = async (req, res, query, user) => {
+const exportLuanChuyenExcel = async (req, res, query, user, body) => {
   try {
-    // Lấy dữ liệu luân chuyển kho trước
-    let reportData = null;
+    // Debug: Log request data
+    console.log("🔍 Export Excel - Request body:", body);
+    console.log("🔍 Export Excel - Query params:", query);
 
-    const mockRes = {
-      status: () => mockRes,
-      json: (result) => {
-        if (result.success) {
-          reportData = result.data;
-        }
-      },
+    // Lấy thông tin từ request body (POST request)
+    const requestBody = body || {};
+    const { signatures, bieu_so, ...requestData } = requestBody;
+
+    // Tạo query object từ request body
+    const exportQuery = {
+      tu_ngay: requestData.tu_ngay,
+      den_ngay: requestData.den_ngay,
+      phong_ban_id: requestData.phong_ban_id,
+      view_type: requestData.view_type || "own",
     };
 
-    await getLuanChuyenKhoData(req, mockRes, query, user);
+    // Lấy số biểu số từ request
+    const bieuSo = bieu_so || "07.1/BCQT";
+    console.log("🔍 Export Excel - Biểu số:", bieuSo);
+    console.log("🔍 Export Excel - Export query:", exportQuery);
+
+    // Lấy dữ liệu luân chuyển kho trước
+    const reportData = await fetchLuanChuyenKhoData(exportQuery, user);
 
     if (!reportData) {
       return sendResponse(res, 400, false, "Không thể lấy dữ liệu báo cáo");
     }
 
-    const filename = `bao-cao-luan-chuyen-kho-${query.tu_ngay}-${query.den_ngay}.xlsx`;
+    // Tạo thông tin chữ ký mặc định nếu không có
+    const signatureInfo = {
+      nguoi_lap: signatures?.nguoi_lap || "Người lập",
+      truong_ban: signatures?.truong_ban || "Trưởng ban Vật tư",
+      chu_nhiem:
+        signatures?.chu_nhiem || "TL. TƯ LỆNH CHỦ NHIỆM HẬU CẦN - KỸ THUẬT",
+    };
 
-    // Tạo workbook Excel
+    // Tạo tên file theo biểu số
+    const filename = `bao-cao-${bieuSo.replace(/[\/\.]/g, "-")}-${
+      exportQuery.tu_ngay
+    }-${exportQuery.den_ngay}.xlsx`;
+
+    // Tạo workbook Excel với format nâng cao từ printController
     const workbook = new ExcelJS.Workbook();
 
-    // Style definitions
-    const headerStyle = {
-      font: { bold: true, color: { argb: "FFFFFF" }, size: 11 },
-      fill: { type: "pattern", pattern: "solid", fgColor: { argb: "366092" } },
-      alignment: { horizontal: "center", vertical: "middle" },
-      border: {
-        top: { style: "thin" },
-        left: { style: "thin" },
-        bottom: { style: "thin" },
-        right: { style: "thin" },
-      },
-    };
+    // Metadata cho workbook
+    workbook.creator = signatureInfo.nguoi_lap || "System";
+    workbook.created = new Date();
+    workbook.modified = new Date();
+    workbook.lastModifiedBy = signatureInfo.nguoi_lap || "System";
 
-    const managerStyle = {
-      font: { bold: true, color: { argb: "1F2937" }, size: 10 },
-      fill: { type: "pattern", pattern: "solid", fgColor: { argb: "DBEAFE" } },
-      alignment: { horizontal: "left", vertical: "middle" },
-      border: {
-        top: { style: "thin" },
-        right: { style: "thin" },
-        bottom: { style: "thin" },
-        left: { style: "thick", color: { argb: "3B82F6" } },
-      },
-    };
-
-    const warehouseStyle = {
-      font: { bold: false, color: { argb: "374151" }, size: 9 },
-      alignment: { horizontal: "left", vertical: "middle" },
-      border: {
-        top: { style: "thin" },
-        left: { style: "thin" },
-        bottom: { style: "thin" },
-        right: { style: "thin" },
-      },
-    };
-
-    const numberStyle = {
-      font: { size: 9 },
-      alignment: { horizontal: "right", vertical: "middle" },
-      border: {
-        top: { style: "thin" },
-        left: { style: "thin" },
-        bottom: { style: "thin" },
-        right: { style: "thin" },
-      },
-      numFmt: "#,##0",
-    };
-
-    const emptyStyle = {
-      font: { color: { argb: "9CA3AF" }, size: 8 },
-      alignment: { horizontal: "center", vertical: "middle" },
-      border: {
-        top: { style: "thin" },
-        left: { style: "thin" },
-        bottom: { style: "thin" },
-        right: { style: "thin" },
-      },
-    };
-
-    // 1. Sheet Tổng hợp
-    const mainWorksheet = workbook.addWorksheet("Tổng hợp luân chuyển kho");
-
-    const mainHeaders = [
-      "Nội dung",
-      "Tồn đầu kỳ",
-      "Trên cấp",
-      "Tự mua",
-      "Khác",
-      "Cộng nhập",
-      "Xuất sử dụng",
-      "Cấp cho ĐV",
-      "Thanh lý",
-      "Xuất khác",
-      "Cộng xuất",
-      "Tồn cuối kỳ",
-    ];
-
-    // Title
-    mainWorksheet.mergeCells("A1:L1");
-    const titleCell = mainWorksheet.getCell("A1");
-    titleCell.value = `BÁO CÁO LUÂN CHUYỂN KHO (${query.tu_ngay} - ${query.den_ngay})`;
-    titleCell.style = {
-      font: { bold: true, size: 14, color: { argb: "1F2937" } },
-      alignment: { horizontal: "center", vertical: "middle" },
-      fill: { type: "pattern", pattern: "solid", fgColor: { argb: "F3F4F6" } },
-    };
-
-    mainWorksheet.addRow(mainHeaders);
-    mainWorksheet.getRow(2).eachCell((cell) => {
-      cell.style = headerStyle;
-    });
-
-    // Add data with hierarchy
-    reportData.tongHop.forEach((item) => {
-      const row = mainWorksheet.addRow([
-        item.is_warehouse ? `  └─ ${item.noi_dung}` : item.noi_dung,
-        item.is_warehouse ? item.ton_dau_ky || 0 : "",
-        item.is_warehouse ? item.nhap_tren_cap || 0 : "",
-        item.is_warehouse ? item.nhap_tu_mua || 0 : "",
-        item.is_warehouse ? item.nhap_khac || 0 : "",
-        item.is_warehouse ? item.cong_nhap || 0 : "",
-        item.is_warehouse ? item.xuat_su_dung || 0 : "",
-        item.is_warehouse ? item.xuat_cap_cho || 0 : "",
-        item.is_warehouse ? item.xuat_thanh_ly || 0 : "",
-        item.is_warehouse ? item.xuat_khac || 0 : "",
-        item.is_warehouse ? item.cong_xuat || 0 : "",
-        item.is_warehouse ? item.ton_cuoi_ky || 0 : "",
+    // Lấy thông tin phòng ban được chọn
+    let selectedPhongBan = user.phong_ban;
+    if (exportQuery.phong_ban_id && exportQuery.phong_ban_id !== "all") {
+      const phongBanQuery = `SELECT id, ten_phong_ban, ma_phong_ban FROM phong_ban WHERE id = $1`;
+      const phongBanResult = await pool.query(phongBanQuery, [
+        exportQuery.phong_ban_id,
       ]);
-
-      if (item.is_manager) {
-        row.eachCell((cell, colNumber) => {
-          if (colNumber === 1) {
-            cell.style = managerStyle;
-          } else {
-            cell.style = emptyStyle;
-            cell.value = "—";
-          }
-        });
-      } else if (item.is_warehouse) {
-        row.eachCell((cell, colNumber) => {
-          if (colNumber === 1) {
-            cell.style = warehouseStyle;
-          } else {
-            cell.style = numberStyle;
-          }
-        });
+      if (phongBanResult.rows.length > 0) {
+        selectedPhongBan = phongBanResult.rows[0];
       }
-    });
+    }
 
-    // Auto-fit columns
-    mainWorksheet.columns.forEach((column) => {
-      let maxLength = 0;
-      column.eachCell({ includeEmpty: true }, (cell) => {
-        const columnLength = cell.value ? cell.value.toString().length : 10;
-        if (columnLength > maxLength) {
-          maxLength = columnLength;
-        }
-      });
-      column.width = maxLength < 12 ? 12 : Math.min(maxLength + 2, 50);
-    });
+    // Format ngày tháng cho tiêu đề
+    const startDate = new Date(exportQuery.tu_ngay);
+    const endDate = new Date(exportQuery.den_ngay);
+    const startQuarter = Math.ceil((startDate.getMonth() + 1) / 3);
+    const startYear = startDate.getFullYear();
 
-    // Set response headers
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    // Tạo sheet chính với format nâng cao từ printController
+    const mainSheet = workbook.addWorksheet(`Tổng hợp ${bieuSo}`);
+    await createMainSheetEnhanced(
+      mainSheet,
+      reportData.tongHop,
+      exportQuery.tu_ngay,
+      exportQuery.den_ngay,
+      selectedPhongBan,
+      signatureInfo,
+      bieuSo
     );
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
 
-    // Write to response
-    await workbook.xlsx.write(res);
-    res.end();
+    // Tạo 3 sheet phụ với format nâng cao
+    await createSubSheetEnhanced(
+      workbook,
+      `Trên cấp ${bieuSo}`,
+      reportData.trenCap,
+      exportQuery.tu_ngay,
+      exportQuery.den_ngay,
+      "nhap_tren_cap",
+      ["xuat_su_dung", "xuat_cap_cho", "xuat_thanh_ly"],
+      selectedPhongBan,
+      signatureInfo,
+      bieuSo
+    );
+
+    await createSubSheetEnhanced(
+      workbook,
+      `Tự mua sắm ${bieuSo}`,
+      reportData.tuMua,
+      exportQuery.tu_ngay,
+      exportQuery.den_ngay,
+      "nhap_tu_mua",
+      ["xuat_su_dung", "xuat_cap_cho", "xuat_thanh_ly"],
+      selectedPhongBan,
+      signatureInfo,
+      bieuSo
+    );
+
+    await createSubSheetEnhanced(
+      workbook,
+      `Khác ${bieuSo}`,
+      reportData.khac,
+      exportQuery.tu_ngay,
+      exportQuery.den_ngay,
+      "nhap_khac",
+      ["xuat_su_dung", "xuat_cap_cho", "xuat_thanh_ly"],
+      selectedPhongBan,
+      signatureInfo,
+      bieuSo
+    );
+
+    console.log("📝 Enhanced workbook created successfully");
+
+    // Tạo buffer từ workbook
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    console.log(
+      `✅ Enhanced Excel buffer created, size: ${buffer.length} bytes`
+    );
+
+    // Đảm bảo buffer không rỗng
+    if (buffer.length === 0) {
+      throw new Error("Generated Excel buffer is empty");
+    }
+
+    // Thiết lập header và gửi file
+    res.writeHead(200, {
+      "Content-Type":
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    });
+
+    res.end(buffer);
+
+    console.log("✅ Enhanced file sent successfully");
   } catch (error) {
     console.error("Export Luan Chuyen Excel error:", error);
     sendResponse(res, 500, false, "Lỗi xuất Excel", { error: error.message });
   }
 };
 
-const getLuanChuyenKhoData = async (req, res, query, user) => {
+// Hàm lấy dữ liệu luân chuyển kho (không gửi response)
+const fetchLuanChuyenKhoData = async (query, user) => {
   try {
     const { tu_ngay, den_ngay, phong_ban_id, view_type = "own" } = query;
 
     if (!tu_ngay || !den_ngay) {
-      return sendResponse(res, 400, false, "Vui lòng chọn khoảng thời gian");
+      throw new Error("Vui lòng chọn khoảng thời gian");
     }
 
     console.log(`📊 Getting Luan Chuyen data from ${tu_ngay} to ${den_ngay}`, {
@@ -1812,6 +1787,17 @@ const getLuanChuyenKhoData = async (req, res, query, user) => {
       },
     });
 
+    return responseData;
+  } catch (error) {
+    console.error("❌ Luan Chuyen report error:", error);
+    throw error;
+  }
+};
+
+// Hàm gửi response cho API
+const getLuanChuyenKhoData = async (req, res, query, user) => {
+  try {
+    const responseData = await fetchLuanChuyenKhoData(query, user);
     sendResponse(
       res,
       200,
@@ -1824,351 +1810,6 @@ const getLuanChuyenKhoData = async (req, res, query, user) => {
     sendResponse(res, 500, false, "Lỗi server", { error: error.message });
   }
 };
-
-// const getLuanChuyenReport = async (req, res, query, user) => {
-//   try {
-//     console.log("🔍 LuÃ¢n chuyá»ƒn report request:", {
-//       query,
-//       user: {
-//         id: user.id,
-//         role: user.role,
-//         phong_ban_id: user.phong_ban_id,
-//         cap_bac: user.phong_ban?.cap_bac,
-//       },
-//     });
-
-//     const { tu_ngay, den_ngay, phong_ban_id } = query;
-
-//     if (!tu_ngay || !den_ngay) {
-//       return sendResponse(res, 400, false, "Thiáº¿u thÃ´ng tin ngÃ y thÃ¡ng");
-//     }
-
-//     // ✅ XÃ¢y dá»±ng Ä'iá»u kiá»‡n WHERE theo quyá»n vÃ  selection
-//     let phongBanCondition = "";
-//     let phongBanParams = [tu_ngay, den_ngay];
-//     let paramIndex = 3;
-
-//     // Xác định điều kiện lọc dựa trên role và selection
-//     if (user.role === "user" && user.phong_ban?.cap_bac === 3) {
-//       phongBanCondition = "AND pb.id = $" + paramIndex++;
-//       phongBanParams.push(user.phong_ban_id);
-
-//       // Log để debug
-//       console.log("🏢 Cấp 3 user filter:", {
-//         user_id: user.id,
-//         phong_ban_id: user.phong_ban_id,
-//         ten_phong_ban: user.phong_ban?.ten_phong_ban,
-//       });
-//     } else if (user.role === "manager" && user.phong_ban?.cap_bac === 2) {
-//       if (phong_ban_id && phong_ban_id !== "all") {
-//         // Manager chọn phòng ban cụ thể
-//         phongBanCondition = "AND pb.id = $" + paramIndex++;
-//         phongBanParams.push(parseInt(phong_ban_id));
-//       } else {
-//         // Manager xem tất cả thuộc quyền
-//         phongBanCondition =
-//           "AND (pb.id = $" +
-//           paramIndex +
-//           " OR pb.phong_ban_cha_id = $" +
-//           paramIndex +
-//           ")";
-//         paramIndex++;
-//         phongBanParams.push(user.phong_ban_id);
-//       }
-//     } else if (user.role === "admin") {
-//       if (phong_ban_id && phong_ban_id !== "all") {
-//         // ✅ SỬA: Admin chọn filter cụ thể
-//         const selectedId = parseInt(phong_ban_id);
-
-//         // Kiểm tra cấp bậc của ID được chọn
-//         const capBacCheck = await pool.query(
-//           "SELECT cap_bac FROM phong_ban WHERE id = $1",
-//           [selectedId]
-//         );
-
-//         if (capBacCheck.rows.length > 0) {
-//           if (capBacCheck.rows[0].cap_bac === 2) {
-//             // Chọn cấp 2 - hiện cấp 2 đó + các cấp 3 con
-//             phongBanCondition =
-//               "AND (pb.id = $" +
-//               paramIndex +
-//               " OR pb.phong_ban_cha_id = $" +
-//               paramIndex +
-//               ")";
-//           } else if (capBacCheck.rows[0].cap_bac === 3) {
-//             // Chọn cấp 3 - chỉ hiện cấp 3 đó + cấp 2 cha
-//             phongBanCondition =
-//               "AND (pb.id = $" +
-//               paramIndex +
-//               " OR pb.id IN (SELECT phong_ban_cha_id FROM phong_ban WHERE id = $" +
-//               paramIndex +
-//               "))";
-//           }
-//           paramIndex++;
-//           phongBanParams.push(selectedId);
-//         }
-//       }
-//       // Admin không chọn gì thì thấy tất cả
-//     }
-
-//     // ✅ Query chính với logic hierarchy và tính tổng đúng
-//     const mainQuery = `
-//       WITH phong_ban_data AS (
-//         -- Lấy tất cả phòng ban theo điều kiện
-//         SELECT DISTINCT
-//           pb.id,
-//           pb.ten_phong_ban,
-//           pb.cap_bac,
-//           pb.phong_ban_cha_id,
-//           pb.thu_tu_hien_thi
-//         FROM phong_ban pb
-//         WHERE pb.is_active = TRUE
-//           AND pb.cap_bac IN (1, 2, 3)
-//           ${phongBanCondition}
-//       ),
-//       raw_data AS (
-//         -- Lấy dữ liệu thô cho TẤT CẢ cấp 3 (chỉ cấp 3 mới có kho thực tế)
-//         SELECT
-//           pb.id as phong_ban_id,
-//           pb.ten_phong_ban,
-//           pb.cap_bac,
-//           pb.phong_ban_cha_id,
-//           -- Tồn đầu kỳ
-//           COALESCE(
-//             (SELECT SUM(pn.tong_tien) FROM phieu_nhap pn
-//              WHERE pn.phong_ban_id = pb.id AND pn.ngay_nhap < $1 AND pn.trang_thai = 'completed'), 0
-//           ) -
-//           COALESCE(
-//             (SELECT SUM(px.tong_tien) FROM phieu_xuat px
-//              WHERE px.phong_ban_id = pb.id AND px.ngay_xuat < $1 AND px.trang_thai = 'completed'), 0
-//           ) as ton_dau_ky,
-//           -- Nhập trong kỳ
-//           COALESCE((SELECT SUM(pn.tong_tien) FROM phieu_nhap pn
-//                    WHERE pn.phong_ban_id = pb.id AND pn.ngay_nhap BETWEEN $1 AND $2
-//                    AND pn.trang_thai = 'completed' AND pn.loai_phieu = 'tren_cap'), 0) as nhap_tren_cap,
-//           COALESCE((SELECT SUM(pn.tong_tien) FROM phieu_nhap pn
-//                    WHERE pn.phong_ban_id = pb.id AND pn.ngay_nhap BETWEEN $1 AND $2
-//                    AND pn.trang_thai = 'completed' AND pn.loai_phieu = 'tu_mua'), 0) as nhap_tu_mua,
-//           COALESCE((SELECT SUM(pn.tong_tien) FROM phieu_nhap pn
-//                    WHERE pn.phong_ban_id = pb.id AND pn.ngay_nhap BETWEEN $1 AND $2
-//                    AND pn.trang_thai = 'completed' AND pn.loai_phieu = 'dieu_chuyen'), 0) as nhap_khac,
-//           -- Xuất trong kỳ
-//           COALESCE((SELECT SUM(px.tong_tien) FROM phieu_xuat px
-//                    WHERE px.phong_ban_id = pb.id AND px.ngay_xuat BETWEEN $1 AND $2
-//                    AND px.trang_thai = 'completed' AND px.loai_xuat = 'don_vi_su_dung'), 0) as xuat_su_dung,
-//           COALESCE((SELECT SUM(px.tong_tien) FROM phieu_xuat px
-//                    WHERE px.phong_ban_id = pb.id AND px.ngay_xuat BETWEEN $1 AND $2
-//                    AND px.trang_thai = 'completed' AND px.loai_xuat = 'don_vi_nhan'), 0) as xuat_cap_cho,
-//           0 as xuat_thanh_ly,
-//           0 as xuat_khac
-//         FROM phong_ban pb
-//         WHERE pb.is_active = TRUE AND pb.cap_bac = 3 -- CHỈ lấy dữ liệu thô từ cấp 3
-//       ),
-//       cap3_data AS (
-//         -- Dữ liệu cấp 3 với tính toán hoàn chỉnh
-//         SELECT
-//           *,
-//           (nhap_tren_cap + nhap_tu_mua + nhap_khac) as cong_nhap,
-//           (xuat_su_dung + xuat_cap_cho + xuat_thanh_ly + xuat_khac) as cong_xuat,
-//           (ton_dau_ky + nhap_tren_cap + nhap_tu_mua + nhap_khac - xuat_su_dung - xuat_cap_cho - xuat_thanh_ly - xuat_khac) as ton_cuoi_ky
-//         FROM raw_data
-//       ),
-//       cap2_data AS (
-//         -- Tính tổng cho cấp 2 từ các cấp 3 con
-//         SELECT
-//           pb2.id as phong_ban_id,
-//           pb2.ten_phong_ban,
-//           2 as cap_bac,
-//           pb2.phong_ban_cha_id,
-//         COALESCE(SUM(c3.ton_dau_ky), 0) as ton_dau_ky,
-//     COALESCE(SUM(c3.nhap_tren_cap), 0) as nhap_tren_cap,
-//     COALESCE(SUM(c3.nhap_tu_mua), 0) as nhap_tu_mua,
-//     COALESCE(SUM(c3.nhap_khac), 0) as nhap_khac,
-//     COALESCE(SUM(c3.cong_nhap), 0) as cong_nhap,
-//     COALESCE(SUM(c3.xuat_su_dung), 0) as xuat_su_dung,
-//     COALESCE(SUM(c3.xuat_cap_cho), 0) as xuat_cap_cho,
-//     COALESCE(SUM(c3.xuat_thanh_ly), 0) as xuat_thanh_ly,
-//     COALESCE(SUM(c3.xuat_khac), 0) as xuat_khac,
-//     COALESCE(SUM(c3.cong_xuat), 0) as cong_xuat,
-//     COALESCE(SUM(c3.ton_cuoi_ky), 0) as ton_cuoi_ky
-//         FROM phong_ban pb2
-//         LEFT JOIN cap3_data c3 ON c3.phong_ban_cha_id = pb2.id
-//         WHERE pb2.cap_bac = 2 AND pb2.is_active = TRUE
-//         GROUP BY pb2.id, pb2.ten_phong_ban, pb2.phong_ban_cha_id
-//       ),
-//       cap1_data AS (
-//         -- Tính tổng cho cấp 1 từ các cấp 2 con
-//         SELECT
-//           pb1.id as phong_ban_id,
-//           pb1.ten_phong_ban,
-//           1 as cap_bac,
-//           CAST(NULL AS INTEGER) as phong_ban_cha_id,
-//           COALESCE(SUM(c2.ton_dau_ky), 0) as ton_dau_ky,
-//     COALESCE(SUM(c2.nhap_tren_cap), 0) as nhap_tren_cap,
-//     COALESCE(SUM(c2.nhap_tu_mua), 0) as nhap_tu_mua,
-//     COALESCE(SUM(c2.nhap_khac), 0) as nhap_khac,
-//     COALESCE(SUM(c2.cong_nhap), 0) as cong_nhap,
-//     COALESCE(SUM(c2.xuat_su_dung), 0) as xuat_su_dung,
-//     COALESCE(SUM(c2.xuat_cap_cho), 0) as xuat_cap_cho,
-//     COALESCE(SUM(c2.xuat_thanh_ly), 0) as xuat_thanh_ly,
-//     COALESCE(SUM(c2.xuat_khac), 0) as xuat_khac,
-//     COALESCE(SUM(c2.cong_xuat), 0) as cong_xuat,
-//     COALESCE(SUM(c2.ton_cuoi_ky), 0) as ton_cuoi_ky
-//         FROM phong_ban pb1
-//         LEFT JOIN cap2_data c2 ON c2.phong_ban_cha_id = pb1.id
-//         WHERE pb1.cap_bac = 1 AND pb1.is_active = TRUE
-//         GROUP BY pb1.id, pb1.ten_phong_ban
-//       )
-//       -- Kết hợp tất cả dữ liệu và lọc theo phong_ban_data
-//       SELECT
-//         fd.phong_ban_id as id,
-//         fd.ten_phong_ban as noi_dung,
-//         fd.cap_bac,
-//         fd.phong_ban_cha_id,
-//         CASE WHEN fd.cap_bac = 2 THEN TRUE ELSE FALSE END as is_manager,
-//         CASE WHEN fd.cap_bac IN (1, 3) THEN TRUE ELSE FALSE END as is_warehouse,
-//         COALESCE(fd.ton_dau_ky, 0) as ton_dau_ky,
-//         COALESCE(fd.nhap_tren_cap, 0) as nhap_tren_cap,
-//         COALESCE(fd.nhap_tu_mua, 0) as nhap_tu_mua,
-//         COALESCE(fd.nhap_khac, 0) as nhap_khac,
-//         COALESCE(fd.cong_nhap, 0) as cong_nhap,
-//         COALESCE(fd.xuat_su_dung, 0) as xuat_su_dung,
-//         COALESCE(fd.xuat_cap_cho, 0) as xuat_cap_cho,
-//         COALESCE(fd.xuat_thanh_ly, 0) as xuat_thanh_ly,
-//         COALESCE(fd.xuat_khac, 0) as xuat_khac,
-//         COALESCE(fd.cong_xuat, 0) as cong_xuat,
-//         COALESCE(fd.ton_cuoi_ky, 0) as ton_cuoi_ky
-//       FROM (
-//         -- Union tất cả dữ liệu từ 3 cấp
-//         SELECT * FROM cap1_data
-//         UNION ALL
-//         SELECT * FROM cap2_data
-//         UNION ALL
-//         SELECT
-//           phong_ban_id, ten_phong_ban, cap_bac, phong_ban_cha_id,
-//           ton_dau_ky, nhap_tren_cap, nhap_tu_mua, nhap_khac, cong_nhap,
-//           xuat_su_dung, xuat_cap_cho, xuat_thanh_ly, xuat_khac, cong_xuat, ton_cuoi_ky
-//         FROM cap3_data
-//       ) fd
-//       -- Chỉ hiển thị các phòng ban trong phong_ban_data (theo điều kiện lọc)
-//       WHERE EXISTS (SELECT 1 FROM phong_ban_data pbd WHERE pbd.id = fd.phong_ban_id)
-//       ORDER BY fd.cap_bac, fd.ten_phong_ban
-//     `;
-
-//     console.log("🔍 Executing query with params:", phongBanParams);
-//     const result = await pool.query(mainQuery, phongBanParams);
-
-//     console.log("📊 Query result count:", result.rows.length);
-//     console.log("📊 Sample results:", result.rows.slice(0, 3));
-
-//     // ✅ Xử lý dữ liệu với hierarchy
-//     const processedData = result.rows.map((row) => ({
-//       id: row.id,
-//       noi_dung: row.noi_dung,
-//       cap_bac: parseInt(row.cap_bac),
-//       phong_ban_cha_id: row.phong_ban_cha_id,
-//       is_manager: row.cap_bac === 2,
-//       is_warehouse: row.cap_bac === 1 || row.cap_bac === 3, // Cấp 1 và 3 có dữ liệu kho
-//       ton_dau_ky: parseFloat(row.ton_dau_ky) || 0,
-//       nhap_tren_cap: parseFloat(row.nhap_tren_cap) || 0,
-//       nhap_tu_mua: parseFloat(row.nhap_tu_mua) || 0,
-//       nhap_khac: parseFloat(row.nhap_khac) || 0,
-//       cong_nhap: parseFloat(row.cong_nhap) || 0,
-//       xuat_su_dung: parseFloat(row.xuat_su_dung) || 0,
-//       xuat_cap_cho: parseFloat(row.xuat_cap_cho) || 0,
-//       xuat_thanh_ly: parseFloat(row.xuat_thanh_ly) || 0,
-//       xuat_khac: parseFloat(row.xuat_khac) || 0,
-//       cong_xuat: parseFloat(row.cong_xuat) || 0,
-//       ton_cuoi_ky: parseFloat(row.ton_cuoi_ky) || 0,
-//     }));
-
-//     // Tạo báo cáo chi tiết theo từng tab (lọc theo từng loại nhập)
-//     const reportData = {
-//       luanChuyen: {
-//         tongHop: processedData, // Tất cả dữ liệu
-
-//         // Tab "Trên cấp" - chỉ hiển thị nhập/xuất từ trên cấp
-//         trenCap: processedData
-//           .map((item) => ({
-//             ...item,
-//             // Chỉ hiển thị nhập từ trên cấp
-//             nhap_tu_mua: 0,
-//             nhap_khac: 0,
-//             cong_nhap: item.nhap_tren_cap,
-
-//             // Chỉ hiển thị xuất từ nguồn trên cấp
-//             xuat_su_dung: item.xuat_tren_cap_su_dung || 0,
-//             xuat_cap_cho: item.xuat_tren_cap_cap_cho || 0,
-//             xuat_thanh_ly: item.xuat_tren_cap_thanh_ly || 0,
-//             xuat_khac: 0,
-//             cong_xuat:
-//               (item.xuat_tren_cap_su_dung || 0) +
-//               (item.xuat_tren_cap_cap_cho || 0) +
-//               (item.xuat_tren_cap_thanh_ly || 0),
-//           }))
-//           .filter((item) => item.nhap_tren_cap > 0 || item.cap_bac <= 2),
-
-//         // Tab "Tự mua sắm" - chỉ hiển thị nhập/xuất tự mua
-//         tuMua: processedData
-//           .map((item) => ({
-//             ...item,
-//             nhap_tren_cap: 0,
-//             nhap_khac: 0,
-//             cong_nhap: item.nhap_tu_mua,
-
-//             xuat_su_dung: item.xuat_tu_mua_su_dung || 0,
-//             xuat_cap_cho: item.xuat_tu_mua_cap_cho || 0,
-//             xuat_thanh_ly: item.xuat_tu_mua_thanh_ly || 0,
-//             xuat_khac: 0,
-//             cong_xuat:
-//               (item.xuat_tu_mua_su_dung || 0) +
-//               (item.xuat_tu_mua_cap_cho || 0) +
-//               (item.xuat_tu_mua_thanh_ly || 0),
-//           }))
-//           .filter((item) => item.nhap_tu_mua > 0 || item.cap_bac <= 2),
-
-//         // Tab "Luân chuyển" - chỉ hiển thị nhập/xuất khác
-//         khac: processedData
-//           .map((item) => ({
-//             ...item,
-//             nhap_tren_cap: 0,
-//             nhap_tu_mua: 0,
-//             cong_nhap: item.nhap_khac,
-
-//             xuat_su_dung: item.xuat_khac_su_dung || 0,
-//             xuat_cap_cho: item.xuat_khac_cap_cho || 0,
-//             xuat_thanh_ly: item.xuat_khac_thanh_ly || 0,
-//             xuat_khac: 0,
-//             cong_xuat:
-//               (item.xuat_khac_su_dung || 0) +
-//               (item.xuat_khac_cap_cho || 0) +
-//               (item.xuat_khac_thanh_ly || 0),
-//           }))
-//           .filter((item) => item.nhap_khac > 0 || item.cap_bac <= 2),
-//       },
-//     };
-
-//     console.log("📈 Final report data structure:", {
-//       tongHop: reportData.luanChuyen.tongHop.length,
-//       trenCap: reportData.luanChuyen.trenCap.length,
-//       tuMua: reportData.luanChuyen.tuMua.length,
-//       khac: reportData.luanChuyen.khac.length,
-//     });
-
-//     return sendResponse(
-//       res,
-//       200,
-//       true,
-//       "Lấy báo cáo luân chuyển thành công",
-//       reportData
-//     );
-//   } catch (error) {
-//     console.error("⌨ Lỗi khi lấy báo cáo luân chuyển:", error);
-//     return sendResponse(res, 500, false, "Lỗi server", {
-//       error: error.message,
-//     });
-//   }
-// };
 
 const getLuanChuyenReport = async (req, res, query, user) => {
   try {
@@ -3063,6 +2704,512 @@ const getPhamChatStats = async (req, res, query, user) => {
   }
 };
 
+// Hàm tạo sheet chính với format nâng cao từ printController
+const createMainSheetEnhanced = async (
+  sheet,
+  data,
+  tu_ngay,
+  den_ngay,
+  phongBanInfo,
+  signatures,
+  bieuSo
+) => {
+  // Thiết lập độ rộng cột
+  sheet.columns = [
+    { width: 35 }, // Nội dung
+    { width: 15 }, // Tồn kho đầu quý
+    { width: 15 }, // Nhập kho trong quý
+    { width: 15 }, // Xuất sử dụng
+    { width: 15 }, // Cấp cho đơn vị
+    { width: 15 }, // Thanh lý, nhượng bán
+    { width: 15 }, // Khác
+    { width: 15 }, // Cộng xuất
+    { width: 15 }, // Tồn cuối quý
+  ];
+
+  // Format ngày tháng cho tiêu đề
+  const startDate = new Date(tu_ngay);
+  const endDate = new Date(den_ngay);
+  const startQuarter = Math.ceil((startDate.getMonth() + 1) / 3);
+  const startYear = startDate.getFullYear();
+
+  // Header chính của báo cáo
+  const headerRows = [
+    // Row 1: CẢNH SÁT BIỂN VIỆT NAM - TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA - Phụ biểu số
+    {
+      values: [
+        "CẢNH SÁT BIỂN VIỆT NAM",
+        "",
+        "",
+        `TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA TRÊN CẤP LUÂN CHUYỂN QUA KHO QUÝ ${startQuarter}/${startYear}`,
+        "",
+        "",
+        "",
+        `Phụ biểu số: ${bieuSo}`,
+      ],
+      merges: [
+        { range: "A1:C1", value: "CẢNH SÁT BIỂN VIỆT NAM" },
+        {
+          range: "D1:G1",
+          value: `TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA TRÊN CẤP LUÂN CHUYỂN QUA KHO QUÝ ${startQuarter}/${startYear}`,
+        },
+      ],
+    },
+    // Row 2: BỘ TƯ LỆNH - Đơn vị - Đơn vị tính
+    {
+      values: [
+        "BỘ TƯ LỆNH",
+        "",
+        "",
+        `Đơn vị: ${phongBanInfo?.ten_phong_ban || "Phòng Hậu cần - Kỹ thuật"}`,
+        "",
+        "",
+        "",
+        "Đơn vị tính: Đồng",
+      ],
+      merges: [
+        { range: "A2:C2", value: "BỘ TƯ LỆNH" },
+        {
+          range: "D2:G2",
+          value: `Đơn vị: ${
+            phongBanInfo?.ten_phong_ban || "Phòng Hậu cần - Kỹ thuật"
+          }`,
+        },
+      ],
+    },
+    // Row 3: VÙNG CẢNH SÁT BIỂN 1
+    {
+      values: ["VÙNG CẢNH SÁT BIỂN 1", "", "", "", "", "", "", ""],
+      merges: [{ range: "A3:I3", value: "VÙNG CẢNH SÁT BIỂN 1" }],
+    },
+    // Row 4: Khoảng trống
+    {
+      values: ["", "", "", "", "", "", "", "", ""],
+    },
+  ];
+
+  // Thêm các header rows
+  headerRows.forEach((row, index) => {
+    const excelRow = sheet.addRow(row.values);
+
+    // Apply merges
+    if (row.merges) {
+      row.merges.forEach((merge) => {
+        sheet.mergeCells(merge.range);
+        if (merge.value) {
+          sheet.getCell(merge.range.split(":")[0]).value = merge.value;
+        }
+      });
+    }
+
+    // Apply styles cho header
+    excelRow.eachCell((cell) => {
+      cell.font = { bold: true, size: 11 };
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+    });
+  });
+
+  // Header bảng dữ liệu chính
+  const tableHeader1 = sheet.addRow([
+    "Nội dung",
+    "Tồn kho đầu quý",
+    "Nhập kho trong quý",
+    "",
+    "",
+    "",
+    "",
+    "Xuất kho trong quý",
+    "Tồn cuối quý",
+  ]);
+
+  const tableHeader2 = sheet.addRow([
+    "",
+    "",
+    "",
+    "Xuất sử dụng",
+    "Cấp cho đơn vị",
+    "Thanh lý, nhượng bán",
+    "Khác",
+    "Cộng xuất",
+    "",
+  ]);
+
+  // Style cho header bảng
+  [tableHeader1, tableHeader2].forEach((row) => {
+    row.eachCell((cell) => {
+      cell.font = { bold: true, size: 10 };
+      cell.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+        wrapText: true,
+      };
+      cell.border = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFE6E6FA" },
+      };
+    });
+  });
+
+  // Merge cells cho header bảng
+  sheet.mergeCells(`A${tableHeader1.number}:A${tableHeader2.number}`); // Nội dung
+  sheet.mergeCells(`B${tableHeader1.number}:B${tableHeader2.number}`); // Tồn đầu
+  sheet.mergeCells(`C${tableHeader1.number}:G${tableHeader1.number}`); // Nhập trong quý
+  sheet.mergeCells(`H${tableHeader1.number}:H${tableHeader2.number}`); // Xuất kho (title)
+  sheet.mergeCells(`I${tableHeader1.number}:I${tableHeader2.number}`); // Tồn cuối
+
+  // Render dữ liệu với phân cấp
+  await renderDataWithHierarchy(sheet, data, tableHeader2.number + 1);
+
+  // Footer với thông tin ngày tháng và chữ ký
+  await addFooterWithSignatures(sheet, signatures);
+};
+
+// Hàm render dữ liệu với phân cấp
+const renderDataWithHierarchy = async (sheet, data, startRow) => {
+  let currentRow = startRow;
+
+  // Nhóm dữ liệu theo cấp
+  const cap1Items = data.filter((item) => item.cap_bac === 1) || [];
+  const cap2Items = data.filter((item) => item.cap_bac === 2) || [];
+  const cap3Items = data.filter((item) => item.cap_bac === 3) || [];
+
+  // Render cấp 1
+  cap1Items.forEach((item) => {
+    const row = sheet.addRow([
+      item.noi_dung,
+      parseFloat(item.ton_dau_ky || 0),
+      parseFloat(item.cong_nhap || 0),
+      parseFloat(item.xuat_su_dung || 0),
+      parseFloat(item.xuat_cap_cho || 0),
+      parseFloat(item.xuat_thanh_ly || 0),
+      parseFloat(item.xuat_khac || 0),
+      parseFloat(item.cong_xuat || 0),
+      parseFloat(item.ton_cuoi_ky || 0),
+    ]);
+
+    // Style cho cấp 1 (màu xanh đậm)
+    applyCap1Style(row);
+  });
+
+  // Render cấp 2 và cấp 3 con
+  cap2Items.forEach((cap2Item) => {
+    // Thêm dòng cấp 2
+    const cap2Row = sheet.addRow([
+      `  ${cap2Item.noi_dung}`,
+      parseFloat(cap2Item.ton_dau_ky || 0),
+      parseFloat(cap2Item.cong_nhap || 0),
+      parseFloat(cap2Item.xuat_su_dung || 0),
+      parseFloat(cap2Item.xuat_cap_cho || 0),
+      parseFloat(cap2Item.xuat_thanh_ly || 0),
+      parseFloat(cap2Item.xuat_khac || 0),
+      parseFloat(cap2Item.cong_xuat || 0),
+      parseFloat(cap2Item.ton_cuoi_ky || 0),
+    ]);
+
+    // Style cho cấp 2
+    applyCap2Style(cap2Row);
+
+    // Thêm các cấp 3 thuộc cấp 2 này
+    const cap3ForThisCap2 = cap3Items.filter(
+      (cap3) => cap3.phong_ban_cha_id === cap2Item.id
+    );
+    cap3ForThisCap2.forEach((cap3Item) => {
+      const cap3Row = sheet.addRow([
+        `    - ${cap3Item.noi_dung}`,
+        parseFloat(cap3Item.ton_dau_ky || 0),
+        parseFloat(cap3Item.cong_nhap || 0),
+        parseFloat(cap3Item.xuat_su_dung || 0),
+        parseFloat(cap3Item.xuat_cap_cho || 0),
+        parseFloat(cap3Item.xuat_thanh_ly || 0),
+        parseFloat(cap3Item.xuat_khac || 0),
+        parseFloat(cap3Item.cong_xuat || 0),
+        parseFloat(cap3Item.ton_cuoi_ky || 0),
+      ]);
+
+      // Style cho cấp 3
+      applyCap3Style(cap3Row);
+    });
+  });
+
+  // Orphan cấp 3 (cho user cấp 3)
+  const orphanCap3 = cap3Items.filter(
+    (cap3) => !cap2Items.find((cap2) => cap2.id === cap3.phong_ban_cha_id)
+  );
+
+  orphanCap3.forEach((cap3Item) => {
+    const row = sheet.addRow([
+      cap3Item.noi_dung,
+      parseFloat(cap3Item.ton_dau_ky || 0),
+      parseFloat(cap3Item.cong_nhap || 0),
+      parseFloat(cap3Item.xuat_su_dung || 0),
+      parseFloat(cap3Item.xuat_cap_cho || 0),
+      parseFloat(cap3Item.xuat_thanh_ly || 0),
+      parseFloat(cap3Item.xuat_khac || 0),
+      parseFloat(cap3Item.cong_xuat || 0),
+      parseFloat(cap3Item.ton_cuoi_ky || 0),
+    ]);
+
+    // Style đặc biệt cho orphan cap3
+    applyOrphanCap3Style(row);
+  });
+
+  // Thêm dòng tổng cộng
+  const totalRow = sheet.addRow([
+    "Tổng cộng",
+    data.reduce((sum, item) => sum + (parseFloat(item.ton_dau_ky) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.cong_nhap) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.xuat_su_dung) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.xuat_cap_cho) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.xuat_thanh_ly) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.xuat_khac) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.cong_xuat) || 0), 0),
+    data.reduce((sum, item) => sum + (parseFloat(item.ton_cuoi_ky) || 0), 0),
+  ]);
+
+  // Style cho dòng tổng cộng
+  applyTotalRowStyle(totalRow);
+};
+
+// Hàm style cho các cấp
+const applyCap1Style = (row) => {
+  row.eachCell((cell, colNumber) => {
+    cell.border = getBorder();
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFB0E0E6" },
+    };
+    cell.font = { bold: true, size: 10 };
+    cell.alignment =
+      colNumber === 1
+        ? { horizontal: "left", vertical: "middle" }
+        : { horizontal: "right", vertical: "middle" };
+    if (colNumber > 1) cell.numFmt = "#,##0";
+  });
+};
+
+const applyCap2Style = (row) => {
+  row.eachCell((cell, colNumber) => {
+    cell.border = getBorder();
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFFFFF99" },
+    };
+    cell.font = { bold: true, size: 9, italic: true };
+    cell.alignment =
+      colNumber === 1
+        ? { horizontal: "left", vertical: "middle" }
+        : { horizontal: "right", vertical: "middle" };
+    if (colNumber > 1) cell.numFmt = "#,##0";
+  });
+};
+
+const applyCap3Style = (row) => {
+  row.eachCell((cell, colNumber) => {
+    cell.border = getBorder();
+    cell.font = { size: 9 };
+    cell.alignment =
+      colNumber === 1
+        ? { horizontal: "left", vertical: "middle" }
+        : { horizontal: "right", vertical: "middle" };
+    if (colNumber > 1) cell.numFmt = "#,##0";
+  });
+};
+
+const applyOrphanCap3Style = (row) => {
+  row.eachCell((cell, colNumber) => {
+    cell.border = getBorder();
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE0F6FF" },
+    };
+    cell.font = { bold: true, size: 10 };
+    cell.alignment =
+      colNumber === 1
+        ? { horizontal: "left", vertical: "middle" }
+        : { horizontal: "right", vertical: "middle" };
+    if (colNumber > 1) cell.numFmt = "#,##0";
+  });
+};
+
+const applyTotalRowStyle = (row) => {
+  row.eachCell((cell, colNumber) => {
+    cell.font = { bold: true, size: 10 };
+    cell.border = {
+      top: { style: "thick" },
+      left: { style: "thin" },
+      bottom: { style: "thick" },
+      right: { style: "thin" },
+    };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFD3D3D3" },
+    };
+    cell.alignment =
+      colNumber === 1
+        ? { horizontal: "center", vertical: "middle" }
+        : { horizontal: "right", vertical: "middle" };
+    if (colNumber > 1) cell.numFmt = "#,##0";
+  });
+};
+
+const getBorder = () => ({
+  top: { style: "thin" },
+  left: { style: "thin" },
+  bottom: { style: "thin" },
+  right: { style: "thin" },
+});
+
+// Hàm thêm footer với chữ ký
+const addFooterWithSignatures = async (sheet, signatures) => {
+  const currentRow = sheet.rowCount + 2;
+
+  // Ngày tháng
+  const dateCell = sheet.getCell(`A${currentRow}`);
+  dateCell.value = `Ngày ${new Date().getDate()} tháng ${
+    new Date().getMonth() + 1
+  } năm ${new Date().getFullYear()}`;
+  dateCell.style = {
+    font: { bold: true, color: { argb: "DC2626" }, size: 10 },
+    alignment: { horizontal: "right", vertical: "middle" },
+  };
+
+  // Chữ ký
+  const signatureRow = currentRow + 2;
+  const nguoiLapCell = sheet.getCell(`A${signatureRow}`);
+  nguoiLapCell.value = "NGƯỜI LẬP BIỂU";
+  nguoiLapCell.style = {
+    font: { bold: true, size: 10 },
+    alignment: { horizontal: "center", vertical: "middle" },
+  };
+
+  const truongBanCell = sheet.getCell(`D${signatureRow}`);
+  truongBanCell.value = "TRƯỞNG BAN VẬT TƯ";
+  truongBanCell.style = {
+    font: { bold: true, size: 10 },
+    alignment: { horizontal: "center", vertical: "middle" },
+  };
+
+  const chuNhiemCell = sheet.getCell(`G${signatureRow}`);
+  chuNhiemCell.value =
+    signatures.chu_nhiem || "TL. TƯ LỆNH CHỦ NHIỆM HẬU CẦN - KỸ THUẬT";
+  chuNhiemCell.style = {
+    font: { bold: true, size: 10 },
+    alignment: { horizontal: "center", vertical: "middle" },
+  };
+
+  // Tên người ký
+  const nameRow = signatureRow + 1;
+  const nguoiLapNameCell = sheet.getCell(`A${nameRow}`);
+  nguoiLapNameCell.value = signatures.nguoi_lap || "Người lập";
+  nguoiLapNameCell.style = {
+    font: { bold: true, size: 10 },
+    alignment: { horizontal: "center", vertical: "middle" },
+  };
+
+  const truongBanNameCell = sheet.getCell(`D${nameRow}`);
+  truongBanNameCell.value = signatures.truong_ban || "Trưởng ban Vật tư";
+  truongBanNameCell.style = {
+    font: { bold: true, size: 10 },
+    alignment: { horizontal: "center", vertical: "middle" },
+  };
+
+  const chuNhiemNameCell = sheet.getCell(`G${nameRow}`);
+  chuNhiemNameCell.value = "Thượng tá Trần Đình Huy";
+  chuNhiemNameCell.style = {
+    font: { bold: true, size: 10 },
+    alignment: { horizontal: "center", vertical: "middle" },
+  };
+};
+
+// Hàm tạo sheet phụ với format nâng cao
+const createSubSheetEnhanced = async (
+  workbook,
+  sheetName,
+  data,
+  tu_ngay,
+  den_ngay,
+  nhapField,
+  xuatFields,
+  phongBanInfo,
+  signatures,
+  bieuSo
+) => {
+  const sheet = workbook.addWorksheet(sheetName);
+
+  // Thiết lập độ rộng cột
+  sheet.columns = [
+    { width: 35 }, // Nội dung
+    { width: 15 }, // Tồn đầu kỳ
+    { width: 15 }, // Nhập trong kỳ
+    { width: 15 }, // Xuất sử dụng
+    { width: 15 }, // Cấp cho đơn vị
+    { width: 15 }, // Thanh lý
+    { width: 15 }, // Cộng xuất
+    { width: 15 }, // Tồn cuối kỳ
+  ];
+
+  // Header đơn giản hơn cho sheet phụ
+  const headerRow = sheet.addRow([
+    "Nội dung",
+    "Tồn đầu kỳ",
+    "Nhập trong kỳ",
+    "Xuất sử dụng",
+    "Cấp cho đơn vị",
+    "Thanh lý",
+    "Cộng xuất",
+    "Tồn cuối kỳ",
+  ]);
+
+  // Style cho header
+  headerRow.eachCell((cell) => {
+    cell.font = { bold: true, size: 10 };
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+    cell.border = getBorder();
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE6E6FA" },
+    };
+  });
+
+  // Render dữ liệu
+  data.forEach((item) => {
+    const row = sheet.addRow([
+      item.noi_dung,
+      parseFloat(item.ton_dau_ky || 0),
+      parseFloat(item[nhapField] || 0),
+      parseFloat(item[xuatFields[0]] || 0),
+      parseFloat(item[xuatFields[1]] || 0),
+      parseFloat(item[xuatFields[2]] || 0),
+      parseFloat(item.cong_xuat || 0),
+      parseFloat(item.ton_cuoi_ky || 0),
+    ]);
+
+    // Áp dụng style theo cấp
+    if (item.cap_bac === 1) {
+      applyCap1Style(row);
+    } else if (item.cap_bac === 2) {
+      applyCap2Style(row);
+    } else if (item.cap_bac === 3) {
+      applyCap3Style(row);
+    }
+  });
+
+  // Footer với chữ ký
+  await addFooterWithSignatures(sheet, signatures);
+};
+
 module.exports = {
   getDashboardStats,
   getTonKhoReport,
@@ -3077,4 +3224,8 @@ module.exports = {
   getPhongBanForReport,
   getChartData,
   getPhamChatStats,
+  createMainSheetEnhanced,
+  createSubSheetEnhanced,
+  renderDataWithHierarchy,
+  addFooterWithSignatures,
 };

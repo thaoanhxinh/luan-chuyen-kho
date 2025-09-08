@@ -1085,7 +1085,7 @@ const nhapKhoController = {
         {
           id: phieu.id,
           so_phieu: phieu.so_phieu,
-          nguoi_duyet_cap1_cap1: user.ho_ten,
+          nguoi_duyet_cap1: user.ho_ten,
           role_duyet: user.role,
         },
         [phieu.nguoi_tao]
@@ -1309,7 +1309,8 @@ const nhapKhoController = {
       }
 
       // Kiểm tra phòng ban có quyền duyệt không
-      if (phieu.phong_ban_cung_cap_id !== user.phong_ban_id) {
+      // User cấp 3 duyệt phiếu nhập của chính phòng ban mình (phong_ban_id)
+      if (phieu.phong_ban_id !== user.phong_ban_id) {
         await client.query("ROLLBACK");
         return sendResponse(
           res,
@@ -1330,7 +1331,7 @@ const nhapKhoController = {
           {
             id: parseInt(phieu.id),
             so_phieu: phieu.so_phieu,
-            nguoi_duyet_cap1_cap1: user.ho_ten,
+            nguoi_duyet_cap1: user.ho_ten,
             role_duyet: "level3_approve",
           },
           nguoiTaoId // ← SỬA: single integer
@@ -1363,7 +1364,7 @@ const nhapKhoController = {
       await client.query(
         `UPDATE phieu_nhap
          SET trang_thai = 'approved',
-             nguoi_duyet_cap1_cap1 = $1,
+             nguoi_duyet_cap1 = $1,
              ngay_duyet_cap1 = CURRENT_TIMESTAMP,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $2`,
@@ -1375,7 +1376,7 @@ const nhapKhoController = {
         await client.query(
           `UPDATE phieu_xuat
            SET trang_thai = 'approved',
-               nguoi_duyet_cap1_cap1 = $1,
+               nguoi_duyet_cap1 = $1,
                ngay_duyet_cap1 = CURRENT_TIMESTAMP,
                updated_at = CURRENT_TIMESTAMP
            WHERE id = $2`,
@@ -1851,7 +1852,7 @@ const nhapKhoController = {
         pb.cap_bac,
         pb_cc.ten_phong_ban as ten_phong_ban_cung_cap,
         nt.ho_ten as nguoi_tao_ten,
-        nd1.ho_ten as nguoi_duyet_cap1_cap1_ten
+        nd1.ho_ten as nguoi_duyet_cap1_ten
       FROM phieu_nhap pn
       LEFT JOIN nha_cung_cap ncc ON pn.nha_cung_cap_id = ncc.id
       LEFT JOIN phong_ban pb ON pn.phong_ban_id = pb.id

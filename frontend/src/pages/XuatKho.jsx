@@ -1,874 +1,4 @@
-// import React, { useState, useEffect, useRef } from "react";
-// import {
-//   Plus,
-//   Eye,
-//   FileText,
-//   Check,
-//   X,
-//   Search,
-//   ArrowUpFromLine,
-//   Upload,
-//   CheckCircle,
-//   Download,
-//   FileDown,
-//   Edit,
-//   MoreVertical,
-//   Send,
-//   AlertTriangle,
-//   RefreshCw,
-//   Building,
-//   Link2,
-//   Info,
-//   Filter,
-//   ChevronDown,
-// } from "lucide-react";
-// import { xuatKhoService } from "../services/xuatKhoService";
-// import { formatCurrency, formatDate } from "../utils/helpers";
-// import {
-//   TRANG_THAI_PHIEU,
-//   LOAI_PHIEU_XUAT,
-//   getActionPermissions,
-//   TAB_CONFIG,
-// } from "../utils/constants";
-// import Modal from "../components/common/Modal";
-// import Pagination from "../components/common/Pagination";
-// import CreateXuatKhoForm from "../components/forms/CreateXuatKhoForm";
-// import EditXuatKhoForm from "../components/forms/EditXuatKhoForm";
-// import Loading from "../components/common/Loading";
-// import PhieuXuatDetail from "../components/details/PhieuXuatDetail";
-// import PrintPhieuXuatForm from "../components/forms/PrintPhieuXuatForm";
-// import toast from "react-hot-toast";
-// import { useAuth } from "../context/AuthContext";
-
-// // Component for revision request modal
-// const RevisionRequestModal = ({ isOpen, onClose, onSubmit, phieu }) => {
-//   const [ghiChu, setGhiChu] = useState("");
-//   const [isSubmitting, setIsSubmitting] = useState(false);
-
-//   const handleSubmit = async (e) => {
-//     e.preventDefault();
-
-//     if (!ghiChu.trim()) {
-//       toast.error("Vui lòng nhập lý do yêu cầu chỉnh sửa");
-//       return;
-//     }
-
-//     setIsSubmitting(true);
-//     try {
-//       await onSubmit(ghiChu);
-//       setGhiChu("");
-//       onClose();
-//     } catch (error) {
-//       console.error("Error submitting revision request:", error);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   return (
-//     <Modal
-//       isOpen={isOpen}
-//       onClose={onClose}
-//       title="Yêu cầu chỉnh sửa phiếu"
-//       size="md"
-//     >
-//       <form onSubmit={handleSubmit} className="p-6 space-y-4">
-//         <div>
-//           <p className="text-sm text-gray-600 mb-3">
-//             Phiếu xuất: <span className="font-medium">{phieu?.so_phieu}</span>
-//           </p>
-
-//           <label className="block text-sm font-medium text-gray-700 mb-2">
-//             Lý do yêu cầu chỉnh sửa <span className="text-red-500">*</span>
-//           </label>
-//           <textarea
-//             value={ghiChu}
-//             onChange={(e) => setGhiChu(e.target.value)}
-//             rows={4}
-//             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-//             placeholder="Nhập lý do cần chỉnh sửa phiếu xuất..."
-//             required
-//           />
-//         </div>
-
-//         <div className="flex justify-end space-x-3 pt-4 border-t">
-//           <button
-//             type="button"
-//             onClick={onClose}
-//             className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
-//           >
-//             Hủy
-//           </button>
-//           <button
-//             type="submit"
-//             disabled={isSubmitting || !ghiChu.trim()}
-//             className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-//           >
-//             {isSubmitting ? "Đang gửi..." : "Gửi yêu cầu"}
-//           </button>
-//         </div>
-//       </form>
-//     </Modal>
-//   );
-// };
-
-// // Component Dropdown Actions
-// const ActionDropdown = ({ phieu, onAction, userRole }) => {
-//   const [isOpen, setIsOpen] = useState(false);
-//   const dropdownRef = useRef(null);
-//   const { user } = useAuth();
-
-//   useEffect(() => {
-//     const handleClickOutside = (event) => {
-//       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-//         setIsOpen(false);
-//       }
-//     };
-
-//     document.addEventListener("mousedown", handleClickOutside);
-//     return () => {
-//       document.removeEventListener("mousedown", handleClickOutside);
-//     };
-//   }, []);
-
-//   const permissions = getActionPermissions(
-//     phieu.trang_thai,
-//     userRole,
-//     user?.phong_ban?.cap_bac,
-//     phieu,
-//     user
-//   );
-
-//   const actions = [
-//     {
-//       key: "view",
-//       label: "Xem chi tiết",
-//       icon: Eye,
-//       color: "text-blue-600 hover:text-blue-800 hover:bg-blue-50",
-//       show: permissions.canView,
-//     },
-//     {
-//       key: "edit",
-//       label: "Sửa phiếu",
-//       icon: Edit,
-//       color: "text-yellow-600 hover:text-yellow-800 hover:bg-yellow-50",
-//       show: permissions.canEdit,
-//     },
-//     {
-//       key: "edit-actual",
-//       label: "Sửa số lượng thực tế",
-//       icon: Edit,
-//       color: "text-blue-600 hover:text-blue-800 hover:bg-blue-50",
-//       show: permissions.canEditActual,
-//     },
-//     {
-//       key: "submit",
-//       label: "Gửi duyệt",
-//       icon: Send,
-//       color: "text-blue-600 hover:text-blue-800 hover:bg-blue-50",
-//       show: permissions.canSubmit,
-//     },
-//     {
-//       key: "approve",
-//       label: "Duyệt phiếu",
-//       icon: Check,
-//       color: "text-green-600 hover:text-green-800 hover:bg-green-50",
-//       show: permissions.canApprove,
-//     },
-//     {
-//       key: "complete",
-//       label: "Hoàn thành",
-//       icon: CheckCircle,
-//       color: "text-green-600 hover:text-green-800 hover:bg-green-50",
-//       show: permissions.canComplete,
-//     },
-//     {
-//       key: "revision",
-//       label: "Yêu cầu sửa",
-//       icon: AlertTriangle,
-//       color: "text-orange-600 hover:text-orange-800 hover:bg-orange-50",
-//       show: permissions.canRequestRevision,
-//     },
-//     {
-//       key: "cancel",
-//       label: "Hủy phiếu",
-//       icon: X,
-//       color: "text-red-600 hover:text-red-800 hover:bg-red-50",
-//       show: permissions.canCancel,
-//     },
-//     {
-//       key: "print",
-//       label: "In phiếu",
-//       icon: FileText,
-//       color: "text-gray-600 hover:text-gray-800 hover:bg-gray-50",
-//       show: permissions.canPrint,
-//     },
-//   ];
-
-//   const visibleActions = actions.filter((action) => action.show);
-
-//   if (visibleActions.length === 0) {
-//     return null;
-//   }
-
-//   return (
-//     <div className="relative" ref={dropdownRef}>
-//       <button
-//         onClick={() => setIsOpen(!isOpen)}
-//         className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-//       >
-//         <MoreVertical size={16} />
-//       </button>
-
-//       {isOpen && (
-//         <div className="absolute right-0 z-50 mt-1 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none">
-//           <div className="py-1">
-//             {visibleActions.map((action) => {
-//               const IconComponent = action.icon;
-//               return (
-//                 <button
-//                   key={action.key}
-//                   onClick={() => {
-//                     onAction(action.key, phieu);
-//                     setIsOpen(false);
-//                   }}
-//                   className={`group flex items-center w-full px-4 py-2 text-sm transition-colors ${action.color}`}
-//                 >
-//                   <IconComponent size={16} className="mr-3" />
-//                   {action.label}
-//                 </button>
-//               );
-//             })}
-//           </div>
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
-
-// const XuatKho = () => {
-//   const [phieuList, setPhieuList] = useState([]);
-//   const [loading, setLoading] = useState(true);
-//   const [showCreateModal, setShowCreateModal] = useState(false);
-//   const [showEditModal, setShowEditModal] = useState(false);
-//   const [showDetailModal, setShowDetailModal] = useState(false);
-//   const [showPrintModal, setShowPrintModal] = useState(false);
-//   const [showRevisionModal, setShowRevisionModal] = useState(false);
-//   const [showEditActualModal, setShowEditActualModal] = useState(false);
-//   const [selectedPhieu, setSelectedPhieu] = useState(null);
-//   const [editPhieuId, setEditPhieuId] = useState(null);
-//   const [printPhieuId, setPrintPhieuId] = useState(null);
-//   const [editActualPhieuId, setEditActualPhieuId] = useState(null);
-//   const [currentPage, setCurrentPage] = useState(1);
-//   const [pagination, setPagination] = useState({});
-//   const [activeTab, setActiveTab] = useState("tat_ca");
-//   const [filters, setFilters] = useState({
-//     search: "",
-//     phong_ban_filter: "own",
-//     tu_ngay: "",
-//     den_ngay: "",
-//   });
-
-//   const { user } = useAuth();
-//   const userRole = user?.role || "user";
-//   const userCapBac = user?.phong_ban?.cap_bac;
-//   const isLevel3User = userRole === "user" && userCapBac === 3;
-//   const shouldShowDropdown = userRole === "admin" || userRole === "manager";
-
-//   useEffect(() => {
-//     fetchPhieuList();
-//   }, [currentPage, activeTab, filters]);
-
-//   const fetchPhieuList = async () => {
-//     try {
-//       setLoading(true);
-
-//       const params = {
-//         page: currentPage,
-//         limit: 20,
-//         ...(activeTab !== "tat_ca" && {
-//           trang_thai: TAB_CONFIG.XUAT_KHO.find((tab) => tab.key === activeTab)
-//             ?.status?.[0],
-//         }),
-//         ...filters,
-//       };
-
-//       const response = await xuatKhoService.getList(params);
-
-//       if (response.success) {
-//         setPhieuList(response.data.items || []);
-//         setPagination(response.data.pagination || {});
-//       } else {
-//         toast.error(response.message || "Lỗi khi tải danh sách");
-//         setPhieuList([]);
-//       }
-//     } catch (error) {
-//       console.error("Error fetching phieu list:", error);
-//       toast.error("Lỗi khi tải danh sách phiếu xuất");
-//       setPhieuList([]);
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   const handleAction = async (action, phieu) => {
-//     setSelectedPhieu(phieu);
-
-//     switch (action) {
-//       case "view":
-//         setShowDetailModal(true);
-//         break;
-//       case "edit":
-//         setEditPhieuId(phieu.id);
-//         setShowEditModal(true);
-//         break;
-//       case "edit-actual":
-//         setEditActualPhieuId(phieu.id);
-//         setShowEditActualModal(true);
-//         break;
-//       case "submit":
-//         await handleSubmit(phieu.id);
-//         break;
-//       case "approve":
-//         await handleApprove(phieu.id);
-//         break;
-//       case "complete":
-//         await handleComplete(phieu.id);
-//         break;
-//       case "revision":
-//         setShowRevisionModal(true);
-//         break;
-//       case "cancel":
-//         await handleCancel(phieu.id);
-//         break;
-//       case "print":
-//         setPrintPhieuId(phieu.id);
-//         setShowPrintModal(true);
-//         break;
-//     }
-//   };
-
-//   const handleSubmit = async (phieuId) => {
-//     try {
-//       const response = await xuatKhoService.submit(phieuId);
-//       if (response.success) {
-//         toast.success("Đã gửi phiếu để duyệt");
-//         fetchPhieuList();
-//       } else {
-//         toast.error(response.message || "Lỗi khi gửi phiếu");
-//       }
-//     } catch (error) {
-//       toast.error("Lỗi khi gửi phiếu: " + error.message);
-//     }
-//   };
-
-//   const handleApprove = async (phieuId) => {
-//     try {
-//       const response = await xuatKhoService.approve(phieuId);
-//       if (response.success) {
-//         toast.success("Đã duyệt phiếu xuất");
-//         fetchPhieuList();
-//       } else {
-//         toast.error(response.message || "Lỗi khi duyệt phiếu");
-//       }
-//     } catch (error) {
-//       toast.error("Lỗi khi duyệt phiếu: " + error.message);
-//     }
-//   };
-
-//   const handleComplete = async (phieuId) => {
-//     try {
-//       const response = await xuatKhoService.complete(phieuId);
-//       if (response.success) {
-//         toast.success("Đã hoàn thành phiếu xuất");
-//         fetchPhieuList();
-//       } else {
-//         toast.error(response.message || "Lỗi khi hoàn thành phiếu");
-//       }
-//     } catch (error) {
-//       toast.error("Lỗi khi hoàn thành phiếu: " + error.message);
-//     }
-//   };
-
-//   const handleCancel = async (phieuId) => {
-//     if (!window.confirm("Bạn có chắc chắn muốn hủy phiếu này?")) {
-//       return;
-//     }
-
-//     try {
-//       const response = await xuatKhoService.cancel(phieuId);
-//       if (response.success) {
-//         toast.success("Đã hủy phiếu xuất");
-//         fetchPhieuList();
-//       } else {
-//         toast.error(response.message || "Lỗi khi hủy phiếu");
-//       }
-//     } catch (error) {
-//       toast.error("Lỗi khi hủy phiếu: " + error.message);
-//     }
-//   };
-
-//   const handleRevisionSubmit = async (ghiChu) => {
-//     try {
-//       const response = await xuatKhoService.requestRevision(selectedPhieu.id, {
-//         ghi_chu_phan_hoi: ghiChu,
-//       });
-
-//       if (response.success) {
-//         toast.success("Đã gửi yêu cầu chỉnh sửa");
-//         fetchPhieuList();
-//       } else {
-//         toast.error(response.message || "Lỗi khi gửi yêu cầu");
-//       }
-//     } catch (error) {
-//       toast.error("Lỗi khi gửi yêu cầu: " + error.message);
-//     }
-//   };
-
-//   const handleFormSuccess = () => {
-//     setShowCreateModal(false);
-//     setShowEditModal(false);
-//     setShowEditActualModal(false);
-//     setEditPhieuId(null);
-//     setEditActualPhieuId(null);
-//     fetchPhieuList();
-//   };
-
-//   const handleFormCancel = () => {
-//     setShowCreateModal(false);
-//     setShowEditModal(false);
-//     setShowEditActualModal(false);
-//     setEditPhieuId(null);
-//     setEditActualPhieuId(null);
-//   };
-
-//   const renderTrangThai = (trangThai) => {
-//     const config = TRANG_THAI_PHIEU[trangThai];
-//     if (!config) return <span className="text-gray-500">Không xác định</span>;
-
-//     return (
-//       <span
-//         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.bgColor} ${config.textColor}`}
-//       >
-//         {config.label}
-//       </span>
-//     );
-//   };
-
-//   const renderDonViNhan = (phieu) => {
-//     if (phieu.loai_xuat === "don_vi_su_dung") {
-//       return (
-//         <div>
-//           <div className="font-medium">Sử dụng nội bộ</div>
-//           <div className="text-xs text-gray-500">Không xuất ra ngoài</div>
-//         </div>
-//       );
-//     } else if (phieu.loai_xuat === "don_vi_nhan") {
-//       if (phieu.ten_phong_ban_nhan) {
-//         return (
-//           <div>
-//             <div className="font-medium">{phieu.ten_phong_ban_nhan}</div>
-//             <div className="text-xs text-gray-500">Phòng ban nội bộ</div>
-//           </div>
-//         );
-//       } else if (phieu.ten_don_vi) {
-//         return (
-//           <div>
-//             <div className="font-medium">{phieu.ten_don_vi}</div>
-//             <div className="text-xs text-gray-500">Đơn vị bên ngoài</div>
-//           </div>
-//         );
-//       }
-//     }
-//     return <span className="text-gray-500">Chưa xác định</span>;
-//   };
-
-//   const renderPhieuLienKet = (phieu) => {
-//     if (phieu.phieu_nhap_lien_ket) {
-//       return (
-//         <div className="flex items-center space-x-1 mt-1">
-//           <Link2 size={12} className="text-green-500" />
-//           <span className="text-xs text-green-600">
-//             Liên kết: {phieu.phieu_nhap_lien_ket.so_phieu}
-//           </span>
-//         </div>
-//       );
-//     }
-//     return null;
-//   };
-
-//   return (
-//     <div className="container mx-auto px-4 py-6">
-//       <div className="flex justify-between items-center mb-6">
-//         <div>
-//           <h1 className="text-2xl font-bold text-gray-900">
-//             Quản lý phiếu xuất kho
-//           </h1>
-//           <p className="text-gray-600 mt-1">
-//             {isLevel3User
-//               ? "Tạo và quản lý phiếu xuất kho"
-//               : "Duyệt và quản lý phiếu xuất kho"}
-//           </p>
-//         </div>
-
-//         {/* Chỉ cấp 3 mới có nút tạo phiếu */}
-//         {isLevel3User && (
-//           <button
-//             onClick={() => setShowCreateModal(true)}
-//             className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-//           >
-//             <Plus size={16} className="mr-2" />
-//             Tạo phiếu xuất
-//           </button>
-//         )}
-//       </div>
-
-//       {/* Filters */}
-//       <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
-//         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-//           <div>
-//             <label className="block text-sm font-medium text-gray-700 mb-1">
-//               Tìm kiếm
-//             </label>
-//             <div className="relative">
-//               <Search
-//                 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-//                 size={16}
-//               />
-//               <input
-//                 type="text"
-//                 placeholder="Tìm theo số phiếu, lý do..."
-//                 value={filters.search}
-//                 onChange={(e) =>
-//                   setFilters((prev) => ({ ...prev, search: e.target.value }))
-//                 }
-//                 className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-//               />
-//             </div>
-//           </div>
-
-//           {shouldShowDropdown && (
-//             <div>
-//               <label className="block text-sm font-medium text-gray-700 mb-1">
-//                 Phòng ban
-//               </label>
-//               <select
-//                 value={filters.phong_ban_filter}
-//                 onChange={(e) =>
-//                   setFilters((prev) => ({
-//                     ...prev,
-//                     phong_ban_filter: e.target.value,
-//                   }))
-//                 }
-//                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-//               >
-//                 <option value="all">Tất cả phòng ban</option>
-//                 <option value="own">Phòng ban của tôi</option>
-//               </select>
-//             </div>
-//           )}
-
-//           <div>
-//             <label className="block text-sm font-medium text-gray-700 mb-1">
-//               Từ ngày
-//             </label>
-//             <input
-//               type="date"
-//               value={filters.tu_ngay}
-//               onChange={(e) =>
-//                 setFilters((prev) => ({ ...prev, tu_ngay: e.target.value }))
-//               }
-//               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-//             />
-//           </div>
-
-//           <div>
-//             <label className="block text-sm font-medium text-gray-700 mb-1">
-//               Đến ngày
-//             </label>
-//             <input
-//               type="date"
-//               value={filters.den_ngay}
-//               onChange={(e) =>
-//                 setFilters((prev) => ({ ...prev, den_ngay: e.target.value }))
-//               }
-//               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-//             />
-//           </div>
-//         </div>
-
-//         <div className="flex justify-between items-center mt-4">
-//           <button
-//             onClick={() => {
-//               setFilters({
-//                 search: "",
-//                 phong_ban_filter: "own",
-//                 tu_ngay: "",
-//                 den_ngay: "",
-//               });
-//               setCurrentPage(1);
-//             }}
-//             className="text-sm text-gray-500 hover:text-gray-700"
-//           >
-//             Xóa bộ lọc
-//           </button>
-
-//           <button
-//             onClick={fetchPhieuList}
-//             className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-//           >
-//             <RefreshCw size={16} className="mr-2" />
-//             Làm mới
-//           </button>
-//         </div>
-//       </div>
-
-//       {/* Tabs */}
-//       <div className="bg-white rounded-lg shadow-sm border">
-//         <div className="border-b border-gray-200">
-//           <nav className="-mb-px flex space-x-8 px-4">
-//             {TAB_CONFIG.XUAT_KHO.map((tab) => (
-//               <button
-//                 key={tab.key}
-//                 onClick={() => {
-//                   setActiveTab(tab.key);
-//                   setCurrentPage(1);
-//                 }}
-//                 className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-//                   activeTab === tab.key
-//                     ? "border-blue-500 text-blue-600"
-//                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-//                 }`}
-//               >
-//                 {tab.label}
-//                 {tab.count > 0 && (
-//                   <span className="ml-2 bg-gray-100 text-gray-900 py-0.5 px-2.5 rounded-full text-xs">
-//                     {tab.count}
-//                   </span>
-//                 )}
-//               </button>
-//             ))}
-//           </nav>
-//         </div>
-
-//         {/* Table */}
-//         {loading ? (
-//           <Loading />
-//         ) : (
-//           <>
-//             <div className="overflow-x-auto">
-//               <table className="min-w-full divide-y divide-gray-200">
-//                 <thead className="bg-gray-50">
-//                   <tr>
-//                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-//                       Số phiếu
-//                     </th>
-//                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-//                       Ngày xuất
-//                     </th>
-//                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-//                       Loại xuất
-//                     </th>
-//                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-//                       Đơn vị nhận
-//                     </th>
-//                     {shouldShowDropdown &&
-//                       filters.phong_ban_filter === "all" && (
-//                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-//                           Phòng ban
-//                         </th>
-//                       )}
-//                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-//                       Tổng tiền
-//                     </th>
-//                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-//                       File
-//                     </th>
-//                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-//                       Trạng thái
-//                     </th>
-//                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-//                       Hành động
-//                     </th>
-//                   </tr>
-//                 </thead>
-//                 <tbody className="bg-white divide-y divide-gray-200">
-//                   {phieuList.map((phieu) => (
-//                     <tr
-//                       key={phieu.id}
-//                       className={`hover:bg-gray-50 ${
-//                         phieu.ghi_chu_phan_hoi
-//                           ? "bg-yellow-50 ring-2 ring-yellow-400"
-//                           : ""
-//                       }`}
-//                     >
-//                       <td className="px-4 py-3 whitespace-nowrap">
-//                         <div className="text-sm font-medium text-gray-900">
-//                           {phieu.so_quyet_dinh || "Chưa có"}
-//                         </div>
-//                         {renderPhieuLienKet(phieu)}
-//                       </td>
-//                       <td className="px-4 py-3 whitespace-nowrap">
-//                         <div className="text-sm text-gray-900">
-//                           {formatDate(phieu.ngay_xuat)}
-//                         </div>
-//                       </td>
-//                       <td className="px-4 py-3 whitespace-nowrap">
-//                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-//                           {LOAI_PHIEU_XUAT[phieu.loai_xuat] || "Cấp phát"}
-//                         </span>
-//                       </td>
-//                       <td className="px-4 py-3">
-//                         <div className="text-sm text-gray-900">
-//                           {renderDonViNhan(phieu)}
-//                         </div>
-//                       </td>
-//                       {shouldShowDropdown &&
-//                         filters.phong_ban_filter === "all" && (
-//                           <td className="px-4 py-3 whitespace-nowrap">
-//                             <div className="text-sm text-gray-900">
-//                               <div className="flex items-center space-x-1">
-//                                 <Building size={12} className="text-gray-500" />
-//                                 <span>
-//                                   {phieu.ten_phong_ban || "Không xác định"}
-//                                 </span>
-//                               </div>
-//                             </div>
-//                           </td>
-//                         )}
-//                       <td className="px-4 py-3 whitespace-nowrap text-right">
-//                         <div className="text-sm font-medium text-red-600">
-//                           {formatCurrency(phieu.tong_tien)}
-//                         </div>
-//                       </td>
-//                       <td className="px-4 py-3 whitespace-nowrap text-center">
-//                         <div className="flex items-center justify-center space-x-1">
-//                           {phieu.decision_pdf_url ? (
-//                             <FileDown size={16} className="text-green-500" />
-//                           ) : (
-//                             <span className="text-xs text-gray-400">
-//                               Chưa có
-//                             </span>
-//                           )}
-//                         </div>
-//                       </td>
-//                       <td className="px-4 py-3 whitespace-nowrap">
-//                         {renderTrangThai(phieu.trang_thai)}
-//                       </td>
-//                       <td className="px-4 py-3 whitespace-nowrap text-center">
-//                         <ActionDropdown
-//                           phieu={phieu}
-//                           onAction={handleAction}
-//                           userRole={userRole}
-//                         />
-//                       </td>
-//                     </tr>
-//                   ))}
-//                 </tbody>
-//               </table>
-//             </div>
-
-//             {phieuList.length === 0 && (
-//               <div className="text-center py-8">
-//                 <p className="text-gray-500">Không có phiếu xuất nào</p>
-//               </div>
-//             )}
-
-//             {pagination.pages > 1 && (
-//               <div className="px-4 py-3 border-t border-gray-200">
-//                 <Pagination
-//                   currentPage={pagination.page || 1}
-//                   totalPages={pagination.pages || 1}
-//                   onPageChange={setCurrentPage}
-//                 />
-//               </div>
-//             )}
-//           </>
-//         )}
-//       </div>
-
-//       {/* Modals */}
-//       <Modal
-//         isOpen={showCreateModal}
-//         onClose={() => setShowCreateModal(false)}
-//         title="Tạo phiếu xuất kho"
-//         size="xl"
-//       >
-//         <CreateXuatKhoForm
-//           onSuccess={handleFormSuccess}
-//           onCancel={handleFormCancel}
-//         />
-//       </Modal>
-
-//       <Modal
-//         isOpen={showDetailModal}
-//         onClose={() => setShowDetailModal(false)}
-//         size="xl"
-//       >
-//         {selectedPhieu && <PhieuXuatDetail phieu={selectedPhieu} />}
-//       </Modal>
-
-//       <Modal
-//         isOpen={showEditModal}
-//         onClose={() => setShowEditModal(false)}
-//         title={`Sửa phiếu xuất: ${selectedPhieu?.so_phieu || "Loading..."}`}
-//         size="xl"
-//       >
-//         {editPhieuId && (
-//           <EditXuatKhoForm
-//             mode="edit"
-//             phieuId={editPhieuId}
-//             onSuccess={handleFormSuccess}
-//             onCancel={handleFormCancel}
-//           />
-//         )}
-//       </Modal>
-
-//       <Modal
-//         isOpen={showPrintModal}
-//         onClose={() => setShowPrintModal(false)}
-//         title="In phiếu xuất kho"
-//         size="md"
-//       >
-//         <PrintPhieuXuatForm
-//           phieuId={printPhieuId}
-//           onSuccess={handleFormSuccess}
-//           onCancel={handleFormCancel}
-//         />
-//       </Modal>
-
-//       <RevisionRequestModal
-//         isOpen={showRevisionModal}
-//         onClose={() => setShowRevisionModal(false)}
-//         onSubmit={handleRevisionSubmit}
-//         phieu={selectedPhieu}
-//       />
-
-//       <Modal
-//         isOpen={showEditActualModal}
-//         onClose={() => setShowEditActualModal(false)}
-//         title="Chỉnh sửa số lượng thực tế"
-//         size="xl"
-//       >
-//         {editActualPhieuId && (
-//           <EditXuatKhoForm
-//             mode="edit-actual"
-//             phieuId={editActualPhieuId}
-//             onSuccess={handleFormSuccess}
-//             onCancel={handleFormCancel}
-//           />
-//         )}
-//       </Modal>
-//     </div>
-//   );
-// };
-
-// export default XuatKho;
-
-// File: src/pages/XuatKho.jsx
-// ✅ COMPLETE: Xuất kho frontend theo chuẩn nhập kho với đầy đủ workflow
-
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -992,7 +122,9 @@ const RevisionRequestModal = ({ isOpen, onClose, onSubmit }) => {
 // ✅ Component Dropdown Actions với logic permissions CHÍNH XÁC cho XUẤT KHO
 const ActionDropdown = ({ phieu, onAction, user }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, right: 0 });
   const dropdownRef = useRef(null);
+  const buttonRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -1006,6 +138,24 @@ const ActionDropdown = ({ phieu, onAction, user }) => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  const handleToggle = () => {
+    if (!isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom;
+      const spaceAbove = rect.top;
+
+      // Nếu không đủ chỗ ở dưới (ít hơn 200px) và có nhiều chỗ ở trên hơn, hiển thị lên trên
+      const shouldShowAbove = spaceBelow < 200 && spaceAbove > spaceBelow;
+
+      // Tính toán vị trí cho absolute positioning
+      const top = shouldShowAbove ? -8 : 32; // 32px để hiển thị dưới nút
+
+      setPosition({ top, right: 0 });
+    }
+    setIsOpen(!isOpen);
+  };
 
   // Determine permissions based on CHÍNH XÁC backend logic
   const isAdmin = user.role === "admin";
@@ -1126,11 +276,12 @@ const ActionDropdown = ({ phieu, onAction, user }) => {
   if (visibleActions.length === 0) return null;
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative" ref={dropdownRef} style={{ overflow: "visible" }}>
       <button
+        ref={buttonRef}
         onClick={(e) => {
           e.stopPropagation();
-          setIsOpen(!isOpen);
+          handleToggle();
         }}
         className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
       >
@@ -1138,20 +289,27 @@ const ActionDropdown = ({ phieu, onAction, user }) => {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-80 overflow-y-auto">
-          {visibleActions.map((action) => {
-            const IconComponent = action.icon;
-            return (
-              <button
-                key={action.key}
-                onClick={() => handleActionClick(action.key)}
-                className={`w-full px-4 py-3 text-left text-sm flex items-center space-x-3 transition-all first:rounded-t-lg last:rounded-b-lg ${action.color}`}
-              >
-                <IconComponent size={16} />
-                <span>{action.label}</span>
-              </button>
-            );
-          })}
+        <div
+          className="absolute right-0 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-[9999] max-h-80"
+          style={{
+            top: `${position.top}px`,
+          }}
+        >
+          <div className="py-1 max-h-80 overflow-y-auto">
+            {visibleActions.map((action) => {
+              const IconComponent = action.icon;
+              return (
+                <button
+                  key={action.key}
+                  onClick={() => handleActionClick(action.key)}
+                  className={`w-full px-4 py-3 text-left text-sm flex items-center space-x-3 transition-all first:rounded-t-lg last:rounded-b-lg ${action.color}`}
+                >
+                  <IconComponent size={16} />
+                  <span>{action.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -1208,7 +366,39 @@ const XuatKho = () => {
     return tabConfig?.status || [];
   };
 
-  const fetchData = async () => {
+  const fetchTabCounts = useCallback(async () => {
+    try {
+      const counts = {};
+
+      // Get counts for each tab
+      for (const tab of TAB_CONFIG.XUAT_KHO) {
+        if (tab.key === "tat_ca") {
+          const response = await xuatKhoService.getList({
+            page: 1,
+            limit: 1,
+            search: searchTerm,
+            ...filters,
+          });
+          counts[tab.key] = response.data?.pagination?.total || 0;
+        } else {
+          const response = await xuatKhoService.getList({
+            page: 1,
+            limit: 1,
+            search: searchTerm,
+            trang_thai: tab.status,
+            ...filters,
+          });
+          counts[tab.key] = response.data?.pagination?.total || 0;
+        }
+      }
+
+      setTabCounts(counts);
+    } catch (error) {
+      console.error("Error fetching tab counts:", error);
+    }
+  }, [searchTerm, filters]);
+
+  const fetchData = useCallback(async () => {
     try {
       setIsLoading(true);
 
@@ -1241,39 +431,7 @@ const XuatKho = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const fetchTabCounts = async () => {
-    try {
-      const counts = {};
-
-      // Get counts for each tab
-      for (const tab of TAB_CONFIG.XUAT_KHO) {
-        if (tab.key === "tat_ca") {
-          const response = await xuatKhoService.getList({
-            page: 1,
-            limit: 1,
-            search: searchTerm,
-            ...filters,
-          });
-          counts[tab.key] = response.data?.pagination?.total || 0;
-        } else {
-          const response = await xuatKhoService.getList({
-            page: 1,
-            limit: 1,
-            search: searchTerm,
-            trang_thai: tab.status,
-            ...filters,
-          });
-          counts[tab.key] = response.data?.pagination?.total || 0;
-        }
-      }
-
-      setTabCounts(counts);
-    } catch (error) {
-      console.error("Error fetching tab counts:", error);
-    }
-  };
+  }, [currentPage, activeTab, searchTerm, filters, sortConfig, fetchTabCounts]);
 
   // Check if user can create phieu: only cấp 3 (user role at level 3)
   const canCreatePhieu =
@@ -1286,7 +444,7 @@ const XuatKho = () => {
 
   useEffect(() => {
     fetchData();
-  }, [currentPage, activeTab, searchTerm, filters, sortConfig]);
+  }, [fetchData]);
 
   // Sync activeTab with URL changes (e.g., via notifications)
   useEffect(() => {
@@ -1669,10 +827,10 @@ const XuatKho = () => {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1200px]">
+              <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[140px]">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[140px]">
                       <button
                         onClick={() => handleSort("so_phieu")}
                         className="flex items-center space-x-1 hover:text-gray-700"
@@ -1681,7 +839,7 @@ const XuatKho = () => {
                         {getSortIcon("so_phieu")}
                       </button>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">
                       <button
                         onClick={() => handleSort("ngay_xuat")}
                         className="flex items-center space-x-1 hover:text-gray-700"
@@ -1690,10 +848,10 @@ const XuatKho = () => {
                         {getSortIcon("ngay_xuat")}
                       </button>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">
                       Loại xuất
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">
                       <button
                         onClick={() => handleSort("trang_thai")}
                         className="flex items-center space-x-1 hover:text-gray-700"
@@ -1702,7 +860,7 @@ const XuatKho = () => {
                         {getSortIcon("trang_thai")}
                       </button>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">
                       <button
                         onClick={() => handleSort("tong_tien")}
                         className="flex items-center space-x-1 hover:text-gray-700"
@@ -1711,13 +869,13 @@ const XuatKho = () => {
                         {getSortIcon("tong_tien")}
                       </button>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[200px]">
                       Đơn vị nhận
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[150px]">
                       Phòng ban
                     </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">
                       Thao tác
                     </th>
                   </tr>

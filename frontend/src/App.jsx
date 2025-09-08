@@ -92,7 +92,7 @@ const Layout = ({ children }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gray-50 overflow-hidden">
+    <div className="min-h-screen bg-gray-50">
       {/* SIDEBAR - FIXED POSITION */}
       <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
 
@@ -108,8 +108,8 @@ const Layout = ({ children }) => {
         </div>
 
         {/* PAGE CONTENT */}
-        <main className="min-h-[calc(100vh-4rem)] overflow-hidden">
-          <div className="p-4 h-full overflow-hidden">{children}</div>
+        <main className="min-h-[calc(100vh-4rem)] overflow-y-auto">
+          <div className="p-4">{children}</div>
         </main>
       </div>
     </div>

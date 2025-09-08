@@ -133,19 +133,25 @@ export const baoCaoService = {
   },
 
   // Export luân chuyển kho Excel (format cũ với 4 sheets)
-  exportLuanChuyenKho: async (params = {}) => {
-    try {
-      const response = await api.get("/bao-cao/luan-chuyen-kho", {
-        params,
-        responseType: "blob", // Download file Excel
-      });
+  // exportLuanChuyenKho: async (params = {}, signatures = {}) => {
+  //   try {
+  //     const response = await api.post(
+  //       "/bao-cao/luan-chuyen-kho",
+  //       {
+  //         ...params,
+  //         signatures,
+  //       },
+  //       {
+  //         responseType: "blob", // Download file Excel
+  //       }
+  //     );
 
-      return response.data;
-    } catch (error) {
-      console.error("Error exporting luan chuyen kho report:", error);
-      throw error;
-    }
-  },
+  //     return response.data;
+  //   } catch (error) {
+  //     console.error("Error exporting luan chuyen kho report:", error);
+  //     throw error;
+  //   }
+  // },
 
   // Export PDF
   exportPDF: async (reportType, params = {}) => {
@@ -326,6 +332,75 @@ export const baoCaoService = {
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching phong ban options:", error);
+      throw error;
+    }
+  },
+
+  exportLuanChuyenKho: async (params = {}, signatures = {}) => {
+    try {
+      console.log("📤 Exporting enhanced Excel report with params:", params);
+      console.log("✍️ Signatures:", signatures);
+
+      const response = await api.post(
+        "/bao-cao/luan-chuyen-kho/export", // URL riêng cho export
+        {
+          ...params,
+          signatures, // Thông tin chữ ký
+          enhanced: true, // Flag để backend biết là format nâng cao
+        },
+        {
+          responseType: "blob", // Download file Excel
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // Kiểm tra response
+      if (response.data.size === 0) {
+        throw new Error("File Excel rỗng");
+      }
+
+      console.log(`✅ Excel file received, size: ${response.data.size} bytes`);
+      return response.data;
+    } catch (error) {
+      console.error(
+        "❌ Error exporting enhanced luan chuyen kho report:",
+        error
+      );
+
+      // Xử lý các loại lỗi khác nhau
+      if (error.response?.status === 400) {
+        throw new Error("Dữ liệu đầu vào không hợp lệ");
+      } else if (error.response?.status === 403) {
+        throw new Error("Không có quyền truy cập");
+      } else if (error.response?.status === 500) {
+        throw new Error("Lỗi server khi tạo báo cáo");
+      } else {
+        throw new Error("Lỗi khi xuất Excel: " + error.message);
+      }
+    }
+  },
+
+  getPhongBanInfo: async (phongBanId) => {
+    try {
+      const response = await api.get(`/phong-ban/${phongBanId}`);
+      return response.data;
+    } catch (error) {
+      console.error("Error getting phong ban info:", error);
+      return null;
+    }
+  },
+
+  // Phương thức preview dữ liệu trước khi export (tùy chọn)
+  previewLuanChuyenKho: async (params = {}) => {
+    try {
+      const response = await api.get("/bao-cao/luan-chuyen-kho/preview", {
+        params,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Error previewing report:", error);
       throw error;
     }
   },

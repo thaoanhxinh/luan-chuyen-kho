@@ -397,7 +397,7 @@ const generateNotificationURL = (
 
     case "phieu_nhap_duyet":
       // Phiếu đã được duyệt
-      tab = "da-duyet";
+      tab = "da_duyet";
       break;
 
     case "phieu_nhap_can_sua":
@@ -415,7 +415,7 @@ const generateNotificationURL = (
       break;
 
     case "phieu_xuat_duyet":
-      tab = "da-duyet";
+      tab = "da_duyet";
       break;
 
     case "phieu_xuat_can_sua":

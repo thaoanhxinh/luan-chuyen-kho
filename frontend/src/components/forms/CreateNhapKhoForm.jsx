@@ -84,7 +84,10 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
   }, [loaiPhieu, setValue, loadPhongBanCungCap]);
 
   const tongTien = chiTietItems.reduce((sum, item) => {
-    return sum + parseFloat(item.so_luong || 0) * parseFloat(item.don_gia || 0);
+    return (
+      sum +
+      parseFloat(item.so_luong_ke_hoach || 0) * parseFloat(item.don_gia || 0)
+    );
   }, 0);
 
   const handleNhaCungCapSelect = (nhaCungCap) => {
@@ -145,6 +148,12 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
         toast.success(`Đã chọn ${hangHoa.ten_hang_hoa}. Vui lòng nhập giá.`);
       }
     }
+  };
+
+  // Auto-sync số lượng thực tế với số lượng kế hoạch
+  const handleSoLuongKeHoachChange = (value, index) => {
+    setValue(`chi_tiet.${index}.so_luong_ke_hoach`, value);
+    setValue(`chi_tiet.${index}.so_luong`, value); // Tự động set số lượng thực tế = số lượng kế hoạch
   };
 
   const addNewRow = () => {
@@ -287,7 +296,7 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
         finalChiTiet.push({
           hang_hoa_id: finalHangHoa.id,
           so_luong_ke_hoach: parseFloat(item.so_luong_ke_hoach),
-          so_luong: parseFloat(item.so_luong),
+          so_luong: parseFloat(item.so_luong_ke_hoach), // Số lượng thực tế = số lượng kế hoạch
           don_gia: parseFloat(item.don_gia),
           pham_chat: item.pham_chat,
           so_seri_list: item.danh_diem
@@ -407,67 +416,150 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Tạo phiếu nhập kho
-        </h2>
-        <p className="text-gray-600">
-          Điền thông tin để tạo phiếu nhập kho mới
-        </p>
-      </div>
-
+    <div className="max-w-6xl mx-auto p-6">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Thông tin cơ bản */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Ngày nhập *
-            </label>
-            <input
-              type="date"
-              {...register("ngay_nhap", {
-                required: "Vui lòng chọn ngày nhập",
-              })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            {errors.ngay_nhap && (
-              <p className="mt-1 text-sm text-red-600">
-                {errors.ngay_nhap.message}
-              </p>
-            )}
+        {/* THÔNG TIN CHUNG */}
+        <div className="bg-white border rounded-lg p-4">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">
+            Thông tin phiếu nhập
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Ngày nhập *
+              </label>
+              <input
+                type="date"
+                {...register("ngay_nhap", {
+                  required: "Vui lòng chọn ngày nhập",
+                })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+              />
+              {errors.ngay_nhap && (
+                <p className="mt-1 text-sm text-red-600">
+                  {errors.ngay_nhap.message}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Loại phiếu *
+              </label>
+              <select
+                {...register("loai_phieu", {
+                  required: "Vui lòng chọn loại phiếu",
+                })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+              >
+                {Object.entries(LOAI_PHIEU_NHAP).map(([key, value]) => (
+                  <option key={key} value={key}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+              {errors.loai_phieu && (
+                <p className="mt-1 text-sm text-red-600">
+                  {errors.loai_phieu.message}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Số quyết định
+              </label>
+              <input
+                type="text"
+                {...register("so_quyet_dinh")}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                placeholder="Nhập số quyết định"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Ghi chú
+              </label>
+              <input
+                type="text"
+                {...register("ghi_chu")}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                placeholder="Nhập ghi chú (nếu có)"
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Loại phiếu *
-            </label>
-            <select
-              {...register("loai_phieu", {
-                required: "Vui lòng chọn loại phiếu",
-              })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              {Object.entries(LOAI_PHIEU_NHAP).map(([key, value]) => (
-                <option key={key} value={key}>
-                  {value}
-                </option>
-              ))}
-            </select>
-            {errors.loai_phieu && (
-              <p className="mt-1 text-sm text-red-600">
-                {errors.loai_phieu.message}
-              </p>
-            )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Lý do nhập *
+              </label>
+              <input
+                type="text"
+                {...register("ly_do_nhap", {
+                  required: "Vui lòng nhập lý do nhập",
+                })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                placeholder="Nhập lý do nhập hàng"
+              />
+              {errors.ly_do_nhap && (
+                <p className="mt-1 text-sm text-red-600">
+                  {errors.ly_do_nhap.message}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Người nhập hàng
+              </label>
+              <input
+                type="text"
+                {...register("nguoi_nhap_hang")}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                placeholder="Nhập tên người nhập hàng"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Số hóa đơn
+              </label>
+              <input
+                type="text"
+                {...register("so_hoa_don")}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                placeholder="Nhập số hóa đơn"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Địa chỉ nhập
+              </label>
+              <input
+                type="text"
+                {...register("dia_chi_nhap")}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                placeholder="Nhập địa chỉ nhập hàng"
+              />
+            </div>
           </div>
         </div>
 
-        {/* Nhà cung cấp hoặc đơn vị cung cấp */}
+        {/* NHÀ CUNG CẤP HOẶC ĐƠN VỊ CUNG CẤP */}
         {loaiPhieu === "dieu_chuyen" ? (
-          <PhongBanCungCapField />
+          <div className="bg-white border rounded-lg p-4">
+            <PhongBanCungCapField />
+          </div>
         ) : (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+          <div className="bg-white border rounded-lg p-4">
+            <label className="block text-lg font-medium text-gray-900 mb-3">
+              <Building className="inline h-4 w-4 mr-1" />
               Nhà cung cấp *
             </label>
             <AutoComplete
@@ -492,265 +584,201 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
           </div>
         )}
 
-        {/* Thông tin bổ sung */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Người nhập hàng
-            </label>
-            <input
-              type="text"
-              {...register("nguoi_nhap_hang")}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Tên người nhập hàng"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Số quyết định
-            </label>
-            <input
-              type="text"
-              {...register("so_quyet_dinh")}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Số quyết định"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Số hóa đơn
-            </label>
-            <input
-              type="text"
-              {...register("so_hoa_don")}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Số hóa đơn"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Địa chỉ nhập
-            </label>
-            <input
-              type="text"
-              {...register("dia_chi_nhap")}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Địa chỉ nhập hàng"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Lý do nhập *
-          </label>
-          <textarea
-            {...register("ly_do_nhap", {
-              required: "Vui lòng nhập lý do nhập",
-            })}
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Lý do nhập hàng"
-          />
-          {errors.ly_do_nhap && (
-            <p className="mt-1 text-sm text-red-600">
-              {errors.ly_do_nhap.message}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Ghi chú
-          </label>
-          <textarea
-            {...register("ghi_chu")}
-            rows={2}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Ghi chú thêm"
-          />
-        </div>
-
-        {/* Chi tiết hàng hóa */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
+        {/* CHI TIẾT HÀNG HÓA */}
+        <div className="bg-white border rounded-lg p-4">
+          <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-medium text-gray-900">
               Chi tiết hàng hóa
             </h3>
             <button
               type="button"
               onClick={addNewRow}
-              className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
             >
-              <Plus className="h-4 w-4 mr-1" />
-              Thêm hàng hóa
+              <Plus className="h-4 w-4" />
+              <span>Thêm hàng hóa</span>
             </button>
           </div>
 
-          <div className="space-y-4">
-            {fields.map((field, index) => (
-              <div
-                key={field.id}
-                className="p-4 border border-gray-200 rounded-lg bg-gray-50"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-medium text-gray-900">
-                    Hàng hóa {index + 1}
-                  </h4>
-                  {fields.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => remove(index)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                    STT
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Hàng hóa *
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                    Số lượng kế hoạch *
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                    Đơn giá
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                    Phẩm chất
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                    Thành tiền
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                    Xóa
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 bg-white">
+                {fields.map((field, index) => {
+                  const item = watch(`chi_tiet.${index}`) || {};
+                  const thanhTien =
+                    (parseFloat(item.so_luong_ke_hoach) || 0) *
+                    (parseFloat(item.don_gia) || 0);
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Hàng hóa *
-                    </label>
-                    <AutoComplete
-                      searchFunction={(query) =>
-                        searchService.searchHangHoa(query)
-                      }
-                      value={watch(`chi_tiet.${index}.hang_hoa`)}
-                      onSelect={(hangHoa) =>
-                        handleHangHoaSelect(hangHoa, index)
-                      }
-                      placeholder="Tìm kiếm hàng hóa..."
-                      displayField="ten_hang_hoa"
-                      searchField="ten_hang_hoa"
-                      allowCreateOption={true}
-                      createNewLabel="Tạo hàng hóa mới"
-                      noResultsText="Không tìm thấy hàng hóa"
-                      minSearchLength={2}
-                    />
-                  </div>
+                  return (
+                    <tr key={field.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-center text-sm font-medium text-gray-900">
+                        {index + 1}
+                      </td>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Số lượng kế hoạch *
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      {...register(`chi_tiet.${index}.so_luong_ke_hoach`, {
-                        required: "Vui lòng nhập số lượng kế hoạch",
-                        min: {
-                          value: 1,
-                          message: "Số lượng phải lớn hơn 0",
-                        },
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
+                      {/* TÌM KIẾM HÀNG HÓA */}
+                      <td className="px-4 py-3">
+                        <AutoComplete
+                          searchFunction={async (query) => {
+                            try {
+                              if (!query || query.length < 2) return [];
+                              const results = await searchService.searchHangHoa(
+                                query,
+                                loaiPhieu
+                              );
+                              return results.filter((item) => !item.isNewItem);
+                            } catch (error) {
+                              console.error("Search error:", error);
+                              return [];
+                            }
+                          }}
+                          onSelect={(hangHoa) =>
+                            handleHangHoaSelect(hangHoa, index)
+                          }
+                          placeholder="Nhập tên hàng hóa..."
+                          displayField="ten_hang_hoa"
+                          renderItem={(hangHoa) => (
+                            <div className="p-2 hover:bg-gray-50">
+                              <div className="font-medium text-gray-900">
+                                {hangHoa.ten_hang_hoa}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                <span className="font-mono">
+                                  {hangHoa.ma_hang_hoa}
+                                </span>
+                                {hangHoa.don_vi_tinh && (
+                                  <span className="ml-2">
+                                    • {hangHoa.don_vi_tinh}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          allowCreateOption={true}
+                          createNewLabel="Tạo hàng hóa mới"
+                          noResultsText="Không tìm thấy hàng hóa"
+                          minSearchLength={2}
+                        />
+                        {errors.chi_tiet?.[index]?.hang_hoa_id && (
+                          <p className="mt-1 text-xs text-red-600">
+                            {errors.chi_tiet[index].hang_hoa_id.message}
+                          </p>
+                        )}
+                      </td>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Số lượng thực nhập *
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      {...register(`chi_tiet.${index}.so_luong`, {
-                        required: "Vui lòng nhập số lượng thực nhập",
-                        min: {
-                          value: 1,
-                          message: "Số lượng phải lớn hơn 0",
-                        },
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
+                      {/* SỐ LƯỢNG KẾ HOẠCH */}
+                      <td className="px-4 py-3">
+                        <input
+                          type="number"
+                          step="1"
+                          min="0"
+                          {...register(`chi_tiet.${index}.so_luong_ke_hoach`, {
+                            required: "Vui lòng nhập số lượng kế hoạch",
+                            min: {
+                              value: 1,
+                              message: "Số lượng phải lớn hơn 0",
+                            },
+                          })}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value) || 0;
+                            handleSoLuongKeHoachChange(value, index);
+                          }}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:ring-2 focus:ring-green-500"
+                          placeholder="0"
+                        />
+                        {errors.chi_tiet?.[index]?.so_luong_ke_hoach && (
+                          <p className="mt-1 text-xs text-red-600">
+                            {errors.chi_tiet[index].so_luong_ke_hoach.message}
+                          </p>
+                        )}
+                      </td>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Đơn giá *
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1000"
-                      {...register(`chi_tiet.${index}.don_gia`, {
-                        required: "Vui lòng nhập đơn giá",
-                        min: {
-                          value: 0,
-                          message: "Đơn giá phải lớn hơn hoặc bằng 0",
-                        },
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
+                      {/* ĐƠN GIÁ */}
+                      <td className="px-4 py-3">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          {...register(`chi_tiet.${index}.don_gia`)}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-right focus:ring-2 focus:ring-green-500"
+                          placeholder="0"
+                        />
+                      </td>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Phẩm chất
-                    </label>
-                    <select
-                      {...register(`chi_tiet.${index}.pham_chat`)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      {Object.entries(PHAM_CHAT).map(([key, value]) => (
-                        <option key={key} value={key}>
-                          {value.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                      {/* PHẨM CHẤT */}
+                      <td className="px-4 py-3">
+                        <select
+                          {...register(`chi_tiet.${index}.pham_chat`)}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-green-500"
+                        >
+                          {Object.entries(PHAM_CHAT).map(([key, value]) => (
+                            <option key={key} value={key}>
+                              {value.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Danh điểm/Seri
-                    </label>
-                    <textarea
-                      {...register(`chi_tiet.${index}.danh_diem`)}
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Nhập danh điểm hoặc số seri (mỗi dòng một số)"
-                    />
-                  </div>
-                </div>
+                      {/* THÀNH TIỀN */}
+                      <td className="px-4 py-3 text-right text-sm font-medium text-gray-900">
+                        {formatCurrency(thanhTien)}
+                      </td>
 
-                {errors.chi_tiet?.[index] && (
-                  <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
-                    {Object.entries(errors.chi_tiet[index]).map(
-                      ([field, error]) => (
-                        <p key={field} className="text-sm text-red-600">
-                          {error.message}
-                        </p>
-                      )
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
+                      {/* XÓA */}
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => remove(index)}
+                          className="text-red-600 hover:text-red-800 p-1"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {/* Tổng tiền */}
-        <div className="bg-blue-50 p-4 rounded-lg">
+        {/* TỔNG TIỀN */}
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="flex justify-between items-center">
             <span className="text-lg font-medium text-gray-900">
               Tổng tiền:
             </span>
-            <span className="text-2xl font-bold text-blue-600">
+            <span className="text-2xl font-bold text-green-600">
               {formatCurrency(tongTien)}
             </span>
           </div>
         </div>
 
-        {/* Nút hành động */}
+        {/* NÚT HÀNH ĐỘNG */}
         <div className="flex justify-end space-x-4">
           <button
             type="button"
@@ -762,7 +790,7 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
           <button
             type="submit"
             disabled={loading}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? "Đang xử lý..." : "Tạo phiếu nhập"}
           </button>

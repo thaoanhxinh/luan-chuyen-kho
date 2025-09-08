@@ -2558,12 +2558,16 @@ const router = async (req, res) => {
     //   );
     // }
 
-    if (pathname === "/api/bao-cao/luan-chuyen-kho" && method === "GET") {
+    if (
+      pathname === "/api/bao-cao/luan-chuyen-kho/export" &&
+      method === "POST"
+    ) {
       return await baoCaoController.exportLuanChuyenExcel(
         req,
         res,
         query,
-        user
+        user,
+        body
       );
     }
 
