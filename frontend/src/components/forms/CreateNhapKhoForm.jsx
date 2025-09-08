@@ -179,6 +179,7 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
       );
       const createPromise = searchService.createNhaCungCapAuto({
         ten_ncc: nhaCungCap.ten_ncc,
+        loai_nha_cung_cap: loaiPhieu,
       });
       const response = await Promise.race([createPromise, timeoutPromise]);
 

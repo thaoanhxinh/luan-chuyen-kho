@@ -121,8 +121,9 @@ const createNhaCungCapAuto = async (req, res, body) => {
     console.log("✅ Generated ma_ncc:", maNcc);
 
     // ✅ FIXED: Xác định loại nhà cung cấp và is_noi_bo
+    // Yêu cầu: tu_mua -> is_noi_bo = false; tren_cap & dieu_chuyen -> is_noi_bo = true
     const finalLoaiNcc = loai_nha_cung_cap || "tu_mua";
-    const isNoiBo = finalLoaiNcc === "dieu_chuyen";
+    const isNoiBo = finalLoaiNcc !== "tu_mua";
 
     console.log("🔧 NCC Type determined:", { finalLoaiNcc, isNoiBo });
 
@@ -220,7 +221,7 @@ const searchNhaCungCapByType = async (req, res, query, user) => {
       );
     } else if (loai_phieu === "tren_cap") {
       whereConditions.push(
-        `ncc.loai_nha_cung_cap = 'tren_cap' AND ncc.is_noi_bo = FALSE`
+        `ncc.loai_nha_cung_cap = 'tren_cap' AND ncc.is_noi_bo = TRUE`
       );
     } else if (loai_phieu === "dieu_chuyen") {
       whereConditions.push(
