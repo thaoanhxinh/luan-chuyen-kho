@@ -11,6 +11,17 @@ export const departmentService = {
     }
   },
 
+  // Lấy danh sách phòng ban theo quyền truy cập của user hiện tại
+  getAccessibleList: async () => {
+    try {
+      const response = await api.get("/departments/list/accessible");
+      return response.data; // API returns {success: true, data: Department[]}
+    } catch (error) {
+      console.error("Get accessible departments error:", error);
+      throw error;
+    }
+  },
+
   // Lấy cấu trúc tổ chức 3 cấp
   getOrganizationStructure: async () => {
     try {

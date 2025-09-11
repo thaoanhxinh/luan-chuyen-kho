@@ -32,6 +32,7 @@ const ThongKeNhaCungCapReport = ({ user }) => {
     timeFrame: "month",
     phong_ban_id: user?.role === "admin" ? "all" : user?.phong_ban_id,
     nha_cung_cap_id: "",
+    loai_phieu: "all", // all, tu_mua, tren_cap, dieu_chuyen
   });
 
   const [data, setData] = useState([]);
@@ -105,6 +106,16 @@ const ThongKeNhaCungCapReport = ({ user }) => {
         params.append("phong_ban_id", filters.phong_ban_id);
       }
 
+      // Lọc theo loại phiếu nếu có chọn
+      if (filters.loai_phieu && filters.loai_phieu !== "all") {
+        params.append("loai_phieu", filters.loai_phieu);
+      }
+
+      // Nếu có chọn NCC cụ thể → gửi filter xuống backend
+      if (filters.nha_cung_cap_id) {
+        params.append("nha_cung_cap_id", filters.nha_cung_cap_id);
+      }
+
       const response = await fetch(`/api/nhap-kho?${params}`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -114,6 +125,7 @@ const ThongKeNhaCungCapReport = ({ user }) => {
 
       const result = await response.json();
       if (result.success) {
+        // Chỉ lấy phiếu đã hoàn thành; loại phiếu được điều khiển bởi filter
         const completedItems = result.data.items.filter(
           (item) => item.trang_thai === "completed"
         );
@@ -130,8 +142,13 @@ const ThongKeNhaCungCapReport = ({ user }) => {
   };
 
   const processThongKeData = (items) => {
-    const grouped = items.reduce((acc, item) => {
-      const nhaCungCapId = item.nha_cung_cap_id || "unknown";
+    // Lọc thêm: chỉ giữ phiếu có nhà cung cấp hợp lệ (tránh gộp vào 'unknown')
+    const validItems = items.filter(
+      (it) => it.nha_cung_cap && it.nha_cung_cap.id
+    );
+
+    const grouped = validItems.reduce((acc, item) => {
+      const nhaCungCapId = item.nha_cung_cap?.id || "unknown";
       const nhaCungCapName = item.nha_cung_cap?.ten_ncc || "Chưa xác định";
 
       if (!acc[nhaCungCapId]) {
@@ -151,9 +168,10 @@ const ThongKeNhaCungCapReport = ({ user }) => {
       return acc;
     }, {});
 
-    const processedData = Object.values(grouped)
-      .sort((a, b) => b.tong_gia_tri - a.tong_gia_tri)
-      .slice(0, 20); // Top 20
+    // Sắp xếp nhưng KHÔNG cắt bớt: hiển thị toàn bộ NCC có trong phiếu nhập
+    const processedData = Object.values(grouped).sort(
+      (a, b) => b.tong_gia_tri - a.tong_gia_tri
+    );
 
     setData(processedData);
   };
@@ -287,7 +305,7 @@ const ThongKeNhaCungCapReport = ({ user }) => {
         </div>
 
         {/* Main Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Từ ngày
@@ -314,6 +332,24 @@ const ThongKeNhaCungCapReport = ({ user }) => {
               }
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Loại phiếu
+            </label>
+            <select
+              value={filters.loai_phieu}
+              onChange={(e) =>
+                setFilters((prev) => ({ ...prev, loai_phieu: e.target.value }))
+              }
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            >
+              <option value="all">Tất cả</option>
+              <option value="tu_mua">Tự mua</option>
+              <option value="tren_cap">Trên cấp</option>
+              <option value="dieu_chuyen">Điều chuyển</option>
+            </select>
           </div>
 
           <div>
@@ -422,11 +458,11 @@ const ThongKeNhaCungCapReport = ({ user }) => {
         {/* Bar Chart */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Top 10 nhà cung cấp theo giá trị
+            Giá trị theo nhà cung cấp
           </h3>
           {data.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={data.slice(0, 10)}>
+              <BarChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis
                   dataKey="ten_ncc"
@@ -468,7 +504,7 @@ const ThongKeNhaCungCapReport = ({ user }) => {
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
-                  data={data.slice(0, 8)}
+                  data={data}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -479,7 +515,7 @@ const ThongKeNhaCungCapReport = ({ user }) => {
                     percent > 5 ? `${percent.toFixed(0)}%` : ""
                   }
                 >
-                  {data.slice(0, 8).map((entry, index) => (
+                  {data.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
                       fill={colors[index % colors.length]}

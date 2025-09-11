@@ -30,6 +30,7 @@ const TonKho = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [pageSize, setPageSize] = useState(6);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({
     loai_hang_id: "",
@@ -91,6 +92,7 @@ const TonKho = () => {
     filters,
     departmentFilters.selectedCap2,
     departmentFilters.selectedCap3,
+    pageSize,
   ]);
 
   const loadTonKhoData = async () => {
@@ -98,7 +100,7 @@ const TonKho = () => {
       setLoading(true);
       const params = {
         page: currentPage,
-        limit: 20,
+        limit: pageSize,
         search: search.trim(),
         ...filters,
       };
@@ -583,18 +585,35 @@ const TonKho = () => {
               </div>
             )}
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="px-6 py-4 border-t">
+            {/* Pagination & Page size */}
+            <div className="px-6 py-4 border-t flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <span>Hiển thị</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(parseInt(e.target.value) || 6);
+                    setCurrentPage(1);
+                  }}
+                  className="px-2 py-1 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value={6}>6</option>
+                  <option value={10}>10</option>
+                  <option value={15}>15</option>
+                  <option value={20}>20</option>
+                </select>
+                <span>dòng / trang</span>
+              </div>
+              {totalPages > 1 && (
                 <Pagination
                   currentPage={currentPage}
                   totalPages={totalPages}
                   onPageChange={setCurrentPage}
                   totalItems={totalItems}
-                  itemsPerPage={20}
+                  itemsPerPage={pageSize}
                 />
-              </div>
-            )}
+              )}
+            </div>
           </>
         )}
       </div>

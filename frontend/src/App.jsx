@@ -5,8 +5,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import "./App.css";
 
 // Layout Components
-import Sidebar from "./components/common/Sidebar";
-import Header from "./components/common/Header";
+import Layout from "./components/common/Layout";
 
 // Pages - Main Pages Only (Forms are modals/components)
 import Login from "./pages/Login";
@@ -72,6 +71,15 @@ const AdminOrManagerRoute = ({ children }) => {
   return children;
 };
 
+// Admin-only Route Component (for Departments page)
+const AdminOnlyRoute = ({ children }) => {
+  const { user } = useAuth();
+  if (!user || user.role !== "admin") {
+    return <Navigate to="/" replace />;
+  }
+  return children;
+};
+
 // Manager Route Component (for approvals)
 const ManagerRoute = ({ children }) => {
   const { user } = useAuth();
@@ -87,34 +95,7 @@ const ManagerRoute = ({ children }) => {
   return children;
 };
 
-// Main Layout Component using our fixed layout system
-const Layout = ({ children }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* SIDEBAR - FIXED POSITION */}
-      <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
-
-      {/* MAIN CONTENT - Margin left to avoid sidebar */}
-      <div
-        className={`transition-all duration-300 ${
-          isCollapsed ? "ml-12" : "ml-56"
-        }`}
-      >
-        {/* HEADER - FIXED TOP */}
-        <div className="sticky top-0 z-30 bg-white border-b border-gray-200 h-16">
-          <Header />
-        </div>
-
-        {/* PAGE CONTENT */}
-        <main className="min-h-[calc(100vh-4rem)] overflow-y-auto">
-          <div className="p-4">{children}</div>
-        </main>
-      </div>
-    </div>
-  );
-};
+// Layout moved to components/common/Layout.jsx and used as a parent Route
 
 // App Component Content
 const AppContent = () => {
@@ -136,257 +117,76 @@ const AppContent = () => {
         element={user ? <Navigate to="/" replace /> : <Login />}
       />
 
-      {/* Protected Routes with Layout */}
+      {/* Protected Routes under a single shared Layout (preserves sidebar state) */}
       <Route
         path="/"
         element={
           <ProtectedRoute>
-            <Layout>
-              <Dashboard />
-            </Layout>
+            <Layout />
           </ProtectedRoute>
         }
-      />
+      >
+        {/* Dashboard */}
+        <Route index element={<Dashboard />} />
 
-      {/* WORKFLOW ROUTES - yêu cầu nhập/xuất đã loại bỏ */}
-
-      {/* Workflow Management - Manager/Admin only */}
-      <Route
-        path="/workflow"
-        element={
-          <ProtectedRoute>
+        {/* Workflow Management - Manager/Admin only */}
+        <Route
+          path="workflow"
+          element={
             <ManagerRoute>
-              <Layout>
-                <WorkflowManagement />
-              </Layout>
+              <WorkflowManagement />
             </ManagerRoute>
-          </ProtectedRoute>
-        }
-      />
+          }
+        />
 
-      {/* WAREHOUSE OPERATIONS ROUTES */}
-      {/* Phiếu nhập kho - Main page (create form is modal) */}
-      <Route
-        path="/nhap-kho"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <NhapKho />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
+        {/* Warehouse */}
+        <Route path="nhap-kho" element={<NhapKho />} />
+        <Route path="xuat-kho" element={<XuatKho />} />
+        <Route path="kiem-ke" element={<KiemKe />} />
 
-      {/* Phiếu xuất kho - Main page (create form is modal) */}
-      <Route
-        path="/xuat-kho"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <XuatKho />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
+        {/* Catalog / Master data */}
+        <Route path="hang-hoa" element={<HangHoa />} />
+        <Route path="ton-kho" element={<TonKho />} />
+        <Route path="loai-hang-hoa" element={<LoaiHangHoa />} />
+        <Route path="nha-cung-cap" element={<NhaCungCap />} />
+        <Route path="don-vi-nhan" element={<DonViNhan />} />
 
-      {/* Kiểm kê - Main page (create form is modal) */}
-      <Route
-        path="/kiem-ke"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <KiemKe />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
+        {/* Reports */}
+        <Route path="bao-cao/luan-chuyen" element={<LuanChuyenReport />} />
+        <Route path="bao-cao/nhap" element={<BaoCaoNhapReport />} />
+        <Route path="bao-cao/xuat" element={<BaoCaoXuatReport />} />
+        <Route path="bao-cao/kiem-ke" element={<KiemKeReport />} />
+        <Route
+          path="bao-cao/don-vi-nhan"
+          element={<ThongKeDonViNhanReport />}
+        />
+        <Route
+          path="bao-cao/nha-cung-cap"
+          element={<ThongKeNhaCungCapReport />}
+        />
 
-      {/* CATALOG/MASTER DATA ROUTES */}
-      {/* Hàng hóa - Main page (create/edit forms are modals) */}
-      <Route
-        path="/hang-hoa"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <HangHoa />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Tồn kho - View only page */}
-      <Route
-        path="/ton-kho"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <TonKho />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Loại hàng hóa - Main page (create/edit forms are modals) */}
-      <Route
-        path="/loai-hang-hoa"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <LoaiHangHoa />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Nhà cung cấp - Main page (create/edit forms are modals) */}
-      <Route
-        path="/nha-cung-cap"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <NhaCungCap />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Đơn vị nhận - Main page (create/edit forms are modals) */}
-      <Route
-        path="/don-vi-nhan"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <DonViNhan />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* REPORTS ROUTES - Using existing components only */}
-      {/* Báo cáo Luân chuyển */}
-      <Route
-        path="/bao-cao/luan-chuyen"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <LuanChuyenReport />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Báo cáo Nhập */}
-      <Route
-        path="/bao-cao/nhap"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <BaoCaoNhapReport />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Báo cáo Xuất */}
-      <Route
-        path="/bao-cao/xuat"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <BaoCaoXuatReport />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Báo cáo Kiểm kê */}
-      <Route
-        path="/bao-cao/kiem-ke"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <KiemKeReport />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Thống kê Đơn vị nhận */}
-      <Route
-        path="/bao-cao/don-vi-nhan"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <ThongKeDonViNhanReport />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Thống kê Nhà cung cấp */}
-      <Route
-        path="/bao-cao/nha-cung-cap"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <ThongKeNhaCungCapReport />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* ADMIN ROUTES - Admin and Manager visibility */}
-      {/* Quản lý nhân viên */}
-      <Route
-        path="/admin/nhan-vien"
-        element={
-          <ProtectedRoute>
+        {/* Admin */}
+        <Route
+          path="admin/nhan-vien"
+          element={
             <AdminOrManagerRoute>
-              <Layout>
-                <Users />
-              </Layout>
+              <Users />
             </AdminOrManagerRoute>
-          </ProtectedRoute>
-        }
-      />
+          }
+        />
+        <Route
+          path="admin/phong-ban"
+          element={
+            <AdminOnlyRoute>
+              <Departments />
+            </AdminOnlyRoute>
+          }
+        />
 
-      {/* Quản lý phòng ban */}
-      <Route
-        path="/admin/phong-ban"
-        element={
-          <ProtectedRoute>
-            <AdminOrManagerRoute>
-              <Layout>
-                <Departments />
-              </Layout>
-            </AdminOrManagerRoute>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Quản lý tài khoản (thay cho cài đặt hệ thống) */}
-      <Route
-        path="/quan-ly-tai-khoan"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <AccountManagement />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* NOTIFICATIONS */}
-      <Route
-        path="/notifications"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <NotificationCenter />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
+        {/* Account Management and Notifications */}
+        <Route path="quan-ly-tai-khoan" element={<AccountManagement />} />
+        <Route path="notifications" element={<NotificationCenter />} />
+      </Route>
 
       {/* REDIRECT ROUTES FOR CREATE ACTIONS */}
       {/* These redirect to main pages since create forms are modals */}

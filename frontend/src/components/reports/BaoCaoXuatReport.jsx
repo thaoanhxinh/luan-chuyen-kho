@@ -406,7 +406,7 @@ const BaoCaoXuatReport = () => {
 
       {/* Filter Section - Simplified */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
-        {/* Main Filters - one line */}
+        {/* Main Filters - one line, no wrap */}
         <div className="flex items-center gap-3 flex-nowrap">
           <div className="flex items-center gap-2 whitespace-nowrap">
             <span className="text-sm text-gray-700">Từ ngày</span>
@@ -432,32 +432,30 @@ const BaoCaoXuatReport = () => {
             />
           </div>
 
-          <div className="flex items-center gap-2 whitespace-nowrap">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Xuất báo cáo
-            </label>
-            <button
-              onClick={handleExport}
-              disabled={isExporting}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {isExporting ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Đang xuất...
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4 mr-2" />
-                  Xuất Excel
-                </>
-              )}
-            </button>
-          </div>
-
           {/* Filter phòng ban */}
-          {renderPhongBanFilter()}
+          <div className="whitespace-nowrap">{renderPhongBanFilter()}</div>
         </div>
+      </div>
+
+      {/* Export button placed separately to avoid breaking the filter row */}
+      <div className="flex justify-end mb-2">
+        <button
+          onClick={handleExport}
+          disabled={isExporting}
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {isExporting ? (
+            <>
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              Đang xuất...
+            </>
+          ) : (
+            <>
+              <Download className="h-4 w-4 mr-2" />
+              Xuất Excel
+            </>
+          )}
+        </button>
       </div>
 
       {/* Tab Navigation & Content */}

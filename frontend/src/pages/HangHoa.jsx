@@ -11,11 +11,9 @@ import {
   DollarSign,
   AlertTriangle,
   Building,
-  Filter,
   ChevronDown,
   ChevronRight,
   Users,
-  Layers,
 } from "lucide-react";
 import { hangHoaService } from "../services/hangHoaService";
 import { formatCurrency } from "../utils/helpers";
@@ -32,6 +30,7 @@ const HangHoa = () => {
 
   // States cơ bản
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(6);
   const [searchTerm, setSearchTerm] = useState("");
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,8 +50,7 @@ const HangHoa = () => {
     selectedCap3: "",
   });
 
-  // View mode states
-  const [viewMode, setViewMode] = useState("aggregated"); // "aggregated" | "detailed"
+  // View mode states - chỉ sử dụng aggregated view
   const [expandedItems, setExpandedItems] = useState(new Set());
 
   const hangHoaList = React.useMemo(
@@ -99,7 +97,7 @@ const HangHoa = () => {
 
       const params = {
         page: currentPage,
-        limit: 20,
+        limit: pageSize,
         search: searchTerm,
       };
 
@@ -134,6 +132,7 @@ const HangHoa = () => {
     departmentFilters.selectedCap2,
     departmentFilters.selectedCap3,
     userRole,
+    pageSize,
   ]);
 
   useEffect(() => {
@@ -143,6 +142,7 @@ const HangHoa = () => {
     searchTerm,
     departmentFilters.selectedCap2,
     departmentFilters.selectedCap3,
+    pageSize,
     fetchData,
   ]);
 
@@ -255,69 +255,6 @@ const HangHoa = () => {
     return { total, inStock, lowStock, outOfStock, totalValue };
   };
 
-  // Render department filters cho Manager và Admin
-  const renderDepartmentFilters = () => {
-    if (userRole === "user") return null;
-
-    return (
-      <div className="flex gap-4">
-        {/* Filter cho Admin - Cấp 2 */}
-        {userRole === "admin" && (
-          <div className="min-w-0 flex-1">
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Phòng ban cấp 2
-            </label>
-            <select
-              value={departmentFilters.selectedCap2}
-              onChange={(e) => handleCap2Change(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-sm"
-            >
-              <option value="">-- Tất cả cấp 2 --</option>
-              {departmentFilters.cap2List.map((dept) => (
-                <option key={dept.id} value={dept.id}>
-                  {dept.ten_phong_ban}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Filter cho Manager và Admin - Cấp 3 */}
-        {(userRole === "manager" || userRole === "admin") && (
-          <div className="min-w-0 flex-1">
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Phòng ban cấp 3
-            </label>
-            <select
-              value={departmentFilters.selectedCap3}
-              onChange={(e) => handleCap3Change(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-sm"
-            >
-              <option value="">-- Tất cả cấp 3 --</option>
-              {departmentFilters.cap3List
-                .filter((dept) => {
-                  // Nếu admin và đã chọn cấp 2, chỉ hiển thị cấp 3 thuộc cấp 2 đó
-                  if (userRole === "admin" && departmentFilters.selectedCap2) {
-                    return (
-                      dept.phong_ban_cha_id ===
-                      parseInt(departmentFilters.selectedCap2)
-                    );
-                  }
-                  // Nếu manager, chỉ hiển thị cấp 3 thuộc quyền (sẽ do backend filter)
-                  return true;
-                })
-                .map((dept) => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.ten_phong_ban}
-                  </option>
-                ))}
-            </select>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   // Determine if viewing aggregated (multi-department) list
   const isAggregatedView =
     (userRole === "admin" || userRole === "manager") &&
@@ -325,7 +262,7 @@ const HangHoa = () => {
 
   // Aggregate items by hang_hoa id when viewing across departments
   const aggregatedList = React.useMemo(() => {
-    if (!isAggregatedView || viewMode === "detailed") return hangHoaList;
+    if (!isAggregatedView) return hangHoaList;
 
     const map = new Map();
     for (const item of hangHoaList) {
@@ -360,9 +297,9 @@ const HangHoa = () => {
     }
 
     return Array.from(map.values());
-  }, [isAggregatedView, hangHoaList, viewMode]);
+  }, [isAggregatedView, hangHoaList]);
 
-  const displayList = viewMode === "aggregated" ? aggregatedList : hangHoaList;
+  const displayList = isAggregatedView ? aggregatedList : hangHoaList;
   const stats = calculateStats();
 
   // Toggle expanded state for aggregated items
@@ -452,73 +389,85 @@ const HangHoa = () => {
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         {/* Filters */}
         <div className="p-4 border-b border-gray-200">
-          <div className="space-y-4">
+          <div className="flex gap-4 items-end">
             {/* Search bar */}
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search
-                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                    size={16}
-                  />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-sm"
-                    placeholder="Tìm theo tên hoặc mã hàng hóa..."
-                  />
-                </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Tìm kiếm
+              </label>
+              <div className="relative">
+                <Search
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                  size={16}
+                />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-sm"
+                  placeholder="Tìm theo tên hoặc mã hàng hóa..."
+                />
               </div>
             </div>
 
             {/* Department filters cho Manager và Admin */}
             {(userRole === "manager" || userRole === "admin") && (
-              <div className="border-t pt-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Filter size={16} className="text-gray-500" />
-                  <span className="text-sm font-medium text-gray-700">
-                    Lọc theo phòng ban
-                  </span>
-                </div>
-                {renderDepartmentFilters()}
-              </div>
-            )}
+              <>
+                {/* Filter cho Admin - Cấp 2 */}
+                {userRole === "admin" && (
+                  <div className="min-w-0 flex-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Phòng ban cấp 2
+                    </label>
+                    <select
+                      value={departmentFilters.selectedCap2}
+                      onChange={(e) => handleCap2Change(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-sm"
+                    >
+                      <option value="">-- Tất cả cấp 2 --</option>
+                      {departmentFilters.cap2List.map((dept) => (
+                        <option key={dept.id} value={dept.id}>
+                          {dept.ten_phong_ban}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
-            {/* View mode toggle cho Admin/Manager khi xem tổng hợp */}
-            {isAggregatedView && (
-              <div className="border-t pt-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Layers size={16} className="text-gray-500" />
-                  <span className="text-sm font-medium text-gray-700">
-                    Chế độ xem
-                  </span>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setViewMode("aggregated")}
-                    className={`px-4 py-2 text-sm rounded-lg flex items-center gap-2 ${
-                      viewMode === "aggregated"
-                        ? "bg-green-100 text-green-700 border border-green-300"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
+                {/* Filter cho Manager và Admin - Cấp 3 */}
+                <div className="min-w-0 flex-1">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Phòng ban cấp 3
+                  </label>
+                  <select
+                    value={departmentFilters.selectedCap3}
+                    onChange={(e) => handleCap3Change(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-sm"
                   >
-                    <BarChart3 size={16} />
-                    Tổng hợp
-                  </button>
-                  <button
-                    onClick={() => setViewMode("detailed")}
-                    className={`px-4 py-2 text-sm rounded-lg flex items-center gap-2 ${
-                      viewMode === "detailed"
-                        ? "bg-green-100 text-green-700 border border-green-300"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
-                  >
-                    <Users size={16} />
-                    Chi tiết
-                  </button>
+                    <option value="">-- Tất cả cấp 3 --</option>
+                    {departmentFilters.cap3List
+                      .filter((dept) => {
+                        // Nếu admin và đã chọn cấp 2, chỉ hiển thị cấp 3 thuộc cấp 2 đó
+                        if (
+                          userRole === "admin" &&
+                          departmentFilters.selectedCap2
+                        ) {
+                          return (
+                            dept.phong_ban_cha_id ===
+                            parseInt(departmentFilters.selectedCap2)
+                          );
+                        }
+                        // Nếu manager, chỉ hiển thị cấp 3 thuộc quyền (sẽ do backend filter)
+                        return true;
+                      })
+                      .map((dept) => (
+                        <option key={dept.id} value={dept.id}>
+                          {dept.ten_phong_ban}
+                        </option>
+                      ))}
+                  </select>
                 </div>
-              </div>
+              </>
             )}
           </div>
         </div>
@@ -563,7 +512,7 @@ const HangHoa = () => {
                       <tr className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3">
                           <div className="flex items-center">
-                            {isAggregatedView && viewMode === "aggregated" && (
+                            {isAggregatedView && (
                               <button
                                 onClick={() => toggleExpanded(hangHoa.id)}
                                 className="mr-2 p-1 hover:bg-gray-200 rounded"
@@ -593,15 +542,14 @@ const HangHoa = () => {
                                   </span>
                                 </div>
                               )}
-                              {isAggregatedView &&
-                                viewMode === "aggregated" && (
-                                  <div className="text-xs text-blue-600 flex items-center mt-1">
-                                    <Users size={12} className="mr-1" />
-                                    <span>
-                                      {hangHoa.departments?.length || 0} đơn vị
-                                    </span>
-                                  </div>
-                                )}
+                              {isAggregatedView && (
+                                <div className="text-xs text-blue-600 flex items-center mt-1">
+                                  <Users size={12} className="mr-1" />
+                                  <span>
+                                    {hangHoa.departments?.length || 0} đơn vị
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -679,7 +627,6 @@ const HangHoa = () => {
 
                       {/* Expanded row cho aggregated view */}
                       {isAggregatedView &&
-                        viewMode === "aggregated" &&
                         expandedItems.has(hangHoa.id) &&
                         hangHoa.departments?.map((dept) => (
                           <tr
@@ -755,16 +702,33 @@ const HangHoa = () => {
               </div>
             )}
 
-            {/* Pagination */}
-            {pagination.pages > 1 && (
-              <div className="px-4 py-3 border-t border-gray-200">
+            {/* Pagination & Page size */}
+            <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <span>Hiển thị</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(parseInt(e.target.value) || 6);
+                    setCurrentPage(1);
+                  }}
+                  className="px-2 py-1 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                >
+                  <option value={6}>6</option>
+                  <option value={10}>10</option>
+                  <option value={15}>15</option>
+                  <option value={20}>20</option>
+                </select>
+                <span>dòng / trang</span>
+              </div>
+              {pagination.pages > 1 && (
                 <Pagination
                   currentPage={pagination.page || 1}
                   totalPages={pagination.pages || 1}
                   onPageChange={setCurrentPage}
                 />
-              </div>
-            )}
+              )}
+            </div>
           </>
         )}
       </div>

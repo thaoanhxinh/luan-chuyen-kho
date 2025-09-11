@@ -9,6 +9,8 @@ import {
   Filter,
   Package,
   Tag,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { hangHoaService } from "../services/hangHoaService";
 import { formatDate } from "../utils/helpers";
@@ -53,8 +55,8 @@ const LoaiHangHoaForm = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.ma_loai.trim() || !formData.ten_loai.trim()) {
-      toast.error("Vui lòng điền đầy đủ thông tin bắt buộc");
+    if (!formData.ten_loai.trim()) {
+      toast.error("Vui lòng nhập tên loại hàng hóa");
       return;
     }
 
@@ -62,7 +64,13 @@ const LoaiHangHoaForm = ({
       setIsSubmitting(true);
 
       if (mode === "create") {
-        await hangHoaService.createLoaiHangHoa(formData);
+        // Cho phép để trống ma_loai để backend tự sinh
+        const payload = {
+          ten_loai: formData.ten_loai,
+          mo_ta: formData.mo_ta,
+          ...(formData.ma_loai?.trim() ? { ma_loai: formData.ma_loai } : {}),
+        };
+        await hangHoaService.createLoaiHangHoa(payload);
         toast.success("Tạo loại hàng hóa thành công");
       } else {
         await hangHoaService.updateLoaiHangHoa(data.id, formData);
@@ -84,21 +92,23 @@ const LoaiHangHoaForm = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Mã loại <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            name="ma_loai"
-            value={formData.ma_loai}
-            onChange={handleChange}
-            disabled={mode === "edit"}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
-            placeholder="Nhập mã loại hàng hóa"
-            maxLength={20}
-          />
-        </div>
+        {mode === "edit" && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Mã loại
+            </label>
+            <input
+              type="text"
+              name="ma_loai"
+              value={formData.ma_loai}
+              onChange={handleChange}
+              disabled
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
+              placeholder="Hệ thống tự sinh khi tạo mới"
+              maxLength={20}
+            />
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -229,9 +239,14 @@ const LoaiHangHoa = () => {
   // Data states
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [expanded, setExpanded] = useState({});
 
-  const loaiHangHoaList = data?.data?.items || [];
-  const pagination = data?.data?.pagination || {};
+  const loaiHangHoaList = data?.message?.data || [];
+  const pagination = {
+    page: currentPage,
+    pages: Math.ceil((data?.message?.total || 0) / 20),
+    total: data?.message?.total || 0,
+  };
 
   const fetchData = async () => {
     try {
@@ -271,6 +286,31 @@ const LoaiHangHoa = () => {
   const handleEdit = (item) => {
     setSelectedItem(item);
     setShowEditModal(true);
+  };
+
+  const toggleExpand = async (item) => {
+    const isOpen = expanded[item.id]?.open;
+    if (isOpen) {
+      setExpanded((prev) => ({
+        ...prev,
+        [item.id]: { ...prev[item.id], open: false },
+      }));
+      return;
+    }
+    // Fetch detail to get danh_sach_hang_hoa filtered by backend permissions
+    try {
+      const detail = await hangHoaService.getLoaiHangHoaById(item.id);
+      setExpanded((prev) => ({
+        ...prev,
+        [item.id]: {
+          open: true,
+          children: detail?.data?.danh_sach_hang_hoa || [],
+        },
+      }));
+    } catch (e) {
+      console.error("Load children error:", e);
+      toast.error("Không tải được danh sách hàng hóa của loại này");
+    }
   };
 
   const handleDelete = async (id) => {
@@ -313,23 +353,10 @@ const LoaiHangHoa = () => {
         Icon={Archive}
       />
 
-      <div className="flex justify-end">
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors"
-        >
-          <Plus size={16} />
-          <span>Thêm loại hàng hóa</span>
-        </button>
-      </div>
-
-      {/* Filters */}
+      {/* Search and Add button in same row */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-3">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tìm kiếm
-            </label>
+        <div className="flex gap-4">
+          <div className="flex-1">
             <div className="relative">
               <Search
                 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
@@ -344,14 +371,20 @@ const LoaiHangHoa = () => {
               />
             </div>
           </div>
-
-          <div className="flex items-end">
+          <div className="flex gap-2">
             <button
               onClick={() => setSearchTerm("")}
-              className="w-full px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center space-x-1"
+              className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-1"
             >
               <Filter size={14} />
               <span>Xóa bộ lọc</span>
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors"
+            >
+              <Plus size={16} />
+              <span>Thêm loại hàng hóa</span>
             </button>
           </div>
         </div>
@@ -397,59 +430,109 @@ const LoaiHangHoa = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {loaiHangHoaList.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center">
-                          <Tag className="h-4 w-4 text-purple-600 mr-2" />
-                          <span className="text-sm font-medium text-gray-900 truncate">
-                            {item.ma_loai}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-sm text-gray-900 font-medium truncate">
-                          {item.ten_loai}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-sm text-gray-900 truncate">
-                          {item.mo_ta || "-"}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-sm text-gray-900">
-                          {formatDate(item.created_at)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex items-center justify-center space-x-1">
-                          <button
-                            onClick={() => handleViewDetail(item)}
-                            className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-all"
-                            title="Xem chi tiết"
-                          >
-                            <Eye size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleEdit(item)}
-                            className="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-all"
-                            title="Chỉnh sửa"
-                          >
-                            <Edit size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(item.id)}
-                            className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-all"
-                            title="Xóa"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                    <React.Fragment key={item.id}>
+                      <tr className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center">
+                            <button
+                              onClick={() => toggleExpand(item)}
+                              className="mr-2 p-1 hover:bg-gray-200 rounded"
+                              title={
+                                expanded[item.id]?.open ? "Thu gọn" : "Mở rộng"
+                              }
+                            >
+                              {expanded[item.id]?.open ? (
+                                <ChevronDown size={16} />
+                              ) : (
+                                <ChevronRight size={16} />
+                              )}
+                            </button>
+                            <div className="flex-1">
+                              <div className="flex items-center">
+                                <Tag className="h-4 w-4 text-purple-600 mr-2" />
+                                <span className="text-sm font-medium text-gray-900 truncate">
+                                  {item.ma_loai}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm text-gray-900 truncate">
+                            {item.ten_loai}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm text-gray-900 truncate">
+                            {item.mo_ta || "-"}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm text-gray-900">
+                            {formatDate(item.created_at)}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center space-x-1">
+                            <button
+                              onClick={() => handleViewDetail(item)}
+                              className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-all"
+                              title="Xem chi tiết"
+                            >
+                              <Eye size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleEdit(item)}
+                              className="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-all"
+                              title="Chỉnh sửa"
+                            >
+                              <Edit size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(item.id)}
+                              className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-all"
+                              title="Xóa"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {expanded[item.id]?.open && (
+                        <tr className="bg-gray-50">
+                          <td colSpan={5} className="px-6 py-3">
+                            {(expanded[item.id]?.children || []).length ===
+                            0 ? (
+                              <div className="text-sm text-gray-500">
+                                Không có hàng hóa thuộc loại này trong đơn vị
+                                của bạn
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {(expanded[item.id].children || []).map(
+                                  (hh) => (
+                                    <div
+                                      key={hh.id}
+                                      className="flex items-center justify-between p-2 bg-white border rounded"
+                                    >
+                                      <div className="text-sm text-gray-800">
+                                        <span className="font-medium mr-2">
+                                          {hh.ma_hang_hoa}
+                                        </span>
+                                        {hh.ten_hang_hoa}
+                                        <span className="text-gray-500 ml-2">
+                                          ({hh.don_vi_tinh})
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>

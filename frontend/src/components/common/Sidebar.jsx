@@ -552,12 +552,17 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
         path: "/admin/nhan-vien",
         icon: Users,
       },
-      {
-        key: "admin-departments",
-        title: "Quản lý phòng ban",
-        path: "/admin/phong-ban",
-        icon: Building2,
-      },
+      // Chỉ admin mới thấy trang quản lý phòng ban
+      ...(user?.role === "admin"
+        ? [
+            {
+              key: "admin-departments",
+              title: "Quản lý phòng ban",
+              path: "/admin/phong-ban",
+              icon: Building2,
+            },
+          ]
+        : []),
       accountItem,
     ];
   }

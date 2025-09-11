@@ -15,7 +15,7 @@ const NotificationBell = ({ compact = false }) => {
   const [page, setPage] = useState(1);
   const dropdownRef = useRef(null);
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside (không ẩn icon chỉ đóng menu)
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -194,10 +194,10 @@ const NotificationBell = ({ compact = false }) => {
 
   if (compact) {
     return (
-      <div className="relative">
+      <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="relative p-2 text-gray-400 hover:text-white transition-colors"
+          className="relative p-2 text-gray-500 hover:text-gray-700 transition-colors rounded-full hover:bg-gray-100"
         >
           <Bell size={20} />
           {unreadCount > 0 && (
@@ -208,7 +208,7 @@ const NotificationBell = ({ compact = false }) => {
         </button>
 
         {isOpen && (
-          <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+          <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50">
             <div className="p-4 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900">
@@ -229,7 +229,8 @@ const NotificationBell = ({ compact = false }) => {
               {loading && notifications.length === 0 ? (
                 <div className="p-4 text-center text-gray-500">Đang tải...</div>
               ) : notifications.length === 0 ? (
-                <div className="p-4 text-center text-gray-500">
+                <div className="p-6 text-center text-gray-500">
+                  <Bell size={28} className="mx-auto mb-2 text-gray-300" />
                   Không có thông báo
                 </div>
               ) : (
@@ -239,7 +240,9 @@ const NotificationBell = ({ compact = false }) => {
                       key={notification.id}
                       onClick={() => handleNotificationClick(notification)}
                       className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
-                        notification.trang_thai === "unread" ? "bg-blue-50" : ""
+                        notification.trang_thai === "unread"
+                          ? "bg-blue-50 border-l-4 border-blue-400"
+                          : ""
                       }`}
                     >
                       <div className="flex items-start space-x-3">

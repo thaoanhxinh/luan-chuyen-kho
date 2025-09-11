@@ -122,7 +122,7 @@ const RevisionRequestModal = ({ isOpen, onClose, onSubmit, phieu }) => {
 
 const ActionDropdown = ({ phieu, onAction, user }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState({ top: 0, right: 0 });
+  const [isAbove, setIsAbove] = useState(false);
   const dropdownRef = useRef(null);
   const buttonRef = useRef(null);
 
@@ -145,14 +145,8 @@ const ActionDropdown = ({ phieu, onAction, user }) => {
       const viewportHeight = window.innerHeight;
       const spaceBelow = viewportHeight - rect.bottom;
       const spaceAbove = rect.top;
-
-      // Nếu không đủ chỗ ở dưới (ít hơn 200px) và có nhiều chỗ ở trên hơn, hiển thị lên trên
       const shouldShowAbove = spaceBelow < 200 && spaceAbove > spaceBelow;
-
-      // Tính toán vị trí cho absolute positioning
-      const top = shouldShowAbove ? -8 : 32; // 32px để hiển thị dưới nút
-
-      setPosition({ top, right: 0 });
+      setIsAbove(shouldShowAbove);
     }
     setIsOpen(!isOpen);
   };
@@ -170,16 +164,17 @@ const ActionDropdown = ({ phieu, onAction, user }) => {
   const canEdit =
     isOwner && ["draft", "revision_required"].includes(phieu.trang_thai);
 
-  // LOGIC ĐÚNG: Quyền approve - admin/manager với phiếu confirmed/pending_approval/pending_level3_approval
+  // LOGIC ĐÚNG: Quyền approve
+  // - Admin/Manager: chỉ approve khi KHÔNG phải điều chuyển ở trạng thái pending_level3_approval
+  // - pending_level3_approval của điều chuyển: chỉ cấp 3 được duyệt (nút riêng)
   const canApprove =
-    (isAdmin ||
-      (isManager &&
-        phieu.loai_phieu !== "dieu_chuyen" && // ✅ SỬA: Manager không duyệt dieu_chuyen
-        ["confirmed", "pending_approval", "pending_level3_approval"].includes(
-          phieu.trang_thai
-        ))) &&
+    (isAdmin || isManager) &&
     ["confirmed", "pending_approval", "pending_level3_approval"].includes(
       phieu.trang_thai
+    ) &&
+    !(
+      phieu.loai_phieu === "dieu_chuyen" &&
+      phieu.trang_thai === "pending_level3_approval"
     );
 
   // LOGIC ĐÚNG: Quyền yêu cầu sửa - admin/manager với phiếu pending
@@ -202,8 +197,8 @@ const ActionDropdown = ({ phieu, onAction, user }) => {
     user.phong_ban?.cap_bac === 3 &&
     phieu.trang_thai === "pending_level3_approval" &&
     phieu.loai_phieu === "dieu_chuyen" &&
-    phieu.phong_ban?.id === user.phong_ban_id;
-
+    //phieu.phong_ban?.id === user.phong_ban_id;
+    phieu.phong_ban_cung_cap?.id === user.phong_ban_id;
   // Debug log để kiểm tra
   if (
     phieu.loai_phieu === "dieu_chuyen" &&
@@ -360,12 +355,12 @@ const ActionDropdown = ({ phieu, onAction, user }) => {
 
       {isOpen && (
         <div
-          className="absolute right-0 w-52 bg-white rounded-lg shadow-lg border border-gray-200 z-[9999] max-h-80"
-          style={{
-            top: `${position.top}px`,
-          }}
+          className={`absolute right-0 w-52 bg-white rounded-lg shadow-lg border border-gray-200 z-[9999] ${
+            isAbove ? "-translate-y-full -mt-2" : "mt-2"
+          }`}
+          style={{ top: 0 }}
         >
-          <div className="py-1 max-h-80 overflow-y-auto">
+          <div className="py-1">
             {visibleActions.map((action) => {
               const IconComponent = action.icon;
               return (
@@ -400,6 +395,7 @@ const NhapKho = () => {
   };
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(6);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState(getInitialTab());
   const [highlightId, setHighlightId] = useState(null);
@@ -439,12 +435,23 @@ const NhapKho = () => {
   const getTabStatusFilter = (tabKey) => {
     const tabConfig = TAB_CONFIG.NHAP_KHO.find((tab) => tab.key === tabKey);
 
+    console.log("🔍 DEBUG getTabStatusFilter:", {
+      tabKey,
+      tabConfig,
+      userRole: user.role,
+      hasRoleFilter: !!tabConfig?.roleFilter,
+      roleFilter: tabConfig?.roleFilter,
+    });
+
     // Check roleFilter
     if (tabConfig?.roleFilter && !tabConfig.roleFilter.includes(user.role)) {
+      console.log("🔍 DEBUG - User không có quyền xem tab này");
       return []; // User không có quyền xem tab này
     }
 
-    return tabConfig?.status || [];
+    const result = tabConfig?.status || [];
+    console.log("🔍 DEBUG - getTabStatusFilter result:", result);
+    return result;
   };
 
   const fetchData = async () => {
@@ -453,9 +460,16 @@ const NhapKho = () => {
 
       // Build filters based on active tab
       const statusFilter = getTabStatusFilter(activeTab);
+
+      console.log("🔍 DEBUG frontend fetchData:", {
+        activeTab,
+        statusFilter,
+        statusFilterLength: statusFilter?.length,
+      });
+
       const queryParams = {
         page: currentPage,
-        limit: 20,
+        limit: pageSize,
         search: searchTerm,
         sort_by: sortConfig.key,
         sort_direction: sortConfig.direction,
@@ -464,15 +478,11 @@ const NhapKho = () => {
 
       // Add status filter if not "tat_ca"
       if (activeTab !== "tat_ca" && statusFilter.length > 0) {
-        if (statusFilter.length === 1) {
-          queryParams.trang_thai = statusFilter[0];
-        } else {
-          // Multiple statuses - backend should handle array
-          queryParams.trang_thai = statusFilter;
-        }
+        // Always pass array to service, let service handle the conversion
+        queryParams.trang_thai = statusFilter;
       }
 
-      console.log("Fetching with params:", queryParams);
+      console.log("🔍 DEBUG Fetching with params:", queryParams);
 
       const response = await nhapKhoService.getList(queryParams);
       setData(response);
@@ -502,13 +512,25 @@ const NhapKho = () => {
           });
           counts[tab.key] = response.data?.pagination?.total || 0;
         } else {
-          const response = await nhapKhoService.getList({
+          // ✅ FIX: Xử lý array status đúng cách
+          const queryParams = {
             page: 1,
             limit: 1,
             search: searchTerm,
-            trang_thai: tab.status,
             ...filters,
-          });
+          };
+
+          // Add status filter if tab has status
+          if (tab.status && tab.status.length > 0) {
+            if (tab.status.length === 1) {
+              queryParams.trang_thai = tab.status[0];
+            } else {
+              // Multiple statuses - send as array
+              queryParams.trang_thai = tab.status;
+            }
+          }
+
+          const response = await nhapKhoService.getList(queryParams);
           counts[tab.key] = response.data?.pagination?.total || 0;
         }
       }
@@ -574,7 +596,7 @@ const NhapKho = () => {
   useEffect(() => {
     // Reset to first page when changing tabs or filters
     setCurrentPage(1);
-  }, [activeTab, searchTerm, filters, sortConfig]);
+  }, [activeTab, searchTerm, filters, sortConfig, pageSize]);
 
   useEffect(() => {
     fetchData(); // FIX: Đổi từ loadData() thành fetchData()
@@ -588,7 +610,15 @@ const NhapKho = () => {
 
   // Function để update URL khi đổi tab
   const handleTabChange = (newTab) => {
-    console.log("🔄 Changing tab from", activeTab, "to", newTab);
+    console.log("🔄 DEBUG - Changing tab from", activeTab, "to", newTab);
+
+    // Debug: Kiểm tra status filter cho tab mới
+    const newStatusFilter = getTabStatusFilter(newTab);
+    console.log("🔄 DEBUG - New tab status filter:", {
+      newTab,
+      newStatusFilter,
+      newStatusFilterLength: newStatusFilter?.length,
+    });
 
     setActiveTab(newTab);
     setCurrentPage(1);
@@ -975,7 +1005,7 @@ const NhapKho = () => {
           <div className="p-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
               {/* Search */}
-              <div className="col-span-1 sm:col-span-2">
+              <div className="col-span-1 sm:col-span-1">
                 <div className="relative">
                   <Search
                     className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
@@ -1077,7 +1107,7 @@ const NhapKho = () => {
             <>
               {/* Desktop Table */}
               <div className="hidden lg:block">
-                <table className="w-full table-fixed">
+                <table className="w-full table-auto">
                   <thead className="bg-gray-50">
                     <tr>
                       <th
@@ -1311,16 +1341,33 @@ const NhapKho = () => {
                 </div>
               )}
 
-              {/* Pagination */}
-              {pagination.pages > 1 && (
-                <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+              {/* Pagination & Page size */}
+              <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <span>Hiển thị</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(parseInt(e.target.value) || 6);
+                      setCurrentPage(1);
+                    }}
+                    className="px-2 py-1 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  >
+                    <option value={6}>6</option>
+                    <option value={10}>10</option>
+                    <option value={15}>15</option>
+                    <option value={20}>20</option>
+                  </select>
+                  <span>dòng / trang</span>
+                </div>
+                {pagination.pages > 1 && (
                   <Pagination
                     currentPage={pagination.page || 1}
                     totalPages={pagination.pages || 1}
                     onPageChange={setCurrentPage}
                   />
-                </div>
-              )}
+                )}
+              </div>
             </>
           )}
         </div>

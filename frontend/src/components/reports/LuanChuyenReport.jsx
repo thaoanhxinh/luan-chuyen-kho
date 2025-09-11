@@ -55,11 +55,12 @@ const LuanChuyenReport = () => {
       console.log("Exporting Excel with filters:", apiFilters);
 
       // Hiện form nhập thông tin chữ ký
-      const signatures = await showSignatureForm();
+      const modalResult = await showSignatureForm();
+      const { signatures, range } = modalResult;
 
       // Goi dung method name trong service với thông tin chữ ký
       const blob = await baoCaoService.exportLuanChuyenKho(
-        apiFilters,
+        { ...apiFilters, ...range },
         signatures
       );
 
@@ -79,6 +80,10 @@ const LuanChuyenReport = () => {
 
       toast.success("Xuat Excel thanh cong!");
     } catch (error) {
+      if (error && error.message === "User cancelled") {
+        // Người dùng hủy, không báo lỗi
+        return;
+      }
       console.error("Export Excel error:", error);
       toast.error("Loi khi xuat Excel");
     } finally {
@@ -93,27 +98,53 @@ const LuanChuyenReport = () => {
       modal.className =
         "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50";
 
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1;
+      const currentYear = now.getFullYear();
+      const currentQuarter = Math.ceil(currentMonth / 3);
+
       modal.innerHTML = `
-        <div class="bg-white rounded-lg p-6 w-96 max-w-md mx-4">
+        <div class="bg-white rounded-lg p-6 w-[28rem] max-w-lg mx-4">
           <h3 class="text-lg font-semibold mb-4">Thông tin xuất Excel</h3>
-          <form id="signatureForm">
-            <div class="mb-4">
+          <form id="signatureForm" class="space-y-4">
+            <div class="grid grid-cols-3 gap-3">
+              <div class="col-span-1">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Kiểu thời gian</label>
+                <select id="timeUnit" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="month">Tháng</option>
+                  <option value="quarter">Quý</option>
+                  <option value="year">Năm</option>
+                </select>
+              </div>
+              <div class="col-span-1">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Giá trị</label>
+                <select id="timeValueSelect" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
+              </div>
+              <div class="col-span-1">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Năm</label>
+                <select id="timeYear" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
+              </div>
+            </div>
+
+            <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Số biểu số</label>
               <input type="text" id="bieuSo" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="VD: 07.1/BCQT" value="07.1/BCQT" required>
             </div>
-            <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Người lập biểu</label>
-              <input type="text" id="nguoiLap" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nhập tên người lập" required>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Người lập biểu</label>
+                <input type="text" id="nguoiLap" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nhập tên người lập" required>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Trưởng ban Vật tư</label>
+                <input type="text" id="truongBan" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nhập tên trưởng ban" required>
+              </div>
             </div>
-            <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Trưởng ban Vật tư</label>
-              <input type="text" id="truongBan" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nhập tên trưởng ban" required>
-            </div>
-            <div class="mb-6">
+            <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">TL. TƯ LỆNH CHỦ NHIỆM HẬU CẦN - KỸ THUẬT</label>
               <input type="text" id="chuNhiem" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nhập tên chủ nhiệm" required>
             </div>
-            <div class="flex justify-end space-x-3">
+            <div class="flex justify-end space-x-3 pt-2">
               <button type="button" id="cancelBtn" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50">Hủy</button>
               <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Xuất Excel</button>
             </div>
@@ -125,6 +156,79 @@ const LuanChuyenReport = () => {
 
       const form = modal.querySelector("#signatureForm");
       const cancelBtn = modal.querySelector("#cancelBtn");
+      const unitEl = modal.querySelector("#timeUnit");
+      const valueEl = modal.querySelector("#timeValueSelect");
+      const yearEl = modal.querySelector("#timeYear");
+
+      const populateYears = () => {
+        yearEl.innerHTML = "";
+        const years = [currentYear, currentYear - 1];
+        years.forEach((y) => {
+          const opt = document.createElement("option");
+          opt.value = y;
+          opt.textContent = y;
+          if (y === currentYear) opt.selected = true;
+          yearEl.appendChild(opt);
+        });
+      };
+
+      const populateValues = () => {
+        const unit = unitEl.value;
+        valueEl.innerHTML = "";
+        if (unit === "month") {
+          for (let m = 1; m <= 12; m++) {
+            const opt = document.createElement("option");
+            opt.value = m;
+            opt.textContent = `Tháng ${m}`;
+            if (m === currentMonth) opt.selected = true;
+            valueEl.appendChild(opt);
+          }
+        } else if (unit === "quarter") {
+          for (let q = 1; q <= 4; q++) {
+            const opt = document.createElement("option");
+            opt.value = q;
+            opt.textContent = `Quý ${q}`;
+            if (q === currentQuarter) opt.selected = true;
+            valueEl.appendChild(opt);
+          }
+        } else {
+          // year unit uses a placeholder value = current year
+          const opt = document.createElement("option");
+          opt.value = currentYear;
+          opt.textContent = `Năm ${currentYear}`;
+          opt.selected = true;
+          valueEl.appendChild(opt);
+        }
+      };
+
+      populateYears();
+      populateValues();
+      unitEl.addEventListener("change", populateValues);
+
+      const computeRange = () => {
+        const unit = unitEl.value;
+        const value = parseInt(valueEl.value, 10);
+        const year = parseInt(yearEl.value, 10);
+        let tuNgay, denNgay;
+        if (unit === "month") {
+          const month = Math.min(Math.max(value, 1), 12) - 1;
+          tuNgay = new Date(year, month, 1);
+          denNgay = new Date(year, month + 1, 0);
+        } else if (unit === "quarter") {
+          const q = Math.min(Math.max(value, 1), 4);
+          const startMonth = (q - 1) * 3;
+          tuNgay = new Date(year, startMonth, 1);
+          denNgay = new Date(year, startMonth + 3, 0);
+        } else {
+          tuNgay = new Date(year, 0, 1);
+          denNgay = new Date(year, 12, 0);
+        }
+        const toISO = (d) =>
+          new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+            .toISOString()
+            .split("T")[0];
+        return { tu_ngay: toISO(tuNgay), den_ngay: toISO(denNgay) };
+      };
 
       form.addEventListener("submit", (e) => {
         e.preventDefault();
@@ -134,8 +238,9 @@ const LuanChuyenReport = () => {
           truong_ban: document.getElementById("truongBan").value,
           chu_nhiem: document.getElementById("chuNhiem").value,
         };
+        const range = computeRange();
         document.body.removeChild(modal);
-        resolve(signatures);
+        resolve({ signatures, range });
       });
 
       cancelBtn.addEventListener("click", () => {
@@ -721,7 +826,7 @@ const LuanChuyenReport = () => {
               <Download
                 className={`h-4 w-4 ${loading ? "animate-bounce" : ""}`}
               />
-              <span>Xuáº¥t Excel</span>
+              <span>Xuất Excel</span>
             </button>
           </div>
         </div>

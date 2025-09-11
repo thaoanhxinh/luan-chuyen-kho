@@ -247,7 +247,7 @@ const CreateKiemKeForm = ({ onSuccess, onCancel }) => {
           response.data?.so_phieu || ""
         }. Phiếu sẽ ở trạng thái nháp và chỉ cập nhật tồn kho khi được duyệt.`
       );
-      onSuccess?.();
+      onSuccess?.("create");
     } catch (error) {
       console.error("Submit error:", error);
       toast.dismiss("processing");

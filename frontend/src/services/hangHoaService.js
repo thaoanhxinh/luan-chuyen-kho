@@ -180,6 +180,11 @@ export const hangHoaService = {
     return response.data;
   },
 
+  async getLoaiHangHoaById(id) {
+    const response = await api.get(`/loai-hang-hoa/${id}`);
+    return response.data;
+  },
+
   async getLoaiHangHoaSuggestions(search = "", limit = 10) {
     const response = await api.get("/loai-hang-hoa/suggestions", {
       params: { search, limit },

@@ -817,7 +817,6 @@ const xuatKhoController = {
       const {
         page = 1,
         limit = 20,
-        trang_thai,
         loai_xuat,
         phong_ban_filter,
         search,
@@ -826,6 +825,31 @@ const xuatKhoController = {
         sort_by = "created_at",
         sort_direction = "desc",
       } = query;
+
+      // ✅ Chuẩn hóa tham số trạng thái: hỗ trợ trang_thai, trang_thai[], và CSV
+      let trang_thai = query.trang_thai ?? query["trang_thai[]"] ?? null;
+
+      console.log("🔍 DEBUG xuatKho statusFilter:", {
+        trang_thai,
+        "trang_thai[]": query["trang_thai[]"],
+        type: typeof trang_thai,
+        isArray: Array.isArray(trang_thai),
+        rawQuery: query,
+      });
+      if (typeof trang_thai === "string") {
+        // "confirmed,pending_level3_approval" hoặc "confirmed"
+        trang_thai = trang_thai.includes(",")
+          ? trang_thai
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [trang_thai];
+      }
+
+      // ✅ FIX: Đảm bảo trang_thai luôn là array nếu có nhiều giá trị
+      if (trang_thai && !Array.isArray(trang_thai)) {
+        trang_thai = [trang_thai];
+      }
 
       // ✅ Validate và parse parameters
       const validatedPage = Math.max(1, parseInt(page) || 1);
@@ -838,21 +862,73 @@ const xuatKhoController = {
 
       // ✅ QUY TẮC XEM: chỉ cấp 3 thấy phiếu của mình, admin/manager thấy tất cả
       if (user.role === "user" && user.phong_ban?.cap_bac === 3) {
-        // User cấp 3: CHỈ thấy phiếu phòng ban mình tạo (không thấy phiếu được gửi đến)
-        whereConditions.push(`px.phong_ban_id = $${paramIndex}`);
-        queryParams.push(user.phong_ban_id);
-        paramIndex++;
-      } else if (user.role === "manager") {
-        // Manager thấy phiếu của các phòng ban thuộc quyền quản lý
-        whereConditions.push(`EXISTS (
-          SELECT 1 FROM phong_ban pb 
-          WHERE pb.id = px.phong_ban_id 
-          AND (pb.phong_ban_cha_id = $${paramIndex} OR pb.id = $${paramIndex})
+        // Cấp 3: xem phiếu của đơn vị mình tạo HOẶC phiếu mà đơn vị mình là bên nhận (chỉ khi chờ cấp 3 duyệt)
+        whereConditions.push(`(
+          px.phong_ban_id = $${paramIndex} OR 
+          (px.phong_ban_nhan_id = $${
+            paramIndex + 1
+          } AND px.trang_thai = 'pending_level3_approval')
         )`);
-        queryParams.push(user.phong_ban_id);
-        paramIndex++;
+        queryParams.push(user.phong_ban_id, user.phong_ban_id);
+        paramIndex += 2;
+      } else if (user.role === "manager") {
+        // ✅ FIX: Manager thấy phiếu của các phòng ban thuộc quyền quản lý
+        // NHƯNG nếu có status filter cụ thể (như tab "Chờ duyệt"),
+        // thì cho phép xem tất cả phiếu có trạng thái đó
+        if (
+          trang_thai &&
+          Array.isArray(trang_thai) &&
+          (trang_thai.includes("confirmed") ||
+            trang_thai.includes("pending_level3_approval"))
+        ) {
+          // Tab "Chờ duyệt" - cho phép xem tất cả phiếu confirmed/pending_level3_approval
+          console.log(
+            "🔍 Manager - Tab Chờ duyệt: cho phép xem tất cả phiếu confirmed/pending_level3_approval",
+            "trang_thai:",
+            trang_thai,
+            "includes confirmed:",
+            trang_thai.includes("confirmed"),
+            "includes pending_level3_approval:",
+            trang_thai.includes("pending_level3_approval")
+          );
+          // Không thêm điều kiện phòng ban - cho phép xem tất cả
+        } else {
+          // Các tab khác - chỉ xem phiếu của phòng ban thuộc quyền quản lý
+          whereConditions.push(`EXISTS (
+            SELECT 1 FROM phong_ban pb 
+            WHERE pb.id = px.phong_ban_id 
+            AND (pb.phong_ban_cha_id = $${paramIndex} OR pb.id = $${paramIndex})
+          )`);
+          queryParams.push(user.phong_ban_id);
+          paramIndex++;
+        }
       }
       // Admin xem tất cả (không thêm điều kiện)
+      // ✅ FIX: Admin cũng cần xử lý logic tương tự cho tab "Chờ duyệt"
+      else if (user.role === "admin") {
+        // Admin xem tất cả phiếu, không cần thêm điều kiện phòng ban
+        console.log("🔍 Admin - xem tất cả phiếu");
+
+        // ✅ FIX: Admin cũng cần xử lý logic tương tự cho tab "Chờ duyệt"
+        if (
+          trang_thai &&
+          Array.isArray(trang_thai) &&
+          (trang_thai.includes("confirmed") ||
+            trang_thai.includes("pending_level3_approval"))
+        ) {
+          // Tab "Chờ duyệt" - cho phép xem tất cả phiếu confirmed/pending_level3_approval
+          console.log(
+            "🔍 Admin - Tab Chờ duyệt: cho phép xem tất cả phiếu confirmed/pending_level3_approval",
+            "trang_thai:",
+            trang_thai,
+            "includes confirmed:",
+            trang_thai.includes("confirmed"),
+            "includes pending_level3_approval:",
+            trang_thai.includes("pending_level3_approval")
+          );
+          // Không thêm điều kiện phòng ban - cho phép xem tất cả
+        }
+      }
 
       // Lọc theo trạng thái
       if (trang_thai) {
@@ -1191,6 +1267,17 @@ const xuatKhoController = {
           so_seri_xuat: item.so_seri_xuat || "",
           ghi_chu: item.ghi_chu || "",
         })),
+        // ✅ Helper flag cho frontend hiển thị nút Duyệt
+        can_approve:
+          // Bước 2 luân chuyển: CẤP 3 BÊN XUẤT (đơn vị tạo PX) duyệt
+          (user.role === "user" &&
+            user.phong_ban?.cap_bac === 3 &&
+            phieuData.trang_thai === "pending_level3_approval" &&
+            user.phong_ban_id === phieuData.phong_ban_id) ||
+          // Sử dụng nội bộ hoặc bước 1 luân chuyển: admin/manager duyệt khi confirmed
+          (["admin", "manager"].includes(user.role) &&
+            phieuData.trang_thai === "confirmed" &&
+            ["don_vi_su_dung", "don_vi_nhan"].includes(phieuData.loai_xuat)),
       };
 
       sendResponse(
@@ -1941,17 +2028,17 @@ const xuatKhoController = {
           approvalMessage =
             "Đã duyệt để luân chuyển (tạo phiếu nhập cho bên kia)";
         }
-        // Bước 2: Cấp 3 bên nhận duyệt khi pending_level3_approval
+        // Bước 2: Cấp 3 BÊN XUẤT (đơn vị 3B) duyệt khi pending_level3_approval
         if (
           user.role === "user" &&
           user.phong_ban?.cap_bac === 3 &&
-          user.phong_ban_id === phieu.phong_ban_nhan_id &&
+          user.phong_ban_id === phieu.phong_ban_id &&
           phieu.trang_thai === "pending_level3_approval"
         ) {
-          step = "receiver_step2";
+          step = "exporter_step2";
           approvalMessage = `${
-            phieu.phong_ban_nhan_ten || "Đơn vị nhận"
-          } duyệt nhận hàng`;
+            phieu.ten_phong_ban || "Đơn vị xuất"
+          } duyệt luân chuyển cho đơn vị nhận`;
         }
       } else if (phieu.loai_xuat === "don_vi_su_dung") {
         // ✅ WORKFLOW SỬ DỤNG NỘI BỘ: Admin/Manager duyệt 1 lần là xong (đơn vị nhận là chính nó)
@@ -2065,7 +2152,7 @@ const xuatKhoController = {
             `Trạng thái không được lưu (hiện tại: ${persisted || "null"})`
           );
         }
-      } else if (step === "receiver_step2") {
+      } else if (step === "exporter_step2") {
         // ✅ WORKFLOW ĐIỀU CHUYỂN: Đồng bộ cả 2 phiếu khi cấp 3 duyệt
         await this.handleLevel3DieuChuyenApproval(client, phieu, user);
         await this.createNotificationForApprove(client, phieu, user);

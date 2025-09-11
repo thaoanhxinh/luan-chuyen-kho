@@ -41,62 +41,6 @@ api.interceptors.request.use(
 );
 
 // Response interceptor để log response và handle errors
-// api.interceptors.response.use(
-//   (response) => {
-//     console.log("✅ === API RESPONSE SUCCESS START ===");
-//     console.log("📊 Status:", response.status);
-//     console.log("📊 StatusText:", response.statusText);
-//     console.log("📦 Data:", response.data);
-//     console.log("🏷️ Headers:", response.headers);
-//     console.log("✅ === API RESPONSE SUCCESS END ===");
-//     return response;
-//   },
-//   (error) => {
-//     console.error("❌ === API RESPONSE ERROR START ===");
-//     console.error("⏰ Timestamp:", new Date().toISOString());
-
-//     if (error.response) {
-//       // Server responded with error status
-//       console.error("📊 Status:", error.response.status);
-//       console.error("📊 StatusText:", error.response.statusText);
-//       console.error("🔗 URL:", error.config?.url);
-//       console.error("🔗 Method:", error.config?.method?.toUpperCase());
-//       console.error("📦 Response Data:", error.response.data);
-//       console.error("🏷️ Response Headers:", error.response.headers);
-
-//       // Log cụ thể cho lỗi 400
-//       if (error.response.status === 400) {
-//         console.error("🔍 BAD REQUEST DETAILS:");
-//         console.error(
-//           "   - Request URL:",
-//           error.config?.baseURL + error.config?.url
-//         );
-//         console.error("   - Request Data:", error.config?.data);
-//         console.error("   - Request Headers:", error.config?.headers);
-//       }
-
-//       // Log cụ thể cho lỗi 401
-//       if (error.response.status === 401) {
-//         console.error("🔐 UNAUTHORIZED - Token may be invalid or expired");
-//         // Clear token và redirect to login nếu cần
-//         localStorage.removeItem("token");
-//       }
-//     } else if (error.request) {
-//       // Request was made but no response received
-//       console.error("📡 No response received");
-//       console.error("🔗 Request URL:", error.config?.url);
-//       console.error("📡 Request details:", error.request);
-//     } else {
-//       // Something else happened
-//       console.error("⚙️ Request setup error:", error.message);
-//     }
-
-//     console.error("❌ === API RESPONSE ERROR END ===");
-//     return Promise.reject(error);
-//   }
-// );
-
-// Thay thế response interceptor hiện tại
 api.interceptors.response.use(
   (response) => {
     console.log("✅ === API RESPONSE SUCCESS START ===");
@@ -112,72 +56,38 @@ api.interceptors.response.use(
     console.error("⏰ Timestamp:", new Date().toISOString());
 
     if (error.response) {
-      const { status, data } = error.response;
-
-      console.error("📊 Status:", status);
+      // Server responded with error status
+      console.error("📊 Status:", error.response.status);
       console.error("📊 StatusText:", error.response.statusText);
       console.error("🔗 URL:", error.config?.url);
       console.error("🔗 Method:", error.config?.method?.toUpperCase());
-      console.error("📦 Response Data:", data);
+      console.error("📦 Response Data:", error.response.data);
+      console.error("🏷️ Response Headers:", error.response.headers);
 
-      // Hiển thị thông báo lỗi rõ ràng ra UI
-      let message =
-        data?.message ||
-        data?.error ||
-        (Array.isArray(data?.errors) && data.errors.join("\n")) ||
-        (typeof data === "string" ? data : "Có lỗi xảy ra. Vui lòng thử lại.");
-
-      // Một số mapping thông dụng
-      if (status === 400 && /invalid|sai|không đúng/i.test(message)) {
-        message = message;
-      }
-      if (status === 409 && /exists|đã tồn tại|duplicate/i.test(message)) {
-        message = message;
-      }
-      if (status === 422 && data?.errors && typeof data.errors === "object") {
-        // Gom validation errors dạng object { field: [messages] }
-        message = Object.entries(data.errors)
-          .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
-          .join("\n");
+      // Log cụ thể cho lỗi 400
+      if (error.response.status === 400) {
+        console.error("🔍 BAD REQUEST DETAILS:");
+        console.error(
+          "   - Request URL:",
+          error.config?.baseURL + error.config?.url
+        );
+        console.error("   - Request Data:", error.config?.data);
+        console.error("   - Request Headers:", error.config?.headers);
       }
 
-      try {
-        toast.error(message);
-      } catch (_) {}
-
-      // Enhanced error handling với specific cases
-      switch (status) {
-        case 401:
-          console.error("🔐 UNAUTHORIZED - Clearing token and redirecting");
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
-
-          if (!window.location.pathname.includes("/login")) {
-            window.location.href = "/login";
-          }
-          break;
-
-        case 403:
-          console.error("🚫 FORBIDDEN - Access denied");
-          break;
-
-        case 422:
-          console.error("🔍 VALIDATION ERROR - Invalid data");
-          break;
-
-        case 429:
-          console.error("⏱️ RATE LIMITED - Too many requests");
-          break;
-
-        case 500:
-          console.error("💥 SERVER ERROR - Internal server error");
-          break;
+      // Log cụ thể cho lỗi 401
+      if (error.response.status === 401) {
+        console.error("🔐 UNAUTHORIZED - Token may be invalid or expired");
+        // Clear token và redirect to login nếu cần
+        localStorage.removeItem("token");
       }
     } else if (error.request) {
+      // Request was made but no response received
       console.error("📡 No response received");
       console.error("🔗 Request URL:", error.config?.url);
       console.error("📡 Request details:", error.request);
     } else {
+      // Something else happened
       console.error("⚙️ Request setup error:", error.message);
     }
 
@@ -185,6 +95,8 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export default api;
 
 // Upload file với progress tracking
 export const uploadWithProgress = (url, formData, onProgress) => {
@@ -238,5 +150,3 @@ export const checkApiHealth = async () => {
     throw error;
   }
 };
-
-export default api;

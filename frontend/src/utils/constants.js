@@ -259,7 +259,8 @@ export const TAB_CONFIG = {
       count: 0,
       // ✅ Đối với nhập kho, hiển thị phiếu đã gửi chờ xử lý
       // (controller sử dụng 'confirmed' trước khi duyệt)
-      status: ["confirmed"],
+      // Điều chuyển: sau cấp 2 duyệt sẽ sang 'pending_level3_approval' để cấp 3 duyệt
+      status: ["confirmed", "pending_level3_approval"],
       description: "Tất cả phiếu đang chờ duyệt (mọi cấp)",
       // ✅ KHÔNG có roleFilter - tất cả role đều thấy
     },
@@ -474,12 +475,6 @@ export const DON_VI_TINH = [
   "Ống",
   "Chai",
   "Lon",
-  "Phần",
-  "Suất",
-  "Ngày",
-  "Giờ",
-  "Lần",
-  "Khác",
 ];
 
 // Message templates cho notifications

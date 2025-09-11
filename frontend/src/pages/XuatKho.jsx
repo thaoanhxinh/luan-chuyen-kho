@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   Plus,
   Search,
-  Filter,
   Eye,
   Edit,
   Send,
@@ -14,12 +13,8 @@ import {
   MoreVertical,
   ChevronUp,
   ChevronDown,
-  RefreshCw,
   Building,
   Calendar,
-  FileText,
-  Link2,
-  Info,
   Package,
 } from "lucide-react";
 import { xuatKhoService } from "../services/xuatKhoService";
@@ -122,7 +117,7 @@ const RevisionRequestModal = ({ isOpen, onClose, onSubmit }) => {
 // ✅ Component Dropdown Actions với logic permissions CHÍNH XÁC cho XUẤT KHO
 const ActionDropdown = ({ phieu, onAction, user }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState({ top: 0, right: 0 });
+  const [isAbove, setIsAbove] = useState(false);
   const dropdownRef = useRef(null);
   const buttonRef = useRef(null);
 
@@ -145,14 +140,8 @@ const ActionDropdown = ({ phieu, onAction, user }) => {
       const viewportHeight = window.innerHeight;
       const spaceBelow = viewportHeight - rect.bottom;
       const spaceAbove = rect.top;
-
-      // Nếu không đủ chỗ ở dưới (ít hơn 200px) và có nhiều chỗ ở trên hơn, hiển thị lên trên
       const shouldShowAbove = spaceBelow < 200 && spaceAbove > spaceBelow;
-
-      // Tính toán vị trí cho absolute positioning
-      const top = shouldShowAbove ? -8 : 32; // 32px để hiển thị dưới nút
-
-      setPosition({ top, right: 0 });
+      setIsAbove(shouldShowAbove);
     }
     setIsOpen(!isOpen);
   };
@@ -186,10 +175,9 @@ const ActionDropdown = ({ phieu, onAction, user }) => {
     if (isStep1Status) {
       canApprove = isAdmin || isManager;
     }
-    // Bước 2 (sau khi tạo phiếu nhập cho 3B → 3B duyệt nhận)
+    // Bước 2 (sau khi tạo phiếu nhập cho 3B → 3B (đơn vị xuất) duyệt)
     if (isStep2Status) {
-      canApprove =
-        isLevel3User && phieu.phong_ban_nhan_id === user.phong_ban_id;
+      canApprove = isLevel3User && phieu.phong_ban?.id === user.phong_ban_id;
     }
   }
 
@@ -290,12 +278,12 @@ const ActionDropdown = ({ phieu, onAction, user }) => {
 
       {isOpen && (
         <div
-          className="absolute right-0 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-[9999] max-h-80"
-          style={{
-            top: `${position.top}px`,
-          }}
+          className={`absolute right-0 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-[9999] ${
+            isAbove ? "-translate-y-full -mt-2" : "mt-2"
+          }`}
+          style={{ top: 0 }}
         >
-          <div className="py-1 max-h-80 overflow-y-auto">
+          <div className="py-1">
             {visibleActions.map((action) => {
               const IconComponent = action.icon;
               return (
@@ -321,6 +309,7 @@ const XuatKho = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(6);
   const [searchTerm, setSearchTerm] = useState("");
   const getInitialTab = () => {
     const params = new URLSearchParams(location.search);
@@ -406,7 +395,7 @@ const XuatKho = () => {
       const statusFilter = getTabStatusFilter(activeTab);
       const queryParams = {
         page: currentPage,
-        limit: 20,
+        limit: pageSize,
         search: searchTerm,
         sort_by: sortConfig.key,
         sort_direction: sortConfig.direction,
@@ -431,16 +420,24 @@ const XuatKho = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, activeTab, searchTerm, filters, sortConfig, fetchTabCounts]);
+  }, [
+    currentPage,
+    activeTab,
+    searchTerm,
+    filters,
+    sortConfig,
+    pageSize,
+    fetchTabCounts,
+  ]);
 
   // Check if user can create phieu: only cấp 3 (user role at level 3)
   const canCreatePhieu =
     (user?.role === "user" && user?.phong_ban?.cap_bac === 3) || false;
 
   useEffect(() => {
-    // Reset to first page when changing tabs or filters
+    // Reset to first page when changing tabs, filters or page size
     setCurrentPage(1);
-  }, [activeTab, searchTerm, filters, sortConfig]);
+  }, [activeTab, searchTerm, filters, sortConfig, pageSize]);
 
   useEffect(() => {
     fetchData();
@@ -614,22 +611,24 @@ const XuatKho = () => {
 
   const getSortIcon = (key) => {
     if (sortConfig.key !== key) return null;
-    return sortConfig.direction === "asc" ? (
-      <ChevronUp size={14} />
-    ) : (
-      <ChevronDown size={14} />
-    );
+    return sortConfig.direction === "asc" ? "↑" : "↓";
   };
 
-  const getStatusBadge = (trangThai) => {
-    const config = TRANG_THAI_PHIEU[trangThai] || TRANG_THAI_PHIEU.draft;
-    return (
-      <span
-        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.bgColor} ${config.textColor}`}
-      >
-        {config.label}
-      </span>
-    );
+  const getTrangThaiColor = (trangThai) => {
+    const config = TRANG_THAI_PHIEU[trangThai] || {};
+    const colorMap = {
+      green: "bg-green-100 text-green-800",
+      blue: "bg-blue-100 text-blue-800",
+      yellow: "bg-yellow-100 text-yellow-800",
+      red: "bg-red-100 text-red-800",
+      gray: "bg-gray-100 text-gray-800",
+      emerald: "bg-emerald-100 text-emerald-800",
+      purple: "bg-purple-100 text-purple-800",
+      orange: "bg-orange-100 text-orange-800",
+    };
+    return `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+      colorMap[config.color] || colorMap.gray
+    }`;
   };
 
   const getLoaiXuatBadge = (loaiXuat) => {
@@ -654,25 +653,26 @@ const XuatKho = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-8">
       {/* Header */}
-      <PageHeader
-        title="Quản lý xuất kho"
-        subtitle="Quản lý các phiếu xuất hàng khỏi kho theo quy trình duyệt"
-        Icon={Package}
-      />
-
-      {canCreatePhieu && (
-        <div className="flex justify-end">
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors shadow-sm"
-          >
-            <Plus size={20} />
-            <span>Tạo phiếu xuất</span>
-          </button>
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <PageHeader
+            title="Quản lý xuất kho"
+            subtitle="Quản lý các phiếu xuất hàng khỏi kho theo quy trình duyệt"
+            Icon={Package}
+          />
+          {canCreatePhieu && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors shadow-sm"
+            >
+              <Plus size={20} />
+              <span>Tạo phiếu xuất</span>
+            </button>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Tabs */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -718,12 +718,10 @@ const XuatKho = () => {
         </div>
 
         {/* Filters */}
-        <div className="p-6 bg-gray-50 border-b border-gray-200">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tìm kiếm
-              </label>
+        <div className="p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+            {/* Search */}
+            <div className="col-span-1 sm:col-span-1">
               <div className="relative">
                 <Search
                   className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
@@ -731,32 +729,28 @@ const XuatKho = () => {
                 />
                 <input
                   type="text"
-                  placeholder="Tìm theo số phiếu, lý do..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm"
+                  placeholder="Tìm theo số phiếu, lý do..."
                 />
               </div>
             </div>
 
+            {/* Date filters */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Từ ngày
-              </label>
               <input
                 type="date"
                 value={filters.tu_ngay}
                 onChange={(e) =>
                   setFilters((prev) => ({ ...prev, tu_ngay: e.target.value }))
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm"
+                placeholder="Từ ngày"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Đến ngày
-              </label>
               <input
                 type="date"
                 value={filters.den_ngay}
@@ -766,14 +760,13 @@ const XuatKho = () => {
                     den_ngay: e.target.value,
                   }))
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm"
+                placeholder="Đến ngày"
               />
             </div>
 
+            {/* Type filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Loại xuất
-              </label>
               <select
                 value={filters.loai_xuat}
                 onChange={(e) =>
@@ -782,9 +775,9 @@ const XuatKho = () => {
                     loai_xuat: e.target.value,
                   }))
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm"
               >
-                <option value="">Tất cả</option>
+                <option value="">Tất cả loại</option>
                 {Object.entries(LOAI_PHIEU_XUAT).map(([key, value]) => (
                   <option key={key} value={key}>
                     {value.label}
@@ -793,194 +786,256 @@ const XuatKho = () => {
               </select>
             </div>
           </div>
-
-          <div className="flex justify-between items-center mt-4">
-            <button
-              onClick={() => {
-                setFilters({
-                  tu_ngay: "",
-                  den_ngay: "",
-                  loai_xuat: "",
-                  phong_ban_filter: user?.role === "admin" ? "all" : "own",
-                });
-                setSearchTerm("");
-                setCurrentPage(1);
-              }}
-              className="text-sm text-gray-500 hover:text-gray-700"
-            >
-              Xóa bộ lọc
-            </button>
-
-            <button
-              onClick={fetchData}
-              className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-            >
-              <RefreshCw size={16} className="mr-2" />
-              Làm mới
-            </button>
-          </div>
         </div>
+      </div>
 
+      <div className="space-y-4">
         {/* Table */}
-        {isLoading ? (
-          <Loading />
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[140px]">
-                      <button
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <Loading size="large" />
+            </div>
+          ) : (
+            <>
+              {/* Desktop Table */}
+              <div className="hidden lg:block">
+                <table className="w-full table-auto">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th
+                        className="w-[140px] px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                         onClick={() => handleSort("so_phieu")}
-                        className="flex items-center space-x-1 hover:text-gray-700"
                       >
-                        <span>Số phiếu</span>
-                        {getSortIcon("so_phieu")}
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">
-                      <button
+                        Số phiếu {getSortIcon("so_phieu")}
+                      </th>
+                      <th
+                        className="w-[120px] px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                         onClick={() => handleSort("ngay_xuat")}
-                        className="flex items-center space-x-1 hover:text-gray-700"
                       >
-                        <span>Ngày xuất</span>
-                        {getSortIcon("ngay_xuat")}
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">
-                      Loại xuất
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">
-                      <button
-                        onClick={() => handleSort("trang_thai")}
-                        className="flex items-center space-x-1 hover:text-gray-700"
-                      >
-                        <span>Trạng thái</span>
-                        {getSortIcon("trang_thai")}
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">
-                      <button
+                        Ngày xuất {getSortIcon("ngay_xuat")}
+                      </th>
+                      <th className="w-[120px] px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Loại xuất
+                      </th>
+                      <th className="w-[250px] px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Đơn vị nhận
+                      </th>
+                      <th className="w-[150px] px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Phòng ban
+                      </th>
+                      <th
+                        className="w-[120px] px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                         onClick={() => handleSort("tong_tien")}
-                        className="flex items-center space-x-1 hover:text-gray-700"
                       >
-                        <span>Tổng tiền</span>
-                        {getSortIcon("tong_tien")}
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[200px]">
-                      Đơn vị nhận
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[150px]">
-                      Phòng ban
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">
-                      Thao tác
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {phieuXuatList.map((phieu) => (
-                    <tr
-                      key={phieu.id}
-                      className={`hover:bg-gray-50 ${
-                        highlightId === phieu.id
-                          ? "ring-2 ring-red-400 bg-red-50"
-                          : ""
-                      }`}
-                    >
-                      <td className="px-4 py-4">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium text-gray-900 truncate">
-                            {phieu.so_phieu}
-                          </span>
-                          {phieu.so_quyet_dinh && (
-                            <span className="text-xs text-gray-500 truncate">
-                              {phieu.so_quyet_dinh}
+                        Tổng tiền {getSortIcon("tong_tien")}
+                      </th>
+                      <th className="w-[100px] px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Trạng thái
+                      </th>
+                      <th className="w-[100px] px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Thao tác
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {phieuXuatList.map((phieu) => {
+                      const isHighlighted = highlightId === phieu.id;
+
+                      return (
+                        <tr
+                          key={phieu.id}
+                          className={`hover:bg-gray-50 transition-all duration-300 ${
+                            isHighlighted
+                              ? "bg-yellow-100 ring-2 ring-yellow-400"
+                              : ""
+                          }`}
+                        >
+                          <td className="px-3 py-4">
+                            <div className="text-sm font-medium text-gray-900">
+                              <div className="truncate">{phieu.so_phieu}</div>
+                              {isHighlighted && (
+                                <span className="animate-pulse bg-yellow-200 text-yellow-800 text-xs px-1 py-0.5 rounded-full">
+                                  Mới
+                                </span>
+                              )}
+                            </div>
+                            {phieu.so_quyet_dinh && (
+                              <div className="text-xs text-gray-500 truncate">
+                                QĐ: {phieu.so_quyet_dinh}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-3 py-4">
+                            <div className="text-sm text-gray-900">
+                              {formatDate(phieu.ngay_xuat)}
+                            </div>
+                          </td>
+                          <td className="px-3 py-4">
+                            {getLoaiXuatBadge(phieu.loai_xuat)}
+                          </td>
+                          <td className="px-3 py-4">
+                            <div className="text-sm text-gray-900 truncate">
+                              {phieu.loai_xuat === "don_vi_su_dung"
+                                ? "Sử dụng nội bộ"
+                                : phieu.ten_phong_ban_nhan
+                                ? phieu.ten_phong_ban_nhan
+                                : phieu.ten_don_vi_nhan
+                                ? phieu.ten_don_vi_nhan
+                                : "N/A"}
+                            </div>
+                          </td>
+                          <td className="px-3 py-4">
+                            <div className="text-sm text-gray-900 flex items-center">
+                              <Building
+                                size={14}
+                                className="mr-2 text-gray-400 flex-shrink-0"
+                              />
+                              <span className="truncate">
+                                {phieu.phong_ban?.ten_phong_ban || "N/A"}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-4 text-right">
+                            <div className="text-sm font-medium text-green-600">
+                              {formatCurrency(phieu.tong_tien)}
+                            </div>
+                          </td>
+                          <td className="px-3 py-4 text-center">
+                            <span
+                              className={getTrangThaiColor(phieu.trang_thai)}
+                            >
+                              {TRANG_THAI_PHIEU[phieu.trang_thai]?.label}
                             </span>
-                          )}
+                          </td>
+                          <td className="px-3 py-4 text-center">
+                            <ActionDropdown
+                              phieu={phieu}
+                              onAction={handleAction}
+                              user={user}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Cards */}
+              <div className="lg:hidden divide-y divide-gray-200">
+                {phieuXuatList.map((phieu) => (
+                  <div key={phieu.id} className="p-4 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {phieu.so_phieu}
                         </div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="flex items-center text-sm text-gray-900">
-                          <Calendar size={14} className="mr-2 text-gray-400" />
+                        <div className="text-xs text-gray-500">
                           {formatDate(phieu.ngay_xuat)}
                         </div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        {getLoaiXuatBadge(phieu.loai_xuat)}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        {getStatusBadge(phieu.trang_thai)}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {formatCurrency(phieu.tong_tien)}
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center text-sm text-gray-900">
-                          <Building size={14} className="mr-2 text-gray-400" />
-                          <span className="truncate">
-                            {phieu.loai_xuat === "don_vi_su_dung"
-                              ? "Sử dụng nội bộ"
-                              : phieu.ten_phong_ban_nhan // ← Đơn vị nhận (cấp 3)
-                              ? phieu.ten_phong_ban_nhan
-                              : phieu.ten_don_vi_nhan // ← Đơn vị nhận ngoài
-                              ? phieu.ten_don_vi_nhan
-                              : "N/A"}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="text-sm text-gray-900 truncate">
-                          {phieu.phong_ban?.ten_phong_ban || "Chưa xác định"}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className={getTrangThaiColor(phieu.trang_thai)}>
+                          {TRANG_THAI_PHIEU[phieu.trang_thai]?.label}
                         </span>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-right">
                         <ActionDropdown
                           phieu={phieu}
                           onAction={handleAction}
                           user={user}
                         />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                    </div>
 
-            {/* Pagination */}
-            {phieuXuatList.length > 0 && (
-              <div className="px-6 py-4 border-t border-gray-200">
-                <Pagination
-                  currentPage={pagination.currentPage || 1}
-                  totalPages={pagination.totalPages || 1}
-                  onPageChange={setCurrentPage}
-                  totalItems={pagination.total || 0}
-                  itemsPerPage={pagination.limit || 20}
-                />
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-xs text-gray-500">Loại:</span>
+                        <span className="text-xs font-medium">
+                          {LOAI_PHIEU_XUAT[phieu.loai_xuat]?.label}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-xs text-gray-500">
+                          Đơn vị nhận:
+                        </span>
+                        <span className="text-xs font-medium">
+                          {phieu.loai_xuat === "don_vi_su_dung"
+                            ? "Sử dụng nội bộ"
+                            : phieu.ten_phong_ban_nhan
+                            ? phieu.ten_phong_ban_nhan
+                            : phieu.ten_don_vi_nhan
+                            ? phieu.ten_don_vi_nhan
+                            : "N/A"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-xs text-gray-500">
+                          Phòng ban:
+                        </span>
+                        <span className="text-xs font-medium">
+                          {phieu.phong_ban?.ten_phong_ban || "Chưa xác định"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-xs text-gray-500">
+                          Tổng tiền:
+                        </span>
+                        <span className="text-xs font-bold text-green-600">
+                          {formatCurrency(phieu.tong_tien)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
 
-            {/* Empty state */}
-            {phieuXuatList.length === 0 && (
-              <div className="text-center py-12">
-                <Package className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">
-                  Không có phiếu xuất nào
-                </h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  {activeTab === "tat_ca"
-                    ? "Hệ thống chưa có phiếu xuất nào."
-                    : `Không có phiếu xuất nào ở trạng thái "${
-                        TAB_CONFIG.XUAT_KHO.find((t) => t.key === activeTab)
-                          ?.label
-                      }".`}
-                </p>
+              {/* Pagination & Page size */}
+              <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <span>Hiển thị</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(parseInt(e.target.value) || 6);
+                      setCurrentPage(1);
+                    }}
+                    className="px-2 py-1 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  >
+                    <option value={6}>6</option>
+                    <option value={10}>10</option>
+                    <option value={15}>15</option>
+                    <option value={20}>20</option>
+                  </select>
+                  <span>dòng / trang</span>
+                </div>
+                {pagination.pages > 1 && (
+                  <Pagination
+                    currentPage={pagination.page || 1}
+                    totalPages={pagination.pages || 1}
+                    onPageChange={setCurrentPage}
+                  />
+                )}
               </div>
-            )}
-          </>
-        )}
+
+              {phieuXuatList.length === 0 && (
+                <div className="text-center py-12">
+                  <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    Không có dữ liệu
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    {activeTab === "tat_ca"
+                      ? "Chưa có phiếu xuất nào được tạo."
+                      : `Không có phiếu xuất nào ở trạng thái "${
+                          TAB_CONFIG.XUAT_KHO.find((t) => t.key === activeTab)
+                            ?.label
+                        }".`}
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Modals */}

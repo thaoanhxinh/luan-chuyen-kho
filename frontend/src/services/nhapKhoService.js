@@ -11,15 +11,22 @@ export const nhapKhoService = {
 
       // Convert array status to proper format for backend
       if (Array.isArray(queryParams.trang_thai)) {
-        // Backend có thể cần format đặc biệt cho multiple status
-        // Kiểm tra nếu backend support array, nếu không thì chuyển thành string
+        // Backend support array, nhưng cần serialize đúng cách
         if (queryParams.trang_thai.length === 1) {
           queryParams.trang_thai = queryParams.trang_thai[0];
+        } else {
+          // Multiple statuses - convert to comma-separated string for backend
+          queryParams.trang_thai = queryParams.trang_thai.join(",");
         }
-        // Nếu multiple status, backend cần handle array
       }
 
       console.log("📤 Sending request with processed params:", queryParams);
+      console.log(
+        "🔍 DEBUG - trang_thai type:",
+        typeof queryParams.trang_thai,
+        "value:",
+        queryParams.trang_thai
+      );
 
       const response = await api.get("/nhap-kho", { params: queryParams });
 

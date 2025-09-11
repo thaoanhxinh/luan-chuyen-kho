@@ -8,7 +8,29 @@ export const xuatKhoService = {
   async getList(params = {}) {
     try {
       console.log("📋 Getting xuat kho list with params:", params);
-      const response = await api.get("/xuat-kho", { params });
+
+      // Xử lý trang_thai param - backend có thể nhận array hoặc string
+      const queryParams = { ...params };
+
+      // Convert array status to proper format for backend
+      if (Array.isArray(queryParams.trang_thai)) {
+        if (queryParams.trang_thai.length === 1) {
+          queryParams.trang_thai = queryParams.trang_thai[0];
+        } else {
+          // Multiple statuses - convert to comma-separated string for backend
+          queryParams.trang_thai = queryParams.trang_thai.join(",");
+        }
+      }
+
+      console.log("📤 Sending request with processed params:", queryParams);
+      console.log(
+        "🔍 DEBUG - trang_thai type:",
+        typeof queryParams.trang_thai,
+        "value:",
+        queryParams.trang_thai
+      );
+
+      const response = await api.get("/xuat-kho", { params: queryParams });
       console.log("✅ Get xuat kho list response:", response.data);
       return response.data;
     } catch (error) {

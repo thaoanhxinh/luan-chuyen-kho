@@ -285,7 +285,39 @@ const getDetail = async (req, res, params, user) => {
 
     // Kiểm tra quyền xem
     const hangHoa = detailResult.rows[0];
-    if (user.role !== "admin" && hangHoa.phong_ban_id !== user.phong_ban_id) {
+
+    // Admin có thể xem tất cả
+    if (user.role === "admin") {
+      // Không cần kiểm tra gì thêm
+    }
+    // Manager cấp 2 có thể xem hàng hóa của phòng ban mình và các cấp 3 trực thuộc
+    else if (user.role === "manager" && user.phong_ban?.cap_bac === 2) {
+      // Kiểm tra xem hàng hóa có thuộc phòng ban mà manager quản lý không
+      const permissionCheck = await pool.query(
+        `
+        SELECT pb.id 
+        FROM phong_ban pb 
+        WHERE pb.id = $1 
+        AND (pb.id = $2 OR pb.phong_ban_cha_id = $2)
+      `,
+        [hangHoa.phong_ban_id, user.phong_ban_id]
+      );
+
+      if (permissionCheck.rows.length === 0) {
+        return sendResponse(
+          res,
+          403,
+          false,
+          "Bạn không có quyền xem hàng hóa này"
+        );
+      }
+    }
+    // User thường chỉ xem được hàng hóa của phòng ban mình
+    // Nếu hàng hóa có phong_ban_id = null, cho phép xem (hàng hóa chung)
+    else if (
+      hangHoa.phong_ban_id !== null &&
+      hangHoa.phong_ban_id !== user.phong_ban_id
+    ) {
       return sendResponse(
         res,
         403,

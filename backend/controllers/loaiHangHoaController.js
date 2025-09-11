@@ -45,24 +45,36 @@ const getDetail = async (req, res, params, user) => {
       SELECT lhh.*, 
              (SELECT COUNT(*) FROM hang_hoa hh 
               WHERE hh.loai_hang_hoa_id = lhh.id 
-              AND hh.trang_thai = 'active') as so_hang_hoa,
+              AND hh.trang_thai = 'active'
+              AND ($2::integer IS NULL OR hh.phong_ban_id = $2::integer)
+             ) as so_hang_hoa,
              (SELECT json_agg(
                json_build_object(
                  'id', hh.id,
                  'ma_hang_hoa', hh.ma_hang_hoa,
                  'ten_hang_hoa', hh.ten_hang_hoa,
                  'don_vi_tinh', hh.don_vi_tinh
-               )
-             ) FROM hang_hoa hh 
-              WHERE hh.loai_hang_hoa_id = lhh.id 
-              AND hh.trang_thai = 'active'
-              ORDER BY hh.ten_hang_hoa ASC
-              LIMIT 20) as danh_sach_hang_hoa
+               ) ORDER BY hh.ten_hang_hoa ASC
+             ) FROM (
+               SELECT hh.id, hh.ma_hang_hoa, hh.ten_hang_hoa, hh.don_vi_tinh
+               FROM hang_hoa hh 
+               WHERE hh.loai_hang_hoa_id = lhh.id 
+               AND hh.trang_thai = 'active'
+               AND ($2::integer IS NULL OR hh.phong_ban_id = $2::integer)
+               ORDER BY hh.ten_hang_hoa ASC
+               LIMIT 20
+             ) hh
+             ) as danh_sach_hang_hoa
       FROM loai_hang_hoa lhh
       WHERE lhh.id = $1
     `;
 
-    const result = await pool.query(detailQuery, [id]);
+    // Admin xem tất cả; người thường chỉ xem theo phòng ban của mình
+    const phongBanFilter =
+      user?.role === "admin"
+        ? null
+        : user?.phong_ban?.id || user?.phong_ban_id || null;
+    const result = await pool.query(detailQuery, [id, phongBanFilter]);
 
     if (result.rows.length === 0) {
       return sendResponse(res, 404, false, "Không tìm thấy loại hàng hóa");
@@ -84,6 +96,17 @@ const getDetail = async (req, res, params, user) => {
 const create = async (req, res, body, user) => {
   try {
     const { ma_loai, ten_loai, mo_ta } = body;
+
+    // Phân quyền: chỉ admin hoặc cấp 3 được tạo
+    const canManage = user?.role === "admin" || user?.phong_ban?.cap_bac === 3;
+    if (!canManage) {
+      return sendResponse(
+        res,
+        403,
+        false,
+        "Bạn không có quyền tạo loại hàng hóa"
+      );
+    }
 
     // Validation
     if (!ten_loai) {
@@ -148,6 +171,17 @@ const update = async (req, res, params, body, user) => {
   try {
     const { id } = params;
     const { ma_loai, ten_loai, mo_ta } = body;
+
+    // Phân quyền: chỉ admin hoặc cấp 3 được cập nhật
+    const canManage = user?.role === "admin" || user?.phong_ban?.cap_bac === 3;
+    if (!canManage) {
+      return sendResponse(
+        res,
+        403,
+        false,
+        "Bạn không có quyền cập nhật loại hàng hóa"
+      );
+    }
 
     // Validation
     if (!ten_loai) {
@@ -217,6 +251,17 @@ const update = async (req, res, params, body, user) => {
 const deleteLoaiHangHoa = async (req, res, params, user) => {
   try {
     const { id } = params;
+
+    // Phân quyền: chỉ admin hoặc cấp 3 được xóa
+    const canManage = user?.role === "admin" || user?.phong_ban?.cap_bac === 3;
+    if (!canManage) {
+      return sendResponse(
+        res,
+        403,
+        false,
+        "Bạn không có quyền xóa loại hàng hóa"
+      );
+    }
 
     // Kiểm tra loại hàng hóa có tồn tại không
     const checkQuery = `

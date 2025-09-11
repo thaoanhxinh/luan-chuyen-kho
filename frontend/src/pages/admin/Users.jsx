@@ -117,16 +117,32 @@ const Users = () => {
 
   const loadDepartments = async () => {
     try {
-      const response = await departmentService.getList({ page: 1, limit: 999 });
-      if (response.success) {
-        setDepartments(response.data.items || []);
-      } else {
-        setDepartments([]);
+      // Ưu tiên gọi API theo quyền để tránh 403 cho cấp 2
+      const resp = await departmentService.getAccessibleList();
+      if (resp?.success) {
+        setDepartments(resp.data || []);
+        return;
       }
-    } catch (error) {
-      console.error("Load departments error:", error);
-      setDepartments([]);
+    } catch (e) {
+      // Fallback: nếu API mới không tồn tại trên server cũ, thử endpoint cũ (admin-only)
+      console.warn(
+        "Accessible departments API failed, fallback to /departments",
+        e
+      );
+      try {
+        const response = await departmentService.getList({
+          page: 1,
+          limit: 999,
+        });
+        if (response.success) {
+          setDepartments(response.data.items || []);
+          return;
+        }
+      } catch (err) {
+        console.error("Load departments error (fallback):", err);
+      }
     }
+    setDepartments([]);
   };
 
   const handleFilterChange = (key, value) => {

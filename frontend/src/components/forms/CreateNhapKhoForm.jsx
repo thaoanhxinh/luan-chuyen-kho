@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { Plus, Trash2, Building, AlertCircle } from "lucide-react";
 import { searchService } from "../../services/searchService";
 import { nhapKhoService } from "../../services/nhapKhoService";
 import { formatCurrency } from "../../utils/helpers";
-import { LOAI_PHIEU_NHAP, PHAM_CHAT } from "../../utils/constants";
+import { LOAI_PHIEU_NHAP, PHAM_CHAT, DON_VI_TINH } from "../../utils/constants";
+import { parseAndRound, calculateTotal } from "../../utils/numberUtils";
 import AutoComplete from "../common/AutoComplete";
 import toast from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext";
@@ -12,8 +13,12 @@ import { useAuth } from "../../context/AuthContext";
 const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [phongBanCungCap, setPhongBanCungCap] = useState([]);
-  const [loadingPhongBan, setLoadingPhongBan] = useState(false);
+  // Dropdown cấp 2/cấp 3 cho điều chuyển
+  const [cap2List, setCap2List] = useState([]);
+  const [cap3List, setCap3List] = useState([]);
+  const [selectedCap2Id, setSelectedCap2Id] = useState("");
+  const [loadingCap2, setLoadingCap2] = useState(false);
+  const [loadingCap3, setLoadingCap3] = useState(false);
 
   const {
     register,
@@ -44,8 +49,10 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
           so_luong_ke_hoach: 1,
           so_luong: 1,
           don_gia: 0,
+          don_vi_tinh: "Cái",
           pham_chat: "tot",
           danh_diem: "",
+          la_tai_san_co_dinh: false,
         },
       ],
     },
@@ -59,35 +66,56 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
   const chiTietItems = watch("chi_tiet");
   const loaiPhieu = watch("loai_phieu");
 
-  const loadPhongBanCungCap = useCallback(async () => {
-    try {
-      setLoadingPhongBan(true);
-      const response = await nhapKhoService.getPhongBanCungCap(loaiPhieu);
-      setPhongBanCungCap(response.data || []);
-    } catch (error) {
-      console.error("Error loading phong ban cung cap:", error);
-      toast.error("Không thể tải danh sách phòng ban cung cấp");
-      setPhongBanCungCap([]);
-    } finally {
-      setLoadingPhongBan(false);
-    }
-  }, [loaiPhieu]);
-
   useEffect(() => {
     if (loaiPhieu === "dieu_chuyen") {
-      loadPhongBanCungCap();
+      // Tải danh sách cấp 2 để chọn
+      (async () => {
+        try {
+          setLoadingCap2(true);
+          const resCap2 = await searchService.getPhongBanCap2();
+          setCap2List(resCap2.data || []);
+        } catch (e) {
+          console.error("Error loading cap 2:", e);
+          setCap2List([]);
+        } finally {
+          setLoadingCap2(false);
+        }
+      })();
+      // Reset selections
+      setSelectedCap2Id("");
+      setCap3List([]);
+      setValue("phong_ban_cung_cap_id", null);
+      setValue("phong_ban_cung_cap", null);
     } else {
-      setPhongBanCungCap([]);
+      // Clear when không phải điều chuyển
+      setCap2List([]);
+      setCap3List([]);
+      setSelectedCap2Id("");
       setValue("phong_ban_cung_cap_id", null);
       setValue("phong_ban_cung_cap", null);
     }
-  }, [loaiPhieu, setValue, loadPhongBanCungCap]);
+  }, [loaiPhieu, setValue]);
+
+  const handleSelectCap2 = async (cap2Id) => {
+    setSelectedCap2Id(cap2Id);
+    setCap3List([]);
+    setValue("phong_ban_cung_cap_id", null);
+    setValue("phong_ban_cung_cap", null);
+    if (!cap2Id) return;
+    try {
+      setLoadingCap3(true);
+      const resCap3 = await searchService.getPhongBanCap3ByParent(cap2Id);
+      setCap3List(resCap3.data || []);
+    } catch (e) {
+      console.error("Error loading cap 3:", e);
+      setCap3List([]);
+    } finally {
+      setLoadingCap3(false);
+    }
+  };
 
   const tongTien = chiTietItems.reduce((sum, item) => {
-    return (
-      sum +
-      parseFloat(item.so_luong_ke_hoach || 0) * parseFloat(item.don_gia || 0)
-    );
+    return sum + calculateTotal(item.so_luong_ke_hoach, item.don_gia);
   }, 0);
 
   const handleNhaCungCapSelect = (nhaCungCap) => {
@@ -126,6 +154,8 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
   const handleHangHoaSelect = (hangHoa, index) => {
     setValue(`chi_tiet.${index}.hang_hoa_id`, hangHoa.id || null);
     setValue(`chi_tiet.${index}.hang_hoa`, hangHoa);
+    // ✅ Tự động điền đơn vị tính nhưng vẫn có thể thay đổi
+    setValue(`chi_tiet.${index}.don_vi_tinh`, hangHoa.don_vi_tinh || "Cái");
 
     if (hangHoa.isNewItem) {
       toast(`💡 Sẽ tạo hàng hóa mới: ${hangHoa.ten_hang_hoa}`, {
@@ -156,6 +186,21 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
     setValue(`chi_tiet.${index}.so_luong`, value); // Tự động set số lượng thực tế = số lượng kế hoạch
   };
 
+  // Cảnh báo/gợi ý TSCĐ khi đơn giá >= 10 triệu
+  const handlePriceChange = (index, price) => {
+    const newPrice = parseFloat(price) || 0;
+    setValue(`chi_tiet.${index}.don_gia`, newPrice);
+
+    if (newPrice >= 10000000) {
+      const isTSCD = window.confirm(
+        "Đơn giá >= 10.000.000. Đây có phải là tài sản cố định (TSCĐ) không?"
+      );
+      setValue(`chi_tiet.${index}.la_tai_san_co_dinh`, !!isTSCD);
+    } else {
+      setValue(`chi_tiet.${index}.la_tai_san_co_dinh`, false);
+    }
+  };
+
   const addNewRow = () => {
     append({
       hang_hoa_id: null,
@@ -163,8 +208,10 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
       so_luong_ke_hoach: 1,
       so_luong: 1,
       don_gia: 0,
+      don_vi_tinh: "Cái",
       pham_chat: "tot",
       danh_diem: "",
+      la_tai_san_co_dinh: false,
     });
   };
 
@@ -197,7 +244,7 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
     }
   };
 
-  const createHangHoaIfNeeded = async (hangHoa) => {
+  const createHangHoaIfNeeded = async (hangHoa, donViTinh) => {
     if (!hangHoa?.isNewItem) {
       return hangHoa;
     }
@@ -208,7 +255,7 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
       );
       const createPromise = searchService.createHangHoaAuto({
         ten_hang_hoa: hangHoa.ten_hang_hoa,
-        don_vi_tinh: "Cái",
+        don_vi_tinh: donViTinh || "Cái", // ✅ Sử dụng đơn vị tính từ dropdown
       });
       const response = await Promise.race([createPromise, timeoutPromise]);
 
@@ -289,7 +336,10 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
       const finalChiTiet = [];
       for (let i = 0; i < data.chi_tiet.length; i++) {
         const item = data.chi_tiet[i];
-        const finalHangHoa = await createHangHoaIfNeeded(item.hang_hoa);
+        const finalHangHoa = await createHangHoaIfNeeded(
+          item.hang_hoa,
+          item.don_vi_tinh
+        );
         if (finalHangHoa && item.hang_hoa.isNewItem) {
           toast.success(`✓ Đã tạo hàng hóa: ${finalHangHoa.ten_hang_hoa}`);
         }
@@ -298,8 +348,10 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
           hang_hoa_id: finalHangHoa.id,
           so_luong_ke_hoach: parseFloat(item.so_luong_ke_hoach),
           so_luong: parseFloat(item.so_luong_ke_hoach), // Số lượng thực tế = số lượng kế hoạch
-          don_gia: parseFloat(item.don_gia),
+          don_gia: parseAndRound(item.don_gia), // ✅ FIX: Sử dụng utility function để làm tròn chính xác
+          don_vi_tinh: item.don_vi_tinh || "Cái", // ✅ Đơn vị tính từ dropdown
           pham_chat: item.pham_chat,
+          la_tai_san_co_dinh: !!item.la_tai_san_co_dinh,
           so_seri_list: item.danh_diem
             ? item.danh_diem
                 .split(/[,\n]/)
@@ -365,53 +417,82 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
   };
 
   const PhongBanCungCapField = () => {
-    if (loaiPhieu !== "tren_cap" && loaiPhieu !== "dieu_chuyen") {
-      return null;
-    }
+    if (loaiPhieu !== "dieu_chuyen") return null;
 
     return (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+      <div className="space-y-3">
+        <label className="block text-sm font-medium text-gray-700">
           <Building className="inline h-4 w-4 mr-1" />
-          Đơn vị cung cấp *
+          Chọn đơn vị cấp 2 và cấp 3 để xin điều chuyển
         </label>
-        {loadingPhongBan ? (
-          <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm">
-            Đang tải danh sách...
-          </div>
-        ) : phongBanCungCap.length > 0 ? (
-          <select
-            {...register("phong_ban_cung_cap_id", {
-              required: "Vui lòng chọn đơn vị cung cấp",
-            })}
-            onChange={(e) => {
-              const selectedId = parseInt(e.target.value);
-              const selectedPhongBan = phongBanCungCap.find(
-                (pb) => pb.id === selectedId
-              );
-              if (selectedPhongBan) {
-                handlePhongBanCungCapSelect(selectedPhongBan);
-              }
-            }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="">Chọn đơn vị cung cấp</option>
-            {phongBanCungCap.map((phongBan) => (
-              <option key={phongBan.id} value={phongBan.id}>
-                {phongBan.ten_phong_ban}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm text-gray-500">
-            Không có đơn vị cung cấp
-          </div>
-        )}
-        {errors.phong_ban_cung_cap_id && (
-          <p className="mt-1 text-sm text-red-600">
-            {errors.phong_ban_cung_cap_id.message}
-          </p>
-        )}
+        {/* Dropdown cấp 2 */}
+        <div>
+          <label className="block text-xs text-gray-600 mb-1">
+            Đơn vị cấp 2
+          </label>
+          {loadingCap2 ? (
+            <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm">
+              Đang tải danh sách cấp 2...
+            </div>
+          ) : (
+            <select
+              value={selectedCap2Id}
+              onChange={(e) => handleSelectCap2(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">Chọn đơn vị cấp 2</option>
+              {cap2List.map((pb) => (
+                <option key={pb.id} value={pb.id}>
+                  {pb.ten_phong_ban}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {/* Dropdown cấp 3 */}
+        <div>
+          <label className="block text-xs text-gray-600 mb-1">
+            Đơn vị cấp 3
+          </label>
+          {loadingCap3 ? (
+            <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm">
+              Đang tải danh sách cấp 3...
+            </div>
+          ) : cap3List.length > 0 ? (
+            <select
+              {...register("phong_ban_cung_cap_id", {
+                required: "Vui lòng chọn đơn vị cấp 3",
+              })}
+              onChange={(e) => {
+                const selectedId = parseInt(e.target.value);
+                const selectedPhongBan = cap3List.find(
+                  (pb) => pb.id === selectedId
+                );
+                if (selectedPhongBan) {
+                  handlePhongBanCungCapSelect(selectedPhongBan);
+                }
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">Chọn đơn vị cấp 3</option>
+              {cap3List.map((pb) => (
+                <option key={pb.id} value={pb.id}>
+                  {pb.ten_phong_ban}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm text-gray-500">
+              Vui lòng chọn đơn vị cấp 2 trước
+            </div>
+          )}
+          {errors.phong_ban_cung_cap_id && (
+            <p className="mt-1 text-sm text-red-600">
+              {errors.phong_ban_cung_cap_id.message}
+            </p>
+          )}
+        </div>
       </div>
     );
   };
@@ -614,11 +695,17 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                     Số lượng kế hoạch *
                   </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                    Đơn vị tính
+                  </th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                     Đơn giá
                   </th>
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                     Phẩm chất
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                    TSCĐ
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                     Thành tiền
@@ -631,9 +718,10 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
               <tbody className="divide-y divide-gray-200 bg-white">
                 {fields.map((field, index) => {
                   const item = watch(`chi_tiet.${index}`) || {};
-                  const thanhTien =
-                    (parseFloat(item.so_luong_ke_hoach) || 0) *
-                    (parseFloat(item.don_gia) || 0);
+                  const thanhTien = calculateTotal(
+                    item.so_luong_ke_hoach,
+                    item.don_gia
+                  );
 
                   return (
                     <tr key={field.id} className="hover:bg-gray-50">
@@ -718,13 +806,30 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
                         )}
                       </td>
 
+                      {/* ĐƠN VỊ TÍNH */}
+                      <td className="px-4 py-3">
+                        <select
+                          {...register(`chi_tiet.${index}.don_vi_tinh`)}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-green-500"
+                        >
+                          {DON_VI_TINH.map((unit) => (
+                            <option key={unit} value={unit}>
+                              {unit}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+
                       {/* ĐƠN GIÁ */}
                       <td className="px-4 py-3">
                         <input
                           type="number"
-                          step="0.01"
+                          step="1000"
                           min="0"
                           {...register(`chi_tiet.${index}.don_gia`)}
+                          onChange={(e) =>
+                            handlePriceChange(index, e.target.value)
+                          }
                           className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-right focus:ring-2 focus:ring-green-500"
                           placeholder="0"
                         />
@@ -742,6 +847,15 @@ const CreateNhapKhoForm = ({ onSuccess, onCancel }) => {
                             </option>
                           ))}
                         </select>
+                      </td>
+
+                      {/* TSCĐ */}
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          {...register(`chi_tiet.${index}.la_tai_san_co_dinh`)}
+                          className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                        />
                       </td>
 
                       {/* THÀNH TIỀN */}

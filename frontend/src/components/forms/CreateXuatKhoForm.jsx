@@ -870,13 +870,13 @@ const CreateXuatKhoForm = ({ onSuccess, onCancel }) => {
                           type="number"
                           {...register(`chi_tiet.${index}.so_luong`, {
                             required: true,
-                            min: 0.01,
+                            min: 1,
                             max:
                               selectedLot?.so_luong_con_lai || tonKho || 999999,
                           })}
                           className="w-20 px-2 py-1 border border-gray-300 rounded text-center text-sm focus:ring-2 focus:ring-blue-500"
-                          step="0.01"
-                          min="0.01"
+                          step="1"
+                          min="1"
                           max={
                             selectedLot?.so_luong_con_lai || tonKho || 999999
                           }

@@ -1187,6 +1187,23 @@ const getNhapDataByType = async (req, res, query, user) => {
   }
 };
 
+// Excel worksheet names cannot contain: \ / * ? : [ ] and must be <= 31 chars
+const sanitizeWorksheetName = (name) => {
+  try {
+    const invalidCharsRegex = /[\\\/\*\?\:\[\]]/g;
+    let safe = String(name || "Sheet")
+      .replace(invalidCharsRegex, "-")
+      .trim();
+    // Excel also trims names to 31 characters
+    if (safe.length > 31) safe = safe.slice(0, 31);
+    // Avoid empty names
+    if (!safe) safe = "Sheet";
+    return safe;
+  } catch (_) {
+    return "Sheet";
+  }
+};
+
 const exportLuanChuyenExcel = async (req, res, query, user, body) => {
   try {
     // Debug: Log request data
@@ -1257,8 +1274,9 @@ const exportLuanChuyenExcel = async (req, res, query, user, body) => {
     const startQuarter = Math.ceil((startDate.getMonth() + 1) / 3);
     const startYear = startDate.getFullYear();
 
-    // Tạo sheet chính với format nâng cao từ printController
-    const mainSheet = workbook.addWorksheet(`Tổng hợp ${bieuSo}`);
+    // Tạo sheet chính (đặt tên theo mẫu, không kèm biểu số)
+    const mainSheetName = sanitizeWorksheetName(`Tổng hợp`);
+    const mainSheet = workbook.addWorksheet(mainSheetName);
     await createMainSheetEnhanced(
       mainSheet,
       reportData.tongHop,
@@ -1272,7 +1290,7 @@ const exportLuanChuyenExcel = async (req, res, query, user, body) => {
     // Tạo 3 sheet phụ với format nâng cao
     await createSubSheetEnhanced(
       workbook,
-      `Trên cấp ${bieuSo}`,
+      `Trên cấp`,
       reportData.trenCap,
       exportQuery.tu_ngay,
       exportQuery.den_ngay,
@@ -1285,7 +1303,7 @@ const exportLuanChuyenExcel = async (req, res, query, user, body) => {
 
     await createSubSheetEnhanced(
       workbook,
-      `Tự mua sắm ${bieuSo}`,
+      `Tự mua sắm`,
       reportData.tuMua,
       exportQuery.tu_ngay,
       exportQuery.den_ngay,
@@ -1298,7 +1316,7 @@ const exportLuanChuyenExcel = async (req, res, query, user, body) => {
 
     await createSubSheetEnhanced(
       workbook,
-      `Khác ${bieuSo}`,
+      `Khác`,
       reportData.khac,
       exportQuery.tu_ngay,
       exportQuery.den_ngay,
@@ -1962,7 +1980,7 @@ const getLuanChuyenReport = async (req, res, query, user) => {
           phong_ban_id,
           SUM(CASE WHEN loai_phieu = 'tren_cap' THEN tong_tien ELSE 0 END) as nhap_tren_cap,
           SUM(CASE WHEN loai_phieu = 'tu_mua' THEN tong_tien ELSE 0 END) as nhap_tu_mua,
-          SUM(CASE WHEN loai_phieu = 'dieu_chuyen' THEN tong_tien ELSE 0 END) as nhap_khac,
+          SUM(CASE WHEN loai_phieu NOT IN ('tren_cap', 'tu_mua') THEN tong_tien ELSE 0 END) as nhap_khac,
           SUM(tong_tien) as tong_nhap
         FROM phieu_nhap pn
         JOIN phong_ban_data pb ON pn.phong_ban_id = pb.id
@@ -2733,7 +2751,7 @@ const createMainSheetEnhanced = async (
   const startQuarter = Math.ceil((startDate.getMonth() + 1) / 3);
   const startYear = startDate.getFullYear();
 
-  // Header chính của báo cáo
+  // Header chính của báo cáo (định dạng gần mẫu: Times New Roman, căn giữa)
   const headerRows = [
     // Row 1: CẢNH SÁT BIỂN VIỆT NAM - TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA - Phụ biểu số
     {
@@ -2750,7 +2768,7 @@ const createMainSheetEnhanced = async (
       merges: [
         { range: "A1:C1", value: "CẢNH SÁT BIỂN VIỆT NAM" },
         {
-          range: "D1:G1",
+          range: "D1:H1",
           value: `TỔNG HỢP GIÁ TRỊ VẬT TƯ HÀNG HÓA TRÊN CẤP LUÂN CHUYỂN QUA KHO QUÝ ${startQuarter}/${startYear}`,
         },
       ],
@@ -2775,11 +2793,12 @@ const createMainSheetEnhanced = async (
             phongBanInfo?.ten_phong_ban || "Phòng Hậu cần - Kỹ thuật"
           }`,
         },
+        { range: "H2:I2", value: "Đơn vị tính: Đồng" },
       ],
     },
     // Row 3: VÙNG CẢNH SÁT BIỂN 1
     {
-      values: ["VÙNG CẢNH SÁT BIỂN 1", "", "", "", "", "", "", ""],
+      values: ["VÙNG CẢNH SÁT BIỂN 1", "", "", "", "", "", "", "", ""],
       merges: [{ range: "A3:I3", value: "VÙNG CẢNH SÁT BIỂN 1" }],
     },
     // Row 4: Khoảng trống
@@ -2804,7 +2823,7 @@ const createMainSheetEnhanced = async (
 
     // Apply styles cho header
     excelRow.eachCell((cell) => {
-      cell.font = { bold: true, size: 11 };
+      cell.font = { bold: true, size: 12, name: "Times New Roman" };
       cell.alignment = { horizontal: "center", vertical: "middle" };
     });
   });
@@ -2834,10 +2853,10 @@ const createMainSheetEnhanced = async (
     "",
   ]);
 
-  // Style cho header bảng
+  // Style cho header bảng (không sử dụng nền màu)
   [tableHeader1, tableHeader2].forEach((row) => {
     row.eachCell((cell) => {
-      cell.font = { bold: true, size: 10 };
+      cell.font = { bold: true, size: 11, name: "Times New Roman" };
       cell.alignment = {
         horizontal: "center",
         vertical: "middle",
@@ -2848,11 +2867,6 @@ const createMainSheetEnhanced = async (
         left: { style: "thin" },
         bottom: { style: "thin" },
         right: { style: "thin" },
-      };
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFE6E6FA" },
       };
     });
   });
@@ -2894,7 +2908,7 @@ const renderDataWithHierarchy = async (sheet, data, startRow) => {
       parseFloat(item.ton_cuoi_ky || 0),
     ]);
 
-    // Style cho cấp 1 (màu xanh đậm)
+    // Style cho cấp 1
     applyCap1Style(row);
   });
 
@@ -2981,12 +2995,7 @@ const renderDataWithHierarchy = async (sheet, data, startRow) => {
 const applyCap1Style = (row) => {
   row.eachCell((cell, colNumber) => {
     cell.border = getBorder();
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FFB0E0E6" },
-    };
-    cell.font = { bold: true, size: 10 };
+    cell.font = { bold: true, size: 11, name: "Times New Roman" };
     cell.alignment =
       colNumber === 1
         ? { horizontal: "left", vertical: "middle" }
@@ -2998,12 +3007,7 @@ const applyCap1Style = (row) => {
 const applyCap2Style = (row) => {
   row.eachCell((cell, colNumber) => {
     cell.border = getBorder();
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FFFFFF99" },
-    };
-    cell.font = { bold: true, size: 9, italic: true };
+    cell.font = { bold: true, size: 11, italic: true, name: "Times New Roman" };
     cell.alignment =
       colNumber === 1
         ? { horizontal: "left", vertical: "middle" }
@@ -3015,7 +3019,7 @@ const applyCap2Style = (row) => {
 const applyCap3Style = (row) => {
   row.eachCell((cell, colNumber) => {
     cell.border = getBorder();
-    cell.font = { size: 9 };
+    cell.font = { size: 11, name: "Times New Roman" };
     cell.alignment =
       colNumber === 1
         ? { horizontal: "left", vertical: "middle" }
@@ -3027,12 +3031,7 @@ const applyCap3Style = (row) => {
 const applyOrphanCap3Style = (row) => {
   row.eachCell((cell, colNumber) => {
     cell.border = getBorder();
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FFE0F6FF" },
-    };
-    cell.font = { bold: true, size: 10 };
+    cell.font = { bold: true, size: 11, name: "Times New Roman" };
     cell.alignment =
       colNumber === 1
         ? { horizontal: "left", vertical: "middle" }
@@ -3043,17 +3042,12 @@ const applyOrphanCap3Style = (row) => {
 
 const applyTotalRowStyle = (row) => {
   row.eachCell((cell, colNumber) => {
-    cell.font = { bold: true, size: 10 };
+    cell.font = { bold: true, size: 11, name: "Times New Roman" };
     cell.border = {
       top: { style: "thick" },
       left: { style: "thin" },
       bottom: { style: "thick" },
       right: { style: "thin" },
-    };
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FFD3D3D3" },
     };
     cell.alignment =
       colNumber === 1
@@ -3080,7 +3074,7 @@ const addFooterWithSignatures = async (sheet, signatures) => {
     new Date().getMonth() + 1
   } năm ${new Date().getFullYear()}`;
   dateCell.style = {
-    font: { bold: true, color: { argb: "DC2626" }, size: 10 },
+    font: { bold: false, size: 11, name: "Times New Roman" },
     alignment: { horizontal: "right", vertical: "middle" },
   };
 
@@ -3089,45 +3083,47 @@ const addFooterWithSignatures = async (sheet, signatures) => {
   const nguoiLapCell = sheet.getCell(`A${signatureRow}`);
   nguoiLapCell.value = "NGƯỜI LẬP BIỂU";
   nguoiLapCell.style = {
-    font: { bold: true, size: 10 },
+    font: { bold: true, size: 11, name: "Times New Roman" },
     alignment: { horizontal: "center", vertical: "middle" },
   };
 
   const truongBanCell = sheet.getCell(`D${signatureRow}`);
   truongBanCell.value = "TRƯỞNG BAN VẬT TƯ";
   truongBanCell.style = {
-    font: { bold: true, size: 10 },
+    font: { bold: true, size: 11, name: "Times New Roman" },
     alignment: { horizontal: "center", vertical: "middle" },
   };
 
   const chuNhiemCell = sheet.getCell(`G${signatureRow}`);
-  chuNhiemCell.value =
-    signatures.chu_nhiem || "TL. TƯ LỆNH CHỦ NHIỆM HẬU CẦN - KỸ THUẬT";
+  // Luôn hiện chức danh đúng mẫu, tên sẽ hiển thị ở dòng dưới
+  chuNhiemCell.value = "TL. TƯ LỆNH CHỦ NHIỆM HẬU CẦN - KỸ THUẬT";
   chuNhiemCell.style = {
-    font: { bold: true, size: 10 },
+    font: { bold: true, size: 11, name: "Times New Roman" },
     alignment: { horizontal: "center", vertical: "middle" },
   };
 
   // Tên người ký
-  const nameRow = signatureRow + 1;
+  // Chừa khoảng trống 2 dòng để ký
+  const nameRow = signatureRow + 3;
   const nguoiLapNameCell = sheet.getCell(`A${nameRow}`);
   nguoiLapNameCell.value = signatures.nguoi_lap || "Người lập";
   nguoiLapNameCell.style = {
-    font: { bold: true, size: 10 },
+    font: { bold: false, size: 11, name: "Times New Roman" },
     alignment: { horizontal: "center", vertical: "middle" },
   };
 
   const truongBanNameCell = sheet.getCell(`D${nameRow}`);
   truongBanNameCell.value = signatures.truong_ban || "Trưởng ban Vật tư";
   truongBanNameCell.style = {
-    font: { bold: true, size: 10 },
+    font: { bold: false, size: 11, name: "Times New Roman" },
     alignment: { horizontal: "center", vertical: "middle" },
   };
 
   const chuNhiemNameCell = sheet.getCell(`G${nameRow}`);
-  chuNhiemNameCell.value = "Thượng tá Trần Đình Huy";
+  // Hiển thị tên người ký chức danh Chủ nhiệm (nếu có)
+  chuNhiemNameCell.value = signatures.chu_nhiem || "";
   chuNhiemNameCell.style = {
-    font: { bold: true, size: 10 },
+    font: { bold: false, size: 11, name: "Times New Roman" },
     alignment: { horizontal: "center", vertical: "middle" },
   };
 };
@@ -3145,7 +3141,8 @@ const createSubSheetEnhanced = async (
   signatures,
   bieuSo
 ) => {
-  const sheet = workbook.addWorksheet(sheetName);
+  const safeName = sanitizeWorksheetName(sheetName);
+  const sheet = workbook.addWorksheet(safeName);
 
   // Thiết lập độ rộng cột
   sheet.columns = [
@@ -3159,7 +3156,77 @@ const createSubSheetEnhanced = async (
     { width: 15 }, // Tồn cuối kỳ
   ];
 
-  // Header đơn giản hơn cho sheet phụ
+  // Header phần trên của sheet phụ
+  const subHeaderRows = [
+    {
+      values: [
+        "CẢNH SÁT BIỂN VIỆT NAM",
+        "",
+        "",
+        `${sheetName.toUpperCase()} QUÝ ${Math.ceil(
+          (new Date(tu_ngay).getMonth() + 1) / 3
+        )}/${new Date(tu_ngay).getFullYear()}`,
+        "",
+        "",
+        "",
+        `Phụ biểu số: ${bieuSo}`,
+      ],
+      merges: [
+        { range: "A1:C1", value: "CẢNH SÁT BIỂN VIỆT NAM" },
+        {
+          range: "D1:H1",
+          value: `${sheetName.toUpperCase()} QUÝ ${Math.ceil(
+            (new Date(tu_ngay).getMonth() + 1) / 3
+          )}/${new Date(tu_ngay).getFullYear()}`,
+        },
+      ],
+    },
+    {
+      values: [
+        "BỘ TƯ LỆNH",
+        "",
+        "",
+        `Đơn vị: ${phongBanInfo?.ten_phong_ban || "Phòng Hậu cần - Kỹ thuật"}`,
+        "",
+        "",
+        "",
+        "Đơn vị tính: Đồng",
+      ],
+      merges: [
+        { range: "A2:C2", value: "BỘ TƯ LỆNH" },
+        {
+          range: "D2:G2",
+          value: `Đơn vị: ${
+            phongBanInfo?.ten_phong_ban || "Phòng Hậu cần - Kỹ thuật"
+          }`,
+        },
+        { range: "H2:I2", value: "Đơn vị tính: Đồng" },
+      ],
+    },
+    {
+      values: ["VÙNG CẢNH SÁT BIỂN 1", "", "", "", "", "", "", "", ""],
+      merges: [{ range: "A3:I3", value: "VÙNG CẢNH SÁT BIỂN 1" }],
+    },
+    { values: ["", "", "", "", "", "", "", "", ""] },
+  ];
+
+  subHeaderRows.forEach((row) => {
+    const excelRow = sheet.addRow(row.values);
+    if (row.merges) {
+      row.merges.forEach((merge) => {
+        sheet.mergeCells(merge.range);
+        if (merge.value) {
+          sheet.getCell(merge.range.split(":")[0]).value = merge.value;
+        }
+      });
+    }
+    excelRow.eachCell((cell) => {
+      cell.font = { bold: true, size: 12, name: "Times New Roman" };
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+    });
+  });
+
+  // Header bảng dữ liệu của sheet phụ
   const headerRow = sheet.addRow([
     "Nội dung",
     "Tồn đầu kỳ",
@@ -3171,16 +3238,10 @@ const createSubSheetEnhanced = async (
     "Tồn cuối kỳ",
   ]);
 
-  // Style cho header
   headerRow.eachCell((cell) => {
-    cell.font = { bold: true, size: 10 };
+    cell.font = { bold: true, size: 11, name: "Times New Roman" };
     cell.alignment = { horizontal: "center", vertical: "middle" };
     cell.border = getBorder();
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FFE6E6FA" },
-    };
   });
 
   // Render dữ liệu

@@ -361,6 +361,7 @@ import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { X, AlertTriangle, Package, Info, Building } from "lucide-react";
 import { hangHoaService } from "../../services/hangHoaService";
+import { DON_VI_TINH } from "../../utils/constants";
 import toast from "react-hot-toast";
 
 const EditHangHoaModal = ({ isOpen, onClose, hangHoaId, onSuccess }) => {
@@ -402,26 +403,44 @@ const EditHangHoaModal = ({ isOpen, onClose, hangHoaId, onSuccess }) => {
   const loadInitialData = async () => {
     try {
       setIsLoadingData(true);
+      console.log(
+        "🔍 Debug - Starting loadInitialData for hangHoaId:",
+        hangHoaId
+      );
+
+      // Check token
+      const token = localStorage.getItem("token");
+      console.log("🔍 Debug - Token exists:", !!token);
+      console.log(
+        "🔍 Debug - Token preview:",
+        token ? token.substring(0, 20) + "..." : "No token"
+      );
 
       // Load all required data in parallel
-      const [loaiHangHoaRes, hangHoaRes, inventoryRes, permissionRes] =
-        await Promise.all([
-          hangHoaService.getLoaiHangHoa(),
-          hangHoaService.getDetail(hangHoaId),
-          hangHoaService
-            .getInventoryByLevel(hangHoaId)
-            .catch(() => ({ data: [] })),
-          hangHoaService
-            .checkHangHoaPermission(hangHoaId, "update")
-            .catch(() => ({ data: { can_edit: false } })),
-        ]);
+      const [loaiHangHoaRes, hangHoaRes, inventoryRes] = await Promise.all([
+        hangHoaService.getLoaiHangHoa().catch((err) => {
+          console.error("❌ Error loading loai hang hoa:", err);
+          return { data: [] };
+        }),
+        hangHoaService.getDetail(hangHoaId).catch((err) => {
+          console.error("❌ Error loading hang hoa detail:", err);
+          return { data: {} };
+        }),
+        hangHoaService
+          .getInventoryBreakdown(hangHoaId)
+          .catch(() => ({ data: [] })),
+      ]);
 
       // Process loai hang hoa with extensive fallback
+      console.log("🔍 Debug - loaiHangHoaRes:", loaiHangHoaRes);
       const processedLoaiHangHoa =
+        loaiHangHoaRes?.message?.data ||
         loaiHangHoaRes?.data?.data ||
         loaiHangHoaRes?.data?.items ||
         loaiHangHoaRes?.data ||
         [];
+
+      console.log("🔍 Debug - processedLoaiHangHoa:", processedLoaiHangHoa);
 
       // Ensure arrays before setting state
       setLoaiHangHoaList(
@@ -454,7 +473,7 @@ const EditHangHoaModal = ({ isOpen, onClose, hangHoaId, onSuccess }) => {
 
       // Set inventory by level and permission info
       setInventoryByLevel(inventoryRes?.data || []);
-      setPermissionInfo(permissionRes?.data || {});
+      setPermissionInfo({ can_edit: true }); // Default permission
 
       setTimeout(() => setDataLoaded(true), 150);
       setTimeout(() => setFormReady(true), 300);
@@ -720,7 +739,10 @@ const EditHangHoaModal = ({ isOpen, onClose, hangHoaId, onSuccess }) => {
                           </option>
                         ))
                       ) : (
-                        <option disabled>Không có dữ liệu loại hàng hóa</option>
+                        <option disabled>
+                          Không có dữ liệu loại hàng hóa (Count:{" "}
+                          {loaiHangHoaList?.length || 0})
+                        </option>
                       )}
                     </select>
                   </div>
@@ -729,15 +751,20 @@ const EditHangHoaModal = ({ isOpen, onClose, hangHoaId, onSuccess }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Đơn vị tính *
                     </label>
-                    <input
-                      type="text"
+                    <select
                       {...register("don_vi_tinh", {
-                        required: "Vui lòng nhập đơn vị tính",
+                        required: "Vui lòng chọn đơn vị tính",
                       })}
                       disabled={!permissionInfo.can_edit}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:bg-gray-100"
-                      placeholder="VD: cái, kg, lít..."
-                    />
+                    >
+                      <option value="">-- Chọn đơn vị tính --</option>
+                      {DON_VI_TINH.map((donVi) => (
+                        <option key={donVi} value={donVi}>
+                          {donVi}
+                        </option>
+                      ))}
+                    </select>
                     {errors.don_vi_tinh && (
                       <p className="mt-1 text-sm text-red-600">
                         {errors.don_vi_tinh.message}

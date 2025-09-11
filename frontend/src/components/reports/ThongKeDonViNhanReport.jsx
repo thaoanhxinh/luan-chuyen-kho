@@ -73,6 +73,8 @@ const ThongKeDonViNhanReport = ({ user }) => {
 
   const fetchDonViNhanList = async () => {
     try {
+      // Chỉ lấy danh sách đơn vị nhận thực thể (bên ngoài) cho dropdown này
+      // Các đơn vị cấp 3 nội bộ sẽ lấy từ phòng ban khi cần xuất nội bộ
       const response = await fetch("/api/don-vi-nhan", {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -105,6 +107,11 @@ const ThongKeDonViNhanReport = ({ user }) => {
         params.append("phong_ban_id", filters.phong_ban_id);
       }
 
+      // Nếu có chọn đơn vị nhận cụ thể (ngoài) -> dùng filter don_vi_nhan_id
+      if (filters.don_vi_nhan_id) {
+        params.append("don_vi_nhan_id", filters.don_vi_nhan_id);
+      }
+
       const response = await fetch(`/api/xuat-kho?${params}`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -114,6 +121,7 @@ const ThongKeDonViNhanReport = ({ user }) => {
 
       const result = await response.json();
       if (result.success) {
+        // Chỉ lấy phiếu hoàn thành
         const completedItems = result.data.items.filter(
           (item) => item.trang_thai === "completed"
         );
@@ -131,22 +139,27 @@ const ThongKeDonViNhanReport = ({ user }) => {
 
   const processThongKeData = (items) => {
     const grouped = items.reduce((acc, item) => {
-      const donViId = item.don_vi_nhan_id || "unknown";
-      const donViName = item.don_vi_nhan?.ten_don_vi || "Chưa xác định";
+      // Ưu tiên group theo phòng_ban_nhan (nội bộ cấp 3). Nếu không có, group theo don_vi_nhan (ngoài - dùng id từ object).
+      const groupKey =
+        item.phong_ban_nhan_id || item.don_vi_nhan?.id || "unknown";
+      const displayName =
+        item.ten_phong_ban_nhan ||
+        item.don_vi_nhan?.ten_don_vi ||
+        "Chưa xác định";
 
-      if (!acc[donViId]) {
-        acc[donViId] = {
-          id: donViId,
-          ten_don_vi: donViName,
+      if (!acc[groupKey]) {
+        acc[groupKey] = {
+          id: groupKey,
+          ten_don_vi: displayName,
           so_phieu: 0,
           tong_gia_tri: 0,
           phieu_list: [],
         };
       }
 
-      acc[donViId].so_phieu += 1;
-      acc[donViId].tong_gia_tri += parseFloat(item.tong_tien) || 0;
-      acc[donViId].phieu_list.push(item);
+      acc[groupKey].so_phieu += 1;
+      acc[groupKey].tong_gia_tri += parseFloat(item.tong_tien) || 0;
+      acc[groupKey].phieu_list.push(item);
 
       return acc;
     }, {});

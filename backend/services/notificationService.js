@@ -251,9 +251,14 @@ const notifySystemMessage = async (userIds, title, content, metadata = {}) => {
  */
 const notifyPhieuNhapCanDuyet = async (phieuData, nguoiDuyetIds) => {
   const title = `Phiếu nhập ${phieuData.so_phieu} cần duyệt`;
-  const content = `Phiếu nhập kho từ ${
-    phieuData.phong_ban?.ten_phong_ban || "N/A"
-  } đang chờ phê duyệt`;
+  // Chuẩn hóa lấy tên phòng ban từ nhiều kiểu dữ liệu đầu vào
+  const tenPhongBan =
+    (typeof phieuData.phong_ban === "string"
+      ? phieuData.phong_ban
+      : phieuData.phong_ban?.ten_phong_ban) ||
+    phieuData.ten_phong_ban ||
+    "N/A";
+  const content = `Phiếu nhập kho từ ${tenPhongBan} đang chờ phê duyệt`;
 
   return await createNotificationsWithDynamicURL(
     Array.isArray(nguoiDuyetIds) ? nguoiDuyetIds : [nguoiDuyetIds],
@@ -364,68 +369,58 @@ const generateNotificationURL = (
   recipientCapBac,
   recipientPhongBanId
 ) => {
-  const baseURL = "/nhap-kho";
-  let tab = "tat-ca"; // default fallback
+  // Xác định base path theo loại thông báo
+  const isNhap = notificationType.startsWith("phieu_nhap");
+  const isXuat = notificationType.startsWith("phieu_xuat");
+  const baseURL = isXuat ? "/xuat-kho" : "/nhap-kho";
 
-  // Logic xác định tab dựa trên workflow type và notification type
+  // Mặc định theo frontend là "tat_ca"
+  let tab = "tat_ca";
+
+  // Map tab phải khớp với TAB_CONFIG ở frontend (dùng underscores)
   switch (notificationType) {
-    case "phieu_nhap_can_duyet":
-      // Phiếu cần người nhận duyệt
-      if (
-        phieuData.workflow_type === "cap3_tu_mua" &&
-        recipientRole === "manager"
-      ) {
-        tab = "can-toi-duyet"; // Manager duyệt cho cấp 3 tự mua
-      } else if (
-        phieuData.workflow_type === "cap3_tu_cap_tren" &&
-        recipientRole === "admin"
-      ) {
-        tab = "can_duyet"; // Admin duyệt cuối cho cấp 3 từ cấp trên
-      } else if (phieuData.workflow_type === "cap3_dieu_chuyen") {
-        if (recipientRole === "manager") {
-          tab = "can-toi-duyet"; // Manager duyệt trước cho điều chuyển
-        } else if (
-          recipientCapBac === 3 &&
-          recipientPhongBanId === phieuData.phong_ban_cung_cap_id
-        ) {
-          tab = "dieu-chuyen-can-duyet"; // Cấp 3 đích duyệt xuất
-        }
-      } else if (recipientRole === "admin") {
-        tab = "can_duyet"; // Admin duyệt các trường hợp khác
-      }
-      break;
-
-    case "phieu_nhap_duyet":
-      // Phiếu đã được duyệt
-      tab = "da_duyet";
-      break;
-
-    case "phieu_nhap_can_sua":
-      // Phiếu cần sửa
-      tab = "can-sua";
-      break;
-
-    case "phieu_xuat_can_duyet":
-      // Phiếu xuất cần duyệt
+    // ================= NHẬP KHO =================
+    case "phieu_nhap_can_duyet": {
+      // Cấp 2 (manager) nhận phiếu chờ duyệt → tab "can_duyet"
       if (recipientRole === "manager") {
         tab = "can_duyet";
       } else if (recipientRole === "admin") {
         tab = "can_duyet";
+      } else {
+        // Cấp 3 hoặc vai trò khác vẫn đưa về danh sách chờ duyệt
+        tab = "can_duyet";
       }
       break;
-
-    case "phieu_xuat_duyet":
+    }
+    case "phieu_nhap_duyet": {
       tab = "da_duyet";
       break;
-
-    case "phieu_xuat_can_sua":
-      tab = "can-sua";
+    }
+    case "phieu_nhap_can_sua": {
+      tab = "can_sua";
       break;
+    }
 
-    default:
-      tab = "tat-ca";
+    // ================= XUẤT KHO =================
+    case "phieu_xuat_can_duyet": {
+      tab = "cho_duyet"; // Frontend XUAT_KHO dùng key "cho_duyet"
+      break;
+    }
+    case "phieu_xuat_duyet": {
+      tab = "da_duyet";
+      break;
+    }
+    case "phieu_xuat_can_sua": {
+      tab = "can_sua";
+      break;
+    }
+
+    default: {
+      tab = "tat_ca";
+    }
   }
 
+  // Sử dụng key tab nhất quán là dùng dấu gạch dưới theo frontend
   return `${baseURL}?tab=${tab}`;
 };
 
@@ -457,7 +452,11 @@ const createNotificationsWithDynamicURL = async (
         [validUserId] // ← SỬA: dùng validUserId
       );
 
-      let url = "/nhap-kho?tab=tat-ca"; // default fallback
+      // default fallback đúng key tab ("tat_ca") và đúng module theo loại thông báo
+      let url =
+        type && type.startsWith("phieu_xuat")
+          ? "/xuat-kho?tab=tat_ca"
+          : "/nhap-kho?tab=tat_ca";
 
       if (recipientInfo.rows.length > 0) {
         const recipient = recipientInfo.rows[0];

@@ -20,12 +20,14 @@ import {
   Cell,
 } from "recharts";
 import { baoCaoService } from "../services/baoCaoService";
+import { notificationService } from "../services/notificationService";
 import { formatCurrency, formatNumber } from "../utils/helpers";
 import Loading from "../components/common/Loading";
 import PageHeader from "../components/common/PageHeader";
 
 const Dashboard = () => {
   const [thongKe, setThongKe] = useState(null);
+  const [recentNotifications, setRecentNotifications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [timeFilter, setTimeFilter] = useState("6months"); // 6months, 1year, 2years
 
@@ -35,17 +37,21 @@ const Dashboard = () => {
         setIsLoading(true);
 
         // Fetch all dashboard data in parallel
-        const [dashboardStats, chartData, phamChatStats] = await Promise.all([
-          baoCaoService.getDashboardStats(),
-          baoCaoService.getChartData({ period: timeFilter }),
-          baoCaoService.getPhamChatStats(),
-        ]);
+        const [dashboardStats, chartData, phamChatStats, notifications] =
+          await Promise.all([
+            baoCaoService.getDashboardStats(),
+            baoCaoService.getChartData({ period: timeFilter }),
+            baoCaoService.getPhamChatStats(),
+            notificationService.getList({ limit: 5, page: 1 }),
+          ]);
 
         setThongKe({
           dashboard: dashboardStats,
           chart: chartData,
           phamChat: phamChatStats,
         });
+
+        setRecentNotifications(notifications.data?.items || []);
       } catch (error) {
         console.error("Error fetching dashboard stats:", error);
       } finally {
@@ -109,7 +115,7 @@ const Dashboard = () => {
 
   // Transform chart data from API
   const transformedChartData = chartData.map((item) => ({
-    name: item.ten_thang || `T${item.thang}`,
+    name: `Tháng ${item.thang}`,
     nhap: item.nhap || 0,
     xuat: item.xuat || 0,
     nhap_value: item.nhap_value || 0,
@@ -181,14 +187,34 @@ const Dashboard = () => {
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={transformedChartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
+              <XAxis
+                dataKey="name"
+                tick={{
+                  fontSize: 13,
+                  fontFamily: "Inter, system-ui, sans-serif",
+                  fontWeight: 500,
+                  fill: "#374151",
+                }}
+              />
+              <YAxis
+                tick={{
+                  fontSize: 12,
+                  fontFamily: "Inter, system-ui, sans-serif",
+                  fontWeight: 400,
+                  fill: "#6B7280",
+                }}
+              />
               <Tooltip
+                contentStyle={{
+                  fontFamily: "Inter, system-ui, sans-serif",
+                  fontSize: "13px",
+                  fontWeight: 500,
+                }}
                 formatter={(value, name) => [
                   value,
                   name === "nhap" ? "Nhập" : "Xuất",
                 ]}
-                labelFormatter={(label) => `Tháng ${label}`}
+                labelFormatter={(label) => label}
               />
               <Bar
                 dataKey="nhap"
@@ -247,33 +273,84 @@ const Dashboard = () => {
           Hoạt động gần đây
         </h3>
         <div className="space-y-3">
-          <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-900">
-                Phiếu nhập #PN001 đã được tạo
+          {recentNotifications.length > 0 ? (
+            recentNotifications.map((notification) => {
+              const isRead = notification.trang_thai === "read";
+              const priority = notification.metadata?.priority || "normal";
+
+              // Map priority to color
+              const getPriorityColor = (priority) => {
+                switch (priority) {
+                  case "urgent":
+                    return "bg-red-500";
+                  case "high":
+                    return "bg-orange-500";
+                  case "medium":
+                    return "bg-yellow-500";
+                  case "normal":
+                    return "bg-blue-500";
+                  case "low":
+                    return "bg-gray-500";
+                  default:
+                    return "bg-blue-500";
+                }
+              };
+
+              // Format time
+              const formatTime = (createdAt) => {
+                const now = new Date();
+                const created = new Date(createdAt);
+                const diffInMinutes = Math.floor((now - created) / (1000 * 60));
+
+                if (diffInMinutes < 1) return "Vừa xong";
+                if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
+
+                const diffInHours = Math.floor(diffInMinutes / 60);
+                if (diffInHours < 24) return `${diffInHours} giờ trước`;
+
+                const diffInDays = Math.floor(diffInHours / 24);
+                if (diffInDays < 7) return `${diffInDays} ngày trước`;
+
+                return created.toLocaleDateString("vi-VN");
+              };
+
+              return (
+                <div
+                  key={notification.id}
+                  className={`flex items-center space-x-3 p-3 rounded-lg ${
+                    isRead ? "bg-gray-50" : "bg-blue-50"
+                  }`}
+                >
+                  <div
+                    className={`w-2 h-2 ${getPriorityColor(
+                      priority
+                    )} rounded-full`}
+                  ></div>
+                  <div className="flex-1">
+                    <p
+                      className={`text-sm font-medium ${
+                        isRead ? "text-gray-900" : "text-blue-900"
+                      }`}
+                    >
+                      {notification.tieu_de}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {formatTime(notification.created_at)}
+                    </p>
+                  </div>
+                  {!isRead && (
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  )}
+                </div>
+              );
+            })
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-500 text-sm">
+                Không có hoạt động gần đây
               </p>
-              <p className="text-xs text-gray-500">2 giờ trước</p>
             </div>
-          </div>
-          <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-900">
-                Phiếu xuất #PX002 đã được duyệt
-              </p>
-              <p className="text-xs text-gray-500">4 giờ trước</p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-            <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-900">
-                Kiểm kê kho đã hoàn thành
-              </p>
-              <p className="text-xs text-gray-500">1 ngày trước</p>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
