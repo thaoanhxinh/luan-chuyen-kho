@@ -44,14 +44,19 @@ const Login = () => {
       <div className="max-w-md w-full space-y-4">
         {/* Header */}
         <div className="text-center">
-          <div className="mx-auto h-12 w-12 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
-            <Shield className="h-6 w-6 text-white" />
+          <div className="mx-auto h-20 w-20 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
+            {/* <Shield className="h-6 w-6 text-white" /> */}
+            <img
+              src="src/assets/coast-guard-badge.png"
+              alt="Vietnam Coast Guard Badge"
+              className="h-50 w-50 object-contain drop-shadow-lg"
+            />
           </div>
           <h2 className="mt-3 text-2xl font-bold text-gray-900">
             Đăng nhập hệ thống
           </h2>
           <p className="mt-1 text-sm text-gray-600">
-            Quản lý kho hàng - Cảnh sát biển
+            Quản lý luân chuyển hàng hóa - Cảnh sát biển
           </p>
         </div>
 
@@ -157,34 +162,7 @@ const Login = () => {
           </form>
         </div>
 
-        {/* Demo Accounts */}
-        {/* <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <h3 className="text-sm font-medium text-blue-900 mb-2 flex items-center">
-            <User className="h-4 w-4 mr-1" />
-            Tài khoản demo
-          </h3>
-          <div className="space-y-1.5 text-sm">
-            <div className="flex justify-between items-center bg-white px-2.5 py-1.5 rounded-lg">
-              <span className="font-medium text-gray-700">👨‍💼 Admin:</span>
-              <span className="text-blue-600 font-mono text-xs">
-                admin / 123456
-              </span>
-            </div>
-            <div className="flex justify-between items-center bg-white px-2.5 py-1.5 rounded-lg">
-              <span className="font-medium text-gray-700">👤 User:</span>
-              <span className="text-blue-600 font-mono text-xs">
-                ptm_user / 123456
-              </span>
-            </div>
-          </div>
-        </div> */}
-
         {/* Footer */}
-        <div className="text-center">
-          <p className="text-xs text-gray-500">
-            © 2024 Hệ thống quản lý kho hàng
-          </p>
-        </div>
       </div>
     </div>
   );

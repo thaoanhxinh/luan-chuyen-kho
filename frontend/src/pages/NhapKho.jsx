@@ -197,8 +197,8 @@ const ActionDropdown = ({ phieu, onAction, user }) => {
     user.phong_ban?.cap_bac === 3 &&
     phieu.trang_thai === "pending_level3_approval" &&
     phieu.loai_phieu === "dieu_chuyen" &&
-    //phieu.phong_ban?.id === user.phong_ban_id;
-    phieu.phong_ban_cung_cap?.id === user.phong_ban_id;
+    // Cấp 3 bên NHẬN duyệt trên phiếu NHẬP: PN thuộc phòng ban của user
+    phieu.phong_ban?.id === user.phong_ban_id;
   // Debug log để kiểm tra
   if (
     phieu.loai_phieu === "dieu_chuyen" &&

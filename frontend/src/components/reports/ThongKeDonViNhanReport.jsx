@@ -32,6 +32,7 @@ const ThongKeDonViNhanReport = ({ user }) => {
     timeFrame: "month",
     phong_ban_id: user?.role === "admin" ? "all" : user?.phong_ban_id,
     don_vi_nhan_id: "",
+    loai_phieu: "all", // all, noi_bo, ben_ngoai, dieu_chuyen (tùy backend)
   });
 
   const [data, setData] = useState([]);
@@ -107,6 +108,11 @@ const ThongKeDonViNhanReport = ({ user }) => {
         params.append("phong_ban_id", filters.phong_ban_id);
       }
 
+      // Nếu chọn loại phiếu cụ thể
+      if (filters.loai_phieu && filters.loai_phieu !== "all") {
+        params.append("loai_phieu", filters.loai_phieu);
+      }
+
       // Nếu có chọn đơn vị nhận cụ thể (ngoài) -> dùng filter don_vi_nhan_id
       if (filters.don_vi_nhan_id) {
         params.append("don_vi_nhan_id", filters.don_vi_nhan_id);
@@ -120,13 +126,16 @@ const ThongKeDonViNhanReport = ({ user }) => {
       });
 
       const result = await response.json();
+      console.log("🔍 API Response:", result);
       if (result.success) {
         // Chỉ lấy phiếu hoàn thành
         const completedItems = result.data.items.filter(
           (item) => item.trang_thai === "completed"
         );
+        console.log("🔍 Completed items:", completedItems.length);
         processThongKeData(completedItems);
       } else {
+        console.log("❌ API Error:", result.message);
         setData([]);
       }
     } catch (error) {
@@ -138,14 +147,41 @@ const ThongKeDonViNhanReport = ({ user }) => {
   };
 
   const processThongKeData = (items) => {
+    console.log("🔍 Processing items:", items.length, "items");
+    console.log("🔍 Sample item:", items[0]);
+    console.log("🔍 Sample item keys:", Object.keys(items[0] || {}));
+
     const grouped = items.reduce((acc, item) => {
-      // Ưu tiên group theo phòng_ban_nhan (nội bộ cấp 3). Nếu không có, group theo don_vi_nhan (ngoài - dùng id từ object).
-      const groupKey =
-        item.phong_ban_nhan_id || item.don_vi_nhan?.id || "unknown";
-      const displayName =
-        item.ten_phong_ban_nhan ||
-        item.don_vi_nhan?.ten_don_vi ||
-        "Chưa xác định";
+      // Xác định đơn vị nhận: ưu tiên phòng ban nhận (nội bộ), sau đó đơn vị nhận (bên ngoài)
+      let groupKey, displayName;
+
+      // Kiểm tra phòng ban nhận (xuất nội bộ)
+      if (item.ten_phong_ban_nhan) {
+        groupKey = `phong_ban_${item.ten_phong_ban_nhan}`;
+        displayName = item.ten_phong_ban_nhan;
+        console.log("✅ Phòng ban nhận:", item.ten_phong_ban_nhan);
+      }
+      // Kiểm tra đơn vị nhận (xuất bên ngoài)
+      else if (
+        item.don_vi_nhan &&
+        item.don_vi_nhan.id &&
+        item.don_vi_nhan.ten_don_vi
+      ) {
+        groupKey = `don_vi_${item.don_vi_nhan.id}`;
+        displayName = item.don_vi_nhan.ten_don_vi;
+        console.log("✅ Đơn vị nhận:", item.don_vi_nhan.ten_don_vi);
+      }
+      // Fallback - debug để xem cấu trúc dữ liệu
+      else {
+        groupKey = "unknown";
+        displayName = "Chưa xác định";
+        console.log("⚠️ Item without clear recipient:", {
+          phong_ban_nhan_id: item.phong_ban_nhan_id,
+          ten_phong_ban_nhan: item.ten_phong_ban_nhan,
+          don_vi_nhan: item.don_vi_nhan,
+          so_phieu: item.so_phieu,
+        });
+      }
 
       if (!acc[groupKey]) {
         acc[groupKey] = {
@@ -164,10 +200,21 @@ const ThongKeDonViNhanReport = ({ user }) => {
       return acc;
     }, {});
 
-    const processedData = Object.values(grouped)
-      .sort((a, b) => b.tong_gia_tri - a.tong_gia_tri)
-      .slice(0, 20); // Top 20
+    console.log("🔍 Grouped data:", Object.keys(grouped).length, "groups");
+    console.log(
+      "🔍 Groups:",
+      Object.values(grouped).map((g) => ({
+        name: g.ten_don_vi,
+        count: g.so_phieu,
+      }))
+    );
 
+    // Sắp xếp nhưng KHÔNG cắt bớt: hiển thị toàn bộ đơn vị nhận có trong phiếu xuất
+    const processedData = Object.values(grouped).sort(
+      (a, b) => b.tong_gia_tri - a.tong_gia_tri
+    );
+
+    console.log("🔍 Final processed data:", processedData.length, "items");
     setData(processedData);
   };
 
@@ -331,6 +378,24 @@ const ThongKeDonViNhanReport = ({ user }) => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
+              Loại phiếu
+            </label>
+            <select
+              value={filters.loai_phieu}
+              onChange={(e) =>
+                setFilters((prev) => ({ ...prev, loai_phieu: e.target.value }))
+              }
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            >
+              <option value="all">Tất cả</option>
+              <option value="noi_bo">Nội bộ</option>
+              <option value="ben_ngoai">Bên ngoài</option>
+              <option value="dieu_chuyen">Điều chuyển</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Đơn vị nhận cụ thể
             </label>
             <select
@@ -435,11 +500,11 @@ const ThongKeDonViNhanReport = ({ user }) => {
         {/* Bar Chart */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Top 10 đơn vị nhận theo giá trị
+            Giá trị theo đơn vị nhận
           </h3>
           {data.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={data.slice(0, 10)}>
+              <BarChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis
                   dataKey="ten_don_vi"
@@ -481,7 +546,7 @@ const ThongKeDonViNhanReport = ({ user }) => {
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
-                  data={data.slice(0, 8)}
+                  data={data}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -492,7 +557,7 @@ const ThongKeDonViNhanReport = ({ user }) => {
                     percent > 5 ? `${percent.toFixed(0)}%` : ""
                   }
                 >
-                  {data.slice(0, 8).map((entry, index) => (
+                  {data.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
                       fill={colors[index % colors.length]}

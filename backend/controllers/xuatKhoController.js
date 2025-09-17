@@ -862,15 +862,10 @@ const xuatKhoController = {
 
       // ✅ QUY TẮC XEM: chỉ cấp 3 thấy phiếu của mình, admin/manager thấy tất cả
       if (user.role === "user" && user.phong_ban?.cap_bac === 3) {
-        // Cấp 3: xem phiếu của đơn vị mình tạo HOẶC phiếu mà đơn vị mình là bên nhận (chỉ khi chờ cấp 3 duyệt)
-        whereConditions.push(`(
-          px.phong_ban_id = $${paramIndex} OR 
-          (px.phong_ban_nhan_id = $${
-            paramIndex + 1
-          } AND px.trang_thai = 'pending_level3_approval')
-        )`);
-        queryParams.push(user.phong_ban_id, user.phong_ban_id);
-        paramIndex += 2;
+        // Cấp 3: CHỈ xem phiếu do đơn vị mình tạo (đơn vị xuất)
+        whereConditions.push(`px.phong_ban_id = $${paramIndex}`);
+        queryParams.push(user.phong_ban_id);
+        paramIndex++;
       } else if (user.role === "manager") {
         // ✅ FIX: Manager thấy phiếu của các phòng ban thuộc quyền quản lý
         // NHƯNG nếu có status filter cụ thể (như tab "Chờ duyệt"),
